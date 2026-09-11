@@ -387,7 +387,6 @@ class AuditCommand extends Command
             'turns' => $t->turns,
             'input' => $this->tokens($t->inputTokens + $t->cacheReadTokens),
             'output' => $this->tokens($t->outputTokens),
-            'cost' => $t->costUsd === null ? '–' : '$'.number_format($t->costUsd, 2),
             'duration' => sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60),
         ]).($outcome->repaired ? ' · '.$this->messages->get('agents.repaired') : '');
 

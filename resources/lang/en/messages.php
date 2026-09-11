@@ -91,7 +91,7 @@ return [
 
     'agents' => [
         'running' => 'running …',
-        'finished' => ':findings findings · :turns turns · :input in / :output out · :cost · :duration',
+        'finished' => ':findings findings · :turns turns · :input in / :output out · :duration',
         'repaired' => '1 repair',
         'failed' => 'failed: :reason',
     ],
