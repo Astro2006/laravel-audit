@@ -4,10 +4,19 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Console;
 
+use Astro2006\LaravelAudit\Data\Steps\AboutData;
+use Astro2006\LaravelAudit\Data\Steps\BrowserData;
+use Astro2006\LaravelAudit\Data\Steps\ComposerData;
+use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
+use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
+use Astro2006\LaravelAudit\Data\Steps\PintData;
+use Astro2006\LaravelAudit\Data\Steps\RoutesData;
+use Astro2006\LaravelAudit\Data\Steps\StackData;
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\StepResult;
-use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Support\Messages;
 
 /**
@@ -17,29 +26,27 @@ final class StepFormatter
 {
     public function __construct(private readonly Messages $messages) {}
 
-    /** @return array{symbol: string, color: string, label: string, detail: string} */
-    public function format(StepResult $result): array
+    public function format(StepResult $result): StepLine
     {
-        $label = $this->messages->get('steps.'.$result->step->value, ['level' => (string) $result->get('level', '?')]);
+        $data = $result->data;
+        $level = $data instanceof PhpstanData ? $data->level : null;
+        $label = $result->step === PreflightStep::Phpstan && $level === null
+            ? $this->messages->get('steps.phpstan_plain')
+            : $this->messages->get('steps.'.$result->step->value, ['level' => $level ?? '?']);
 
         if ($result->status === StepStatus::Skipped) {
-            return ['symbol' => '–', 'color' => 'gray', 'label' => $label, 'detail' => $this->messages->get('skip.'.$result->reason?->value)];
+            return new StepLine('–', 'gray', $label, $this->messages->get('skip.'.$result->reason?->value));
         }
 
         if ($result->status === StepStatus::Error) {
             $error = strtok((string) $result->error, "\n") ?: '';
 
-            return ['symbol' => '✘', 'color' => 'red', 'label' => $label, 'detail' => mb_strimwidth($error, 0, 110, '…')];
+            return new StepLine('✘', 'red', $label, mb_strimwidth($error, 0, 110, '…'));
         }
 
-        $failed = in_array($result->step, [PreflightStep::Tests, PreflightStep::Browser], true) && TestGate::failures($result) > 0;
+        $failed = ($data instanceof TestsData || $data instanceof BrowserData) && $data->failures() > 0;
 
-        return [
-            'symbol' => $failed ? '✘' : '✔',
-            'color' => $failed ? 'red' : 'green',
-            'label' => $label,
-            'detail' => $this->detail($result),
-        ];
+        return new StepLine($failed ? '✘' : '✔', $failed ? 'red' : 'green', $label, $this->detail($result));
     }
 
     /** @return list<string> */
@@ -51,29 +58,31 @@ final class StepFormatter
     private function detail(StepResult $result): string
     {
         $m = $this->messages;
+        $data = $result->data;
 
-        return match ($result->step) {
-            PreflightStep::About => $m->get('details.about', ['laravel' => $result->get('laravel', '?'), 'php' => $result->get('php', '?')]),
-            PreflightStep::Stack => $m->get('details.stack', ['stack' => implode(', ', array_filter([...(array) $result->get('frontend', []), $result->get('test_framework')]))]),
-            PreflightStep::LinesOfCode => $m->get('details.loc', ['loc' => number_format((int) $result->get('loc', 0), 0, ',', '.')]),
-            PreflightStep::Pint => $m->get('details.pint', ['files' => $result->get('files_with_issues', 0), 'rules' => $result->get('rules', 0)]),
-            PreflightStep::Routes => $m->get('details.routes', ['count' => $result->get('count', 0), 'flagged' => $result->get('flagged', 0)]),
-            PreflightStep::Translations => $m->get('details.translations', ['locales' => implode(', ', (array) $result->get('locales', [])) ?: '–', 'missing' => $result->get('missing', 0)]),
-            PreflightStep::Composer => $m->get('details.composer', ['advisories' => $result->get('advisories', 0), 'abandoned' => $result->get('abandoned', 0), 'outdated' => $result->get('outdated_major', 0)]),
-            PreflightStep::Tests => $this->testDetail($result, 'tests')
-                .($result->get('coverage_pct') !== null ? ' · '.$m->get('details.coverage', ['pct' => $result->get('coverage_pct')]) : ''),
-            PreflightStep::Browser => $this->testDetail($result, 'browser')
-                .((int) $result->get('artifacts', 0) > 0 ? ' · '.$m->get('details.artifacts', ['count' => $result->get('artifacts')]) : ''),
-            PreflightStep::Phpstan => $m->get('details.phpstan', ['errors' => $result->get('errors', 0), 'baselined' => $result->get('baselined', 0)]),
+        return match (true) {
+            $data instanceof AboutData => $m->get('details.about', ['laravel' => $data->laravel ?? '?', 'php' => $data->php ?? '?']),
+            $data instanceof StackData => $m->get('details.stack', ['stack' => implode(', ', array_filter([...$data->frontend, $data->testFramework]))]),
+            $data instanceof LinesOfCodeData => $m->get('details.loc', ['loc' => number_format($data->loc, 0, ',', '.')]),
+            $data instanceof PintData => $m->get('details.pint', ['files' => $data->filesWithIssues, 'rules' => $data->rules]),
+            $data instanceof RoutesData => $m->get('details.routes', ['count' => $data->count, 'flagged' => $data->flagged]),
+            $data instanceof TranslationsData => $data->locales === []
+                ? $m->get('details.translations_none')
+                : $m->get('details.translations', ['locales' => implode(', ', $data->locales), 'missing' => $data->missing]),
+            $data instanceof ComposerData => $m->get('details.composer', ['advisories' => $data->advisories, 'abandoned' => $data->abandoned, 'outdated' => $data->outdatedMajor]),
+            $data instanceof TestsData => $this->testDetail('tests', $data->failures(), $data->total)
+                .($data->coveragePct !== null ? ' · '.$m->get('details.coverage', ['pct' => $data->coveragePct]) : ''),
+            $data instanceof BrowserData => $this->testDetail('browser', $data->failures(), $data->total)
+                .($data->artifacts > 0 ? ' · '.$m->get('details.artifacts', ['count' => $data->artifacts]) : ''),
+            $data instanceof PhpstanData => $m->get('details.phpstan', ['errors' => $data->errors, 'baselined' => $data->baselined]),
+            default => '',
         };
     }
 
-    private function testDetail(StepResult $result, string $key): string
+    private function testDetail(string $key, int $failures, int $total): string
     {
-        $failures = TestGate::failures($result);
-
         return $failures > 0
-            ? $this->messages->get('details.'.$key, ['failed' => $failures, 'total' => $result->get('total', 0)])
-            : $this->messages->get('details.'.$key.'_green', ['total' => $result->get('total', 0)]);
+            ? $this->messages->get('details.'.$key, ['failed' => $failures, 'total' => $total])
+            : $this->messages->get('details.'.$key.'_green', ['total' => $total]);
     }
 }

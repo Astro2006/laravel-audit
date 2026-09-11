@@ -75,22 +75,19 @@ final class TestsAudit extends BaseAudit
     public function requiredFindings(PreflightSummary $preflight): array
     {
         $required = [];
+        $tests = $preflight->steps->tests();
+        $browser = $preflight->steps->browser();
+        $phpstan = $preflight->steps->phpstan();
 
-        $tests = $preflight->step(PreflightStep::Tests);
-
-        if ($preflight->ran(PreflightStep::Tests) && ((int) ($tests['failed'] ?? 0) + (int) ($tests['errors'] ?? 0)) > 0) {
+        if ($tests !== null && $tests->failures() > 0) {
             $required[] = new RequiredFinding(
                 check: 'test-failure',
                 description: 'at least one `test-failure` finding for the failing tests in tests/tests-condensed.json.',
             );
         }
 
-        $browser = $preflight->step(PreflightStep::Browser);
-
-        if ($preflight->ran(PreflightStep::Browser)
-            && ((int) ($browser['failed'] ?? 0) + (int) ($browser['errors'] ?? 0)) > 0
-            && ! ($browser['environment_error'] ?? false)) {
-            $path = rtrim((string) ($browser['path'] ?? 'tests/Browser'), '/').'/';
+        if ($browser !== null && $browser->failures() > 0 && ! $browser->environmentError) {
+            $path = rtrim($browser->path ?? 'tests/Browser', '/').'/';
 
             $required[] = new RequiredFinding(
                 check: 'test-failure',
@@ -99,7 +96,7 @@ final class TestsAudit extends BaseAudit
             );
         }
 
-        if ($preflight->ran(PreflightStep::Phpstan) && (int) $preflight->get('steps.phpstan.baselined', 0) > 0) {
+        if ($phpstan !== null && $phpstan->baselined > 0) {
             $required[] = new RequiredFinding(
                 check: 'phpstan-baseline',
                 description: 'one `phpstan-baseline` finding that summarizes the baselined PHPStan errors.',

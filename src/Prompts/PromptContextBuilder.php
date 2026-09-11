@@ -9,47 +9,57 @@ use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Illuminate\Support\Arr;
+use Astro2006\LaravelAudit\Support\Read;
 
 final class PromptContextBuilder
 {
-    /** @param array<string, mixed> $config */
+    /** @param array<mixed> $config */
     public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable): PromptContext
     {
-        $frontend = (array) $summary->get('stack.frontend', []);
+        $steps = $summary->steps;
+        $about = $steps->about();
+        $stack = $steps->stack();
+        $frontend = $stack === null ? [] : $stack->frontend;
+
+        $customChecks = [];
+
+        foreach (Read::keys($config, 'custom_checks') as $audit) {
+            $customChecks = [...$customChecks, $audit => Read::strings($config, 'custom_checks.'.$audit)];
+        }
 
         return new PromptContext(
-            projectName: (string) ($summary->get('app.name') ?: config('app.name', 'Laravel')),
-            laravelVersion: (string) ($summary->get('app.laravel') ?: 'unknown'),
-            phpVersion: (string) ($summary->get('app.php') ?: PHP_VERSION),
-            testFramework: (string) ($summary->get('stack.test_framework') ?: 'unknown'),
+            projectName: $about?->name ?: (string) config('app.name', 'Laravel'),
+            laravelVersion: $about?->laravel ?: 'unknown',
+            phpVersion: $about?->php ?: PHP_VERSION,
+            testFramework: $stack === null ? 'unknown' : $stack->testFramework,
             frontendStack: $frontend === [] ? 'none detected' : implode(', ', $frontend),
-            phpstanLevel: (string) ($summary->get('steps.phpstan.level') ?: 'unknown'),
+            phpstanLevel: $steps->phpstan()->level ?? 'unknown',
             browserTests: $this->browserTests($summary),
             runId: $run->id,
             outputDir: $project->relative($run->dir()),
             preflightDir: $project->relative($run->preflightDir()),
             reportLanguage: $locale,
-            excludePaths: array_values((array) Arr::get($config, 'exclude_paths', [])),
-            customChecks: array_map(fn ($rules): array => array_values((array) $rules), (array) Arr::get($config, 'custom_checks', [])),
-            maxFindings: (int) Arr::get($config, 'max_findings', 25),
+            excludePaths: Read::strings($config, 'exclude_paths'),
+            customChecks: $customChecks,
+            maxFindings: Read::int($config, 'max_findings', 25),
             boostAvailable: $boostAvailable,
         );
     }
 
     private function browserTests(PreflightSummary $summary): string
     {
-        $browser = $summary->step(PreflightStep::Browser);
+        $result = $summary->steps->get(PreflightStep::Browser);
+        $browser = $summary->steps->browser();
 
-        return match ($summary->status(PreflightStep::Browser)) {
+        return match ($result?->status) {
             StepStatus::Ok => sprintf(
                 'ran (%d tests, %d failed%s)',
-                $browser['total'] ?? 0,
-                ($browser['failed'] ?? 0) + ($browser['errors'] ?? 0),
-                ($browser['environment_error'] ?? false) ? ', environment error — results unreliable' : '',
+                $browser === null ? 0 : $browser->total,
+                $browser === null ? 0 : $browser->failures(),
+                $browser !== null && $browser->environmentError ? ', environment error — results unreliable' : '',
             ),
-            StepStatus::Skipped => 'not run ('.($browser['reason'] ?? 'skipped').')',
-            StepStatus::Error => 'error ('.mb_strimwidth((string) ($browser['error'] ?? ''), 0, 120, '…').')',
+            StepStatus::Skipped => 'not run ('.($result->reason === null ? 'skipped' : $result->reason->value).')',
+            StepStatus::Error => 'error ('.mb_strimwidth((string) $result->error, 0, 120, '…').')',
             null => 'not part of this run',
         };
     }

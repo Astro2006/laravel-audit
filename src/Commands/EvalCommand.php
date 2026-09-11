@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
+use Astro2006\LaravelAudit\Data\Run\RunRecord;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Eval\EvalReport;
 use Astro2006\LaravelAudit\Eval\ExpectedSet;
@@ -39,55 +40,53 @@ class EvalCommand extends Command
 
         $outputRoot = rtrim((string) $factory->config('output_path', storage_path('audit')), '/');
         $runs = max(1, (int) $this->option('runs'));
-        $audits = array_values(array_intersect(AuditType::values(), (array) $this->option('audit')));
-        $runDirs = [];
+        $audits = array_values(array_intersect(AuditType::values(), array_map('strval', (array) $this->option('audit'))));
+        $records = [];
 
         for ($i = 0; $i < $runs; $i++) {
             $before = glob($outputRoot.'/*', GLOB_ONLYDIR) ?: [];
 
-            $options = ['--force' => true, '--no-interaction' => true];
-
-            foreach ($audits as $audit) {
-                $options['--'.$audit] = true;
-            }
-
             // The tools are deterministic; only the agents vary between runs.
-            if ($i > 0) {
-                $options['--reuse-preflight'] = null;
-            }
+            $options = [
+                '--force' => true,
+                '--no-interaction' => true,
+                ...array_fill_keys(array_map(fn (string $audit): string => '--'.$audit, $audits), true),
+                ...($i > 0 ? ['--reuse-preflight' => null] : []),
+            ];
 
             $this->components->info(sprintf('Eval run %d of %d', $i + 1, $runs));
             $this->call('audit', $options);
 
-            $created = array_values(array_diff(glob($outputRoot.'/*', GLOB_ONLYDIR) ?: [], $before));
+            foreach (array_diff(glob($outputRoot.'/*', GLOB_ONLYDIR) ?: [], $before) as $created) {
+                $data = Json::readFile($created.'/run.json');
 
-            if ($created !== []) {
-                $runDirs[] = $created[0];
+                if ($data !== []) {
+                    $records[] = RunRecord::fromArray($data);
+                }
             }
         }
 
-        $data = array_values(array_filter(array_map(fn (string $dir): array => Json::readFile($dir.'/run.json'), $runDirs)));
-
-        if ($data === []) {
+        if ($records === []) {
             $this->components->error('No run produced a run.json.');
 
             return self::FAILURE;
         }
 
         $report = new EvalReport;
-        $result = $report->evaluate($expected, $data);
+        $result = $report->evaluate($expected, $records);
         $path = $outputRoot.'/eval-'.date('Y-m-d_H-i-s').'.md';
         file_put_contents($path, $report->render($result));
-        Json::writeFile(substr($path, 0, -3).'.json', $result);
+        Json::writeFile(substr($path, 0, -3).'.json', $result->toArray());
 
         $this->newLine();
 
-        foreach ($result['audits'] as $audit => $item) {
-            $this->components->twoColumnDetail($audit, sprintf(
+        foreach ($result->audits as $audit) {
+            $recall = $audit->recall();
+            $this->components->twoColumnDetail($audit->audit, sprintf(
                 'recall %s · control hits %s · jaccard %s',
-                $item['recall'] === null ? '–' : $item['recall'].' %',
-                implode('/', $item['control_hits']),
-                $item['stability']['jaccard'] ?? '–',
+                $recall === null ? '–' : $recall.' %',
+                implode('/', $audit->controlHits),
+                $audit->stability->jaccard ?? '–',
             ));
         }
 

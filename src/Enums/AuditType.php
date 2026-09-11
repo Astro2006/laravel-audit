@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
-use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Audits\FrontendAudit;
 use Astro2006\LaravelAudit\Audits\TestsAudit;
+use Astro2006\LaravelAudit\Contracts\Audit;
 
 enum AuditType: string
 {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Audits;
 
+use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Data\Composer\Advisory;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
@@ -66,33 +68,28 @@ final class DependenciesAudit extends BaseAudit
 
     public function requiredFindings(PreflightSummary $preflight): array
     {
-        $facts = $preflight->json(self::FACTS_FILE);
+        $facts = $preflight->dependencyFacts();
+
+        if ($facts === null) {
+            return [];
+        }
+
         $required = [];
-        $seen = [];
 
-        foreach ((array) ($facts['advisories'] ?? []) as $advisory) {
-            $package = strtolower((string) ($advisory['package'] ?? ''));
+        foreach ($facts->advisoryPackages() as $package) {
+            $advisories = array_filter($facts->advisories, fn (Advisory $advisory): bool => $advisory->package === $package);
+            $ids = array_filter(array_map(fn (Advisory $advisory): ?string => $advisory->advisory, $advisories));
 
-            if ($package === '' || isset($seen['vuln:'.$package])) {
-                continue;
-            }
-
-            $seen['vuln:'.$package] = true;
             $required[] = new RequiredFinding(
                 check: 'vulnerable-dependency',
-                description: sprintf('a `vulnerable-dependency` finding with location `package:%s` (advisory %s).', $package, $advisory['advisory'] ?? 'see dependency-facts.json'),
+                description: sprintf('a `vulnerable-dependency` finding with location `package:%s` (advisory %s).', $package, $ids === [] ? 'see dependency-facts.json' : implode(', ', $ids)),
                 target: 'package:'.$package,
             );
         }
 
-        foreach ((array) ($facts['abandoned'] ?? []) as $abandoned) {
-            $package = strtolower((string) ($abandoned['package'] ?? ''));
+        $abandoned = array_values(array_unique(array_map(fn (AbandonedPackage $package): string => $package->package, $facts->abandoned)));
 
-            if ($package === '' || isset($seen['abandoned:'.$package])) {
-                continue;
-            }
-
-            $seen['abandoned:'.$package] = true;
+        foreach (array_filter($abandoned) as $package) {
             $required[] = new RequiredFinding(
                 check: 'abandoned-package',
                 description: sprintf('an `abandoned-package` finding with location `package:%s`.', $package),
@@ -100,7 +97,7 @@ final class DependenciesAudit extends BaseAudit
             );
         }
 
-        if (($facts['validate']['lock_in_sync'] ?? true) === false) {
+        if (! $facts->validate->lockInSync) {
             $required[] = new RequiredFinding(
                 check: 'lock-out-of-sync',
                 description: 'a `lock-out-of-sync` finding, because composer validate reports an outdated lock file.',

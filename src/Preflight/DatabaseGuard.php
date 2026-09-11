@@ -5,55 +5,54 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Astro2006\LaravelAudit\Support\Read;
 use Dotenv\Dotenv;
 
 /**
  * Tests with RefreshDatabase wipe the database they run against. Before any
  * test runs, the guard resolves the test connection the way Laravel does
- * (.env.testing replaces .env, phpunit.xml <env> wins) and compares it with
- * the app database. When in doubt, it says "not safe".
+ * (.env.testing replaces .env, phpunit.xml <env> wins over it, variables
+ * exported in the shell win over <env> without force="true") and compares it
+ * with the app database. When in doubt, it says "not safe".
  */
 final class DatabaseGuard
 {
     /**
-     * @param  array<string, array<string, mixed>>  $connections  config('database.connections')
+     * @param  array<mixed>  $connections  config('database.connections')
      * @param  string  $appConnection  config('database.default')
+     * @param  array<string, string>  $inherited  variables the test process inherits, see ChildEnvironment
      */
     public function __construct(
         private readonly ProjectInspector $project,
         private readonly array $connections,
         private readonly string $appConnection,
+        private readonly array $inherited = [],
     ) {}
 
     public function check(): DatabaseGuardResult
     {
         // The running app already resolved its own connection from the environment.
-        $app = $this->describe($this->appConnection, $this->connections[$this->appConnection] ?? [], []);
+        $app = $this->describe($this->appConnection, []);
 
         $env = $this->testEnv();
-        $testName = $env['DB_CONNECTION'] ?? $this->appConnection;
-        $test = $this->describe($testName, $this->connections[$testName] ?? [], $env);
+        $test = $this->describe(Read::string($env, 'DB_CONNECTION', $this->appConnection), $env);
 
-        if ($test['driver'] === 'sqlite' && $test['database'] === ':memory:') {
-            return new DatabaseGuardResult(true, $test['label'], $app['label']);
+        if ($test->isInMemorySqlite()) {
+            return new DatabaseGuardResult(true, $test->label, $app->label);
         }
 
-        $shared = $test['driver'] === $app['driver']
-            && $this->sameDatabase($test, $app);
+        $shared = $test->driver === $app->driver && $this->sameDatabase($test, $app);
 
-        return new DatabaseGuardResult(! $shared, $test['label'], $app['label']);
+        return new DatabaseGuardResult(! $shared, $test->label, $app->label);
     }
 
-    /**
-     * @param  array<string, mixed>  $config
-     * @param  array<string, string>  $env
-     * @return array{driver: string, host: string, database: string, label: string}
-     */
-    private function describe(string $name, array $config, array $env): array
+    /** @param array<string, string> $env */
+    private function describe(string $name, array $env): ConnectionInfo
     {
-        $driver = (string) ($config['driver'] ?? $name);
-        $database = (string) ($env['DB_DATABASE'] ?? $config['database'] ?? '');
-        $host = (string) ($env['DB_HOST'] ?? $config['host'] ?? '');
+        $config = Read::array($this->connections, $name);
+        $driver = Read::string($config, 'driver', $name);
+        $database = Read::string($env, 'DB_DATABASE', Read::string($config, 'database'));
+        $host = Read::string($env, 'DB_HOST', Read::string($config, 'host'));
 
         if ($driver === 'sqlite' && $database === '') {
             $database = $this->project->path('database/database.sqlite');
@@ -63,24 +62,20 @@ final class DatabaseGuard
             ? 'sqlite '.($database === ':memory:' ? ':memory:' : $this->project->relative($database))
             : sprintf('%s %s@%s', $driver, $database, $host ?: 'localhost');
 
-        return ['driver' => $driver, 'host' => $host, 'database' => $database, 'label' => $label];
+        return new ConnectionInfo($driver, $host, $database, $label);
     }
 
-    /**
-     * @param  array{driver: string, host: string, database: string}  $a
-     * @param  array{driver: string, host: string, database: string}  $b
-     */
-    private function sameDatabase(array $a, array $b): bool
+    private function sameDatabase(ConnectionInfo $a, ConnectionInfo $b): bool
     {
-        if ($a['driver'] === 'sqlite') {
-            $pathA = $this->absolute($a['database']);
-            $pathB = $this->absolute($b['database']);
+        if ($a->driver === 'sqlite') {
+            $pathA = $this->absolute($a->database);
+            $pathB = $this->absolute($b->database);
 
             return (realpath($pathA) ?: $pathA) === (realpath($pathB) ?: $pathB);
         }
 
-        return strcasecmp($a['database'], $b['database']) === 0
-            && $this->normalizeHost($a['host']) === $this->normalizeHost($b['host']);
+        return strcasecmp($a->database, $b->database) === 0
+            && $this->normalizeHost($a->host) === $this->normalizeHost($b->host);
     }
 
     /** @return array<string, string> */
@@ -90,7 +85,7 @@ final class DatabaseGuard
             ? $this->fileEnv('.env.testing')
             : $this->fileEnv('.env');
 
-        return [...$env, ...$this->project->phpunitEnv()];
+        return [...$env, ...$this->project->phpunitEnv(), ...$this->inherited, ...$this->project->phpunitEnv(forcedOnly: true)];
     }
 
     /** @return array<string, string> */

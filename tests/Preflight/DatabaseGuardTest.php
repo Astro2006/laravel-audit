@@ -1,6 +1,7 @@
 <?php
 
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 function guardProject(array $files): ProjectInspector
@@ -68,4 +69,33 @@ it('compares sqlite files by path', function () use ($connections) {
     $project = guardProject(['phpunit.xml' => phpunitWithEnv(['DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => '/tmp/app.sqlite'])]);
 
     expect((new DatabaseGuard($project, $connections, 'sqlite'))->check()->safe)->toBeFalse();
+});
+
+it('lets exported variables win over phpunit env without force', function () use ($connections) {
+    $project = guardProject(['phpunit.xml' => phpunitWithEnv(['DB_CONNECTION' => 'mysql', 'DB_DATABASE' => 'shop_test'])]);
+
+    $guard = new DatabaseGuard($project, $connections, 'mysql', inherited: ['DB_DATABASE' => 'shop']);
+
+    expect($guard->check()->safe)->toBeFalse();
+});
+
+it('lets forced phpunit env win over exported variables', function () use ($connections) {
+    $project = guardProject(['phpunit.xml' => '<phpunit><php><env name="DB_CONNECTION" value="mysql"/><env name="DB_DATABASE" value="shop_test" force="true"/></php></phpunit>']);
+
+    $guard = new DatabaseGuard($project, $connections, 'mysql', inherited: ['DB_DATABASE' => 'shop']);
+
+    expect($guard->check())->safe->toBeTrue()->testDatabase->toBe('mysql shop_test@127.0.0.1');
+});
+
+it('removes everything from .env for child processes but keeps exported variables', function () {
+    $project = guardProject(['.env' => "APP_ENV=local\nDB_DATABASE=shop\n"]);
+    $environment = ChildEnvironment::for($project);
+
+    putenv('AUDIT_EXPORTED=1');
+
+    expect($environment->overrides())->toBe(['APP_ENV' => false, 'DB_DATABASE' => false])
+        ->and($environment->inherited())->toHaveKey('AUDIT_EXPORTED')
+        ->and(ChildEnvironment::for(guardProject([]))->overrides())->toBe([]);
+
+    putenv('AUDIT_EXPORTED');
 });

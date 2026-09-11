@@ -1,5 +1,12 @@
 <?php
 
+use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Data\Composer\PackageCandidate;
+use Astro2006\LaravelAudit\Data\Phpstan\FileCount;
+use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
@@ -9,27 +16,41 @@ use Astro2006\LaravelAudit\Preflight\Condensers\RouteFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteTestMapper;
 use Astro2006\LaravelAudit\Preflight\Condensers\TranslationDiff;
 use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
+use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-it('condenses a junit report', function () {
-    $result = (new JunitCondenser)->condense(fixture('tools/junit.xml'), '/app');
+function fixtureRoutes(): array
+{
+    return RouteDefinition::listFromJson(Json::readFile(fixture('tools/routes.json')));
+}
 
-    expect($result)
+function uris(array $routes): array
+{
+    return array_map(fn (RouteDefinition $route) => $route->uri, $routes);
+}
+
+it('condenses a junit report', function () {
+    $report = (new JunitCondenser)->condense(fixture('tools/junit.xml'), '/app');
+    [$coupon, $orders] = $report->failureGroups;
+    [$skipped] = $report->skippedTests;
+    [$slowest] = $report->slowest;
+
+    expect($report)
         ->total->toBe(6)
         ->passed->toBe(2)
         ->failed->toBe(2)
         ->errors->toBe(1)
         ->skipped->toBe(1)
-        ->environment_error->toBeFalse()
-        ->and($result['failure_groups'][0])->toMatchArray([
-            'exception' => 'ErrorException',
-            'message' => 'Undefined array key "discount"',
-            'count' => 2,
-            'files' => ['tests/Feature/CheckoutTest.php'],
-        ])
-        ->and($result['failure_groups'][1]['tests'])->toBe(['Tests\Feature\OrderTest::it lists orders'])
-        ->and($result['skipped_tests'][0])->toBe(['test' => 'Tests\Feature\ExportTest::it exports csv', 'reason' => 'TODO after refactor', 'file' => 'tests/Feature/ExportTest.php'])
-        ->and($result['slowest'][0])->toBe(['test' => 'Tests\Feature\OrderTest::it lists orders', 'seconds' => 4.1]);
+        ->environmentError->toBeFalse()
+        ->and($coupon)->exception->toBe('ErrorException')
+        ->message->toBe('Undefined array key "discount"')
+        ->count->toBe(2)
+        ->files->toBe(['tests/Feature/CheckoutTest.php'])
+        ->and($orders->tests)->toBe(['Tests\Feature\OrderTest::it lists orders'])
+        ->and($skipped)->test->toBe('Tests\Feature\ExportTest::it exports csv')->reason->toBe('TODO after refactor')
+        ->and($slowest)->test->toBe('Tests\Feature\OrderTest::it lists orders')->seconds->toBe(4.1)
+        ->and($report->topFailure())->toBe('ErrorException: Undefined array key "discount"')
+        ->and($report->toArray())->toHaveKeys(['failure_groups', 'skipped_tests', 'slowest', 'environment_error']);
 });
 
 it('flags a broken environment when almost everything fails for one reason', function () {
@@ -37,109 +58,140 @@ it('flags a broken environment when almost everything fails for one reason', fun
     $path = tempDir('junit').'/junit.xml';
     file_put_contents($path, "<testsuites><testsuite>{$cases}</testsuite></testsuites>");
 
-    expect((new JunitCondenser)->condense($path, '/app')['environment_error'])->toBeTrue()
+    expect((new JunitCondenser)->condense($path, '/app')->environmentError)->toBeTrue()
         ->and((new JunitCondenser)->condense('/missing.xml', '/app'))->toBeNull();
 });
 
-it('condenses clover coverage for app classes only, lowest first', function () {
-    $result = (new CoverageCondenser)->condense(fixture('tools/clover.xml'), '/app');
+it('skips the test identifier phpunit 12 puts before the failure message', function () {
+    $path = tempDir('junit').'/junit.xml';
+    file_put_contents($path, <<<'XML'
+        <testsuites><testsuite>
+        <testcase name="test_home" class="Tests\Feature\ExampleTest" file="/app/tests/Feature/ExampleTest.php" time="0.4"><failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\ExampleTest::test_home
+        Expected response status code [200] but received 500.
+        Failed asserting that 500 is identical to 200.</failure></testcase>
+        </testsuite></testsuites>
+        XML);
 
-    expect($result['files'])->toBe(2)
-        ->and($result['lines_pct'])->toBe(60.0)
-        ->and($result['classes'][0])->toBe([
-            'class' => 'App\Services\OrderService',
-            'file' => 'app/Services/OrderService.php',
-            'lines_pct' => 40.0,
-            'statements' => 10,
-            'uncovered_methods' => ['refund'],
-        ])
-        ->and($result['classes'][1]['class'])->toBe('App\Models\User');
+    [$group] = (new JunitCondenser)->condense($path, '/app')->failureGroups;
+
+    expect($group->message)->toBe('Expected response status code [200] but received 500.');
+});
+
+it('does not flag the signed local storage routes of the framework', function () {
+    $routes = RouteDefinition::listFromJson([
+        ['method' => 'PUT', 'uri' => 'storage/{path}', 'name' => 'storage.local.upload', 'action' => 'Closure', 'middleware' => []],
+        ['method' => 'PUT', 'uri' => 'files/{path}', 'name' => 'files.upload', 'action' => 'Closure', 'middleware' => []],
+    ]);
+
+    [$flagged] = (new RouteFacts)->facts($routes)->unauthenticatedWrite;
+
+    expect((new RouteFacts)->facts($routes)->unauthenticatedWrite)->toHaveCount(1)
+        ->and($flagged->name)->toBe('files.upload');
+});
+
+it('condenses clover coverage for app classes only, lowest first', function () {
+    $report = (new CoverageCondenser)->condense(fixture('tools/clover.xml'), '/app');
+    [$lowest, $highest] = $report->classes;
+
+    expect($report->classes)->toHaveCount(2)
+        ->and($report->linesPct)->toBe(60.0)
+        ->and($lowest)->toEqual(new ClassCoverage('App\Services\OrderService', 'app/Services/OrderService.php', 40.0, 10, ['refund']))
+        ->and($highest->class)->toBe('App\Models\User');
 });
 
 it('finds route candidates', function () {
-    $routes = json_decode(file_get_contents(fixture('tools/routes.json')), true);
-    $facts = (new RouteFacts(fn (string $action) => ! str_contains($action, 'CheckoutController')))->facts($routes);
+    $facts = (new RouteFacts(fn (string $action) => ! str_contains($action, 'CheckoutController')))->facts(fixtureRoutes());
 
-    expect(array_column($facts['unauthenticated_write'], 'uri'))->toBe(['/orders/{order}', '/contact'])
-        ->and(array_column($facts['state_changing_get'], 'uri'))->toBe(['/orders/{order}/delete'])
-        ->and(array_column($facts['missing_throttle'], 'uri'))->toBe(['/contact'])
-        ->and(array_column($facts['debug_routes'], 'uri'))->toBe(['/telescope/{view?}'])
-        ->and(array_column($facts['broken_routes'], 'uri'))->toBe(['/checkout'])
-        ->and($facts['flagged'])->toBe(6);
+    expect(uris($facts->unauthenticatedWrite))->toBe(['/orders/{order}', '/contact'])
+        ->and(uris($facts->stateChangingGet))->toBe(['/orders/{order}/delete'])
+        ->and(uris($facts->missingThrottle))->toBe(['/contact'])
+        ->and(uris($facts->debugRoutes))->toBe(['/telescope/{view?}'])
+        ->and(uris($facts->brokenRoutes))->toBe(['/checkout'])
+        ->and($facts->flagged())->toBe(6);
 });
 
 it('maps routes to tests by name, uri and controller', function () {
-    $routes = json_decode(file_get_contents(fixture('tools/routes.json')), true);
-    $map = (new RouteTestMapper)->map($routes, [
+    $map = (new RouteTestMapper)->map(fixtureRoutes(), [
         'tests/Feature/OrderTest.php' => file_get_contents(fixture('project/tests/Feature/OrderTest.php')),
         'tests/Browser/CheckoutTest.php' => file_get_contents(fixture('project/tests/Browser/CheckoutTest.php')),
     ]);
 
-    $byUri = collect($map['routes'])->keyBy('uri');
-
-    expect($byUri['/orders']['tests'])->toBe(['tests/Feature/OrderTest.php'])
-        ->and($byUri['/orders']['matched_by'])->toBe(['name'])
-        ->and($byUri['/orders/{order}']['matched_by'])->toBe(['uri'])
-        ->and($byUri['/checkout']['tests'])->toBe(['tests/Browser/CheckoutTest.php'])
-        ->and($byUri['/contact']['tests'])->toBe([])
-        ->and($map['untested'])->toBe(4);
+    expect($map->forUri('/orders')?->tests)->toBe(['tests/Feature/OrderTest.php'])
+        ->and($map->forUri('/orders')?->matchedBy)->toBe(['name'])
+        ->and($map->forUri('/orders/{order}')?->matchedBy)->toBe(['uri'])
+        ->and($map->forUri('/checkout')?->tests)->toBe(['tests/Browser/CheckoutTest.php'])
+        ->and($map->forUri('/contact')?->tests)->toBe([])
+        ->and($map->untested())->toBe(4);
 });
 
 it('lists translation keys missing in other locales', function () {
-    $diff = (new TranslationDiff)->diff(fixture('project/lang'), 'en');
+    $report = (new TranslationDiff)->diff(fixture('project/lang'), 'en');
+    [$german] = $report->missing;
 
-    expect($diff['locales'])->toBe(['de', 'en'])
-        ->and($diff['missing'])->toBe(['de' => ['count' => 3, 'keys' => ['auth.nested.deep', 'auth.throttle', 'json:Checkout']]]);
+    expect($report->locales)->toBe(['de', 'en'])
+        ->and($german)->locale->toBe('de')->count->toBe(3)->keys->toBe(['auth.nested.deep', 'auth.throttle', 'json:Checkout'])
+        ->and($report->missingCount())->toBe(3);
 });
 
 it('groups phpstan errors and reads the baseline', function () {
     $config = new PhpstanConfig(fixture('project/phpstan.neon'));
-    $grouped = (new PhpstanGrouper)->group(json_decode(file_get_contents(fixture('tools/phpstan.json')), true), $config->baselineEntries(), '/app');
+    $messages = PhpstanMessage::listFromJson(Json::readFile(fixture('tools/phpstan.json')), '/app');
+    $report = (new PhpstanGrouper)->group('6', $messages, $config->baselineEntries());
+    [$top] = $report->identifiers;
+    [$baselined] = $report->baselinedIdentifiers;
 
     expect($config->level())->toBe('6')
-        ->and($grouped['errors'])->toBe(4)
-        ->and($grouped['baselined'])->toBe(4)
-        ->and($grouped['identifiers'][0])->toMatchArray(['identifier' => 'missingType.return', 'count' => 2, 'file_count' => 1, 'top_files' => ['app/Services/OrderService.php' => 2]])
-        ->and(array_column($grouped['identifiers'], 'identifier'))->toContain('unknown')
-        ->and($grouped['baselined_identifiers'][0])->toMatchArray(['identifier' => 'missingType.parameter', 'count' => 3, 'baselined' => true]);
+        ->and($report->errors)->toBe(4)
+        ->and($report->baselined)->toBe(4)
+        ->and($top)->identifier->toBe('missingType.return')->count->toBe(2)->fileCount->toBe(1)
+        ->and($top->topFiles)->toEqual([new FileCount('app/Services/OrderService.php', 2)])
+        ->and($report->identifier('unknown'))->not->toBeNull()
+        ->and($baselined)->identifier->toBe('missingType.parameter')->count->toBe(3)->baselined->toBeTrue();
 });
 
 it('builds the usage map from class references', function () {
     $map = (new UsageMapBuilder(new ProjectInspector(fixture('project'))))->build();
 
-    expect($map['packages']['acme/used-lib'])->toMatchArray(['section' => 'require', 'prod_refs' => 2, 'test_refs' => 0, 'top_files' => ['app/Http/Controllers/OrderController.php']])
-        ->and($map['packages']['acme/unused-lib']['prod_refs'])->toBe(0)
-        ->and($map['packages']['acme/test-only'])->toMatchArray(['prod_refs' => 0, 'test_refs' => 1])
-        ->and($map['packages']['acme/dev-tool'])->toMatchArray(['section' => 'require-dev', 'prod_refs' => 1, 'binaries' => ['dev-tool']])
-        ->and($map['transitive_usage'])->toHaveKey('acme/transitive-lib');
+    expect($map->package('acme/used-lib'))->section->toBe('require')->prodRefs->toBe(2)->testRefs->toBe(0)->topFiles->toBe(['app/Http/Controllers/OrderController.php'])
+        ->and($map->package('acme/unused-lib')?->prodRefs)->toBe(0)
+        ->and($map->package('acme/test-only'))->prodRefs->toBe(0)->testRefs->toBe(1)
+        ->and($map->package('acme/dev-tool'))->section->toBe('require-dev')->prodRefs->toBe(1)->binaries->toBe(['dev-tool'])
+        ->and(array_map(fn ($usage) => $usage->name, $map->transitive))->toContain('acme/transitive-lib');
 });
 
 it('derives dependency facts and candidates', function () {
     $project = new ProjectInspector(fixture('project'));
     $facts = (new DependencyFacts)->build(
         project: $project,
-        audit: json_decode(file_get_contents(fixture('tools/composer-audit.json')), true),
-        outdated: json_decode(file_get_contents(fixture('tools/composer-outdated.json')), true),
-        licenses: json_decode(file_get_contents(fixture('tools/composer-licenses.json')), true),
+        audit: Json::readFile(fixture('tools/composer-audit.json')),
+        outdated: Json::readFile(fixture('tools/composer-outdated.json')),
+        licenses: Json::readFile(fixture('tools/composer-licenses.json')),
         validateOutput: "./composer.json is valid but your composer.lock has some errors\nThe lock file is not up to date with the latest changes in composer.json.",
         validateExitCode: 1,
         usageMap: (new UsageMapBuilder($project))->build(),
         why: ['guzzlehttp/psr7' => ['laravel/framework v13.2.0 requires guzzlehttp/psr7 (^2.0)']],
         licenseAllowlist: ['MIT'],
     );
+    [$advisory] = $facts->advisories;
+    $packages = fn (array $items) => array_map(fn ($item) => $item->package, $items);
 
-    expect($facts['advisories'][0])->toMatchArray(['package' => 'guzzlehttp/psr7', 'installed' => '2.4.1', 'direct' => false, 'via' => ['laravel/framework'], 'severity' => 'medium'])
-        ->and($facts['abandoned'])->toBe([
-            ['package' => 'acme/test-only', 'replacement' => null],
-            ['package' => 'acme/unused-lib', 'replacement' => 'acme/new-lib'],
-        ])
-        ->and(array_column($facts['outdated_major'], 'package'))->toBe(['acme/used-lib', 'acme/test-only'])
-        ->and(array_column($facts['misplaced_candidates'], 'package'))->toBe(['acme/test-only', 'acme/dev-tool'])
-        ->and(array_column($facts['unused_candidates'], 'package'))->toBe(['acme/unused-lib'])
-        ->and(array_column($facts['shadow_candidates'], 'package'))->toBe(['acme/transitive-lib'])
-        ->and(array_column($facts['licenses_flagged'], 'package'))->toBe(['acme/unused-lib', 'acme/nolicense'])
-        ->and(array_column($facts['constraints_flagged'], 'package'))->toBe(['acme/test-only'])
-        ->and($facts['composer_config'])->toContain('config.allow-plugins is true for every plugin')
-        ->and($facts['validate']['lock_in_sync'])->toBeFalse()
+    expect($advisory)->package->toBe('guzzlehttp/psr7')->installed->toBe('2.4.1')->direct->toBeFalse()->via->toBe(['laravel/framework'])->severity->toBe('medium')
+        ->and($facts->abandoned)->toEqual([new AbandonedPackage('acme/test-only', null), new AbandonedPackage('acme/unused-lib', 'acme/new-lib')])
+        ->and($packages($facts->outdatedMajor))->toBe(['acme/used-lib', 'acme/test-only'])
+        ->and($packages($facts->misplacedCandidates))->toBe(['acme/test-only', 'acme/dev-tool'])
+        ->and($packages($facts->unusedCandidates))->toBe(['acme/unused-lib'])
+        ->and($facts->shadowCandidates)->toEqual([new PackageCandidate('acme/transitive-lib', prodRefs: 1, topFiles: ['app/Http/Controllers/OrderController.php'])])
+        ->and($packages($facts->licensesFlagged))->toBe(['acme/unused-lib', 'acme/nolicense'])
+        ->and($packages($facts->constraintsFlagged))->toBe(['acme/test-only'])
+        ->and($facts->composerConfig)->toContain('config.allow-plugins is true for every plugin')
+        ->and($facts->validate->lockInSync)->toBeFalse()
+        ->and($facts->advisoriesBySeverity())->toBe(['critical' => 0, 'high' => 0, 'medium' => 1, 'low' => 0])
         ->and(DependencyFacts::packagesNeedingWhy(['advisories' => ['guzzlehttp/psr7' => []], 'abandoned' => ['acme/unused-lib' => null]], $project))->toBe(['guzzlehttp/psr7']);
+});
+
+it('round-trips the dependency facts file', function () {
+    $project = new ProjectInspector(fixture('project'));
+    $facts = (new DependencyFacts)->build($project, Json::readFile(fixture('tools/composer-audit.json')), [], [], '', 0, (new UsageMapBuilder($project))->build(), [], ['MIT']);
+
+    expect(DependencyFactsReport::fromArray($facts->toArray()))->toEqual($facts);
 });

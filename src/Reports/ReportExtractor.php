@@ -17,9 +17,12 @@ final class ReportExtractor
 
         $lines = explode("\n", $answer);
 
+        $first = (string) reset($lines);
+        $last = (string) end($lines);
+
         if (count($lines) >= 2
-            && preg_match('/^(`{3,}|~{3,})\w*\s*$/', $lines[0]) === 1
-            && preg_match('/^(`{3,}|~{3,})\s*$/', (string) end($lines)) === 1) {
+            && preg_match('/^(`{3,}|~{3,})\w*\s*$/', $first) === 1
+            && preg_match('/^(`{3,}|~{3,})\s*$/', $last) === 1) {
             $lines = array_slice($lines, 1, -1);
         }
 

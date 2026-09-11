@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\StackData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Support\Read;
 
 final class StackStep implements Step
 {
-    /** stack label => [composer packages, npm packages] */
+    /** stack label => composer packages and npm packages that reveal it */
     private const array FRONTEND = [
         'livewire' => [['livewire/livewire'], []],
         'inertia' => [['inertiajs/inertia-laravel'], ['@inertiajs/vue3', '@inertiajs/react', '@inertiajs/svelte']],
@@ -33,38 +35,29 @@ final class StackStep implements Step
     {
         $project = $context->project;
         $package = $project->packageJson();
-        $npm = array_map('strtolower', array_keys([
-            ...(array) ($package['dependencies'] ?? []),
-            ...(array) ($package['devDependencies'] ?? []),
-        ]));
+        $npm = array_map('strtolower', [...Read::keys($package, 'dependencies'), ...Read::keys($package, 'devDependencies')]);
 
         $frontend = [];
 
         foreach (self::FRONTEND as $label => [$composer, $node]) {
-            foreach ($composer as $name) {
-                if ($project->isInstalled($name)) {
-                    $frontend[] = $label;
+            $viaComposer = array_filter($composer, fn (string $name): bool => $project->isInstalled($name)) !== [];
 
-                    continue 2;
-                }
-            }
-
-            if (array_intersect($node, $npm) !== []) {
+            if ($viaComposer || array_intersect($node, $npm) !== []) {
                 $frontend[] = $label;
             }
         }
 
-        return StepResult::ok($this->step(), [
-            'frontend' => $frontend,
-            'test_framework' => match (true) {
+        return StepResult::ok($this->step(), new StackData(
+            frontend: $frontend,
+            testFramework: match (true) {
                 $project->usesPest() => 'pest',
                 $project->isInstalled('phpunit/phpunit') => 'phpunit',
                 default => 'none',
             },
-            'pest_version' => $project->majorVersion('pestphp/pest'),
-            'browser_plugin' => $project->hasBrowserPlugin(),
-            'boost' => $project->boostMcpServer() !== null,
-            'package_manager' => $project->packageManager()->value,
-        ]);
+            pestVersion: $project->majorVersion('pestphp/pest'),
+            browserPlugin: $project->hasBrowserPlugin(),
+            boost: $project->boostMcpServer() !== null,
+            packageManager: $project->packageManager()->value,
+        ));
     }
 }

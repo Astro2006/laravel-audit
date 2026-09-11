@@ -7,7 +7,7 @@ namespace Astro2006\LaravelAudit\Install;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Illuminate\Support\Arr;
+use Astro2006\LaravelAudit\Support\Read;
 
 /**
  * Collects what is missing. Larastan and Pint come with this package; the
@@ -51,7 +51,7 @@ final class InstallPlanner
             $plan->packages[] = new PlannedPackage('brianium/paratest', 'composer');
         }
 
-        if (($this->active(AuditType::Tests) || $this->active(AuditType::Frontend)) && Arr::get($this->config, 'preflight.browser.enabled', true)) {
+        if (($this->active(AuditType::Tests) || $this->active(AuditType::Frontend)) && Read::bool($this->config, 'preflight.browser.enabled', true)) {
             $this->planBrowser($plan);
         }
 
@@ -72,7 +72,7 @@ final class InstallPlanner
 
         if (! $project->usesPest()) {
             $plan->packages[] = new PlannedPackage('pestphp/pest', 'composer', upgradeReason: 'PHPUnit → Pest');
-            $plan->notes[] = ['key' => 'install.phpunit_only'];
+            $plan->notes[] = new InstallNote('install.phpunit_only');
             $pestPlanned = true;
         } elseif ($pestMajor !== null && $pestMajor < 4) {
             $plan->packages[] = new PlannedPackage('pestphp/pest', 'composer', upgradeReason: 'Pest '.$pestMajor.' → Pest 4+');
@@ -92,12 +92,12 @@ final class InstallPlanner
         }
 
         $location = $project->browserTests(
-            (string) Arr::get($this->config, 'preflight.browser.testsuite', 'Browser'),
-            (string) Arr::get($this->config, 'preflight.browser.path', 'tests/Browser'),
+            Read::string($this->config, 'preflight.browser.testsuite', 'Browser'),
+            Read::string($this->config, 'preflight.browser.path', 'tests/Browser'),
         );
 
         if ($location === null) {
-            $plan->notes[] = ['key' => 'install.no_browser_tests'];
+            $plan->notes[] = new InstallNote('install.no_browser_tests');
         }
     }
 
@@ -121,7 +121,7 @@ final class InstallPlanner
             $database = $this->guard->check();
 
             if (! $database->safe) {
-                $plan->notes[] = ['key' => 'requirements.database_shared', 'replace' => ['app' => $database->appDatabase]];
+                $plan->notes[] = new InstallNote('requirements.database_shared', ['app' => $database->appDatabase]);
             }
         }
     }
@@ -145,6 +145,6 @@ final class InstallPlanner
 
     private function active(AuditType $audit): bool
     {
-        return (bool) Arr::get($this->config, 'audits.'.$audit->value, true);
+        return Read::bool($this->config, 'audits.'.$audit->value, true);
     }
 }

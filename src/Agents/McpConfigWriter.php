@@ -23,7 +23,7 @@ final class McpConfigWriter
 
         // Relative commands like "php artisan boost:mcp" work because the
         // agent runs with the project root as working directory.
-        Json::writeFile($path, ['mcpServers' => [ClaudeCodeDriver::MCP_SERVER => $server['config']]]);
+        Json::writeFile($path, ['mcpServers' => [ClaudeCodeDriver::MCP_SERVER => $server->config]]);
 
         return $path;
     }

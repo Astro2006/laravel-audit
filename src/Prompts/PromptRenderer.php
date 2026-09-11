@@ -15,17 +15,6 @@ use RuntimeException;
  */
 final class PromptRenderer
 {
-    private const array LANGUAGES = [
-        'de' => 'German (de)',
-        'en' => 'English (en)',
-        'fr' => 'French (fr)',
-        'es' => 'Spanish (es)',
-        'it' => 'Italian (it)',
-        'nl' => 'Dutch (nl)',
-        'pt' => 'Portuguese (pt)',
-        'pl' => 'Polish (pl)',
-    ];
-
     /**
      * @param  string  $packagePath  resources/prompts of this package
      * @param  string|null  $overridePath  published prompts; files there win
@@ -49,15 +38,23 @@ final class PromptRenderer
 
     public static function languageLabel(string $locale): string
     {
-        $short = strtolower(substr($locale, 0, 2));
-
-        return self::LANGUAGES[$short] ?? $locale;
+        return match (strtolower(substr($locale, 0, 2))) {
+            'de' => 'German (de)',
+            'en' => 'English (en)',
+            'fr' => 'French (fr)',
+            'es' => 'Spanish (es)',
+            'it' => 'Italian (it)',
+            'nl' => 'Dutch (nl)',
+            'pt' => 'Portuguese (pt)',
+            'pl' => 'Polish (pl)',
+            default => $locale,
+        };
     }
 
     /** @return array<string, string> */
     private function placeholders(Audit $audit, PromptContext $context): array
     {
-        $customChecks = $context->customChecks[$audit->type()->value] ?? [];
+        $customChecks = $context->customChecksFor($audit->type()->value);
 
         return [
             '{{project_name}}' => $context->projectName,

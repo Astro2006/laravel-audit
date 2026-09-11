@@ -15,6 +15,7 @@ use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Facades\Process;
@@ -44,7 +45,7 @@ it('reads app info from artisan about', function () {
     $result = (new AboutStep)->run($context);
 
     expect($result->status)->toBe(StepStatus::Ok)
-        ->and($result->data)->toMatchArray(['name' => 'Shop', 'laravel' => '13.2.0', 'php' => '8.4.1'])
+        ->and($result->data)->name->toBe('Shop')->laravel->toBe('13.2.0')->php->toBe('8.4.1')
         ->and($context->preflightDir.'/about.json')->toBeFile();
 });
 
@@ -55,8 +56,8 @@ it('groups pint results by rule', function () {
 
     $result = (new PintStep)->run($context);
 
-    expect($result->data)->toMatchArray(['files_with_issues' => 2, 'rules' => 2])
-        ->and($context->readJson('pint-grouped.json')['rules'][0])->toBe(['rule' => 'braces', 'files' => 2, 'examples' => ['app/A.php', 'app/B.php']]);
+    expect($result->data)->filesWithIssues->toBe(2)->rules->toBe(2)
+        ->and(data_get($context->readJson('pint-grouped.json'), 'rules.0'))->toBe(['rule' => 'braces', 'files' => 2, 'examples' => ['app/A.php', 'app/B.php']]);
 });
 
 it('skips pint with --without', function () {
@@ -69,7 +70,7 @@ it('writes routes and route facts', function () {
 
     $result = (new RoutesStep)->run($context);
 
-    expect($result->data['count'])->toBe(8)
+    expect($result->data)->count->toBe(8)->flagged->toBe(11)
         ->and($context->readJson('route-facts.json'))->toHaveKey('unauthenticated_write');
 });
 
@@ -78,8 +79,8 @@ it('diffs translations', function () {
 
     $result = (new TranslationsStep('en'))->run($context);
 
-    expect($result->data)->toMatchArray(['locales' => ['de', 'en'], 'missing' => 3])
-        ->and($context->readJson('translations.json')['directory'])->toBe('lang');
+    expect($result->data)->locales->toBe(['de', 'en'])->missing->toBe(3)
+        ->and(data_get($context->readJson('translations.json'), 'directory'))->toBe('lang');
 });
 
 it('runs phpstan once and reads level and baseline', function () {
@@ -91,8 +92,8 @@ it('runs phpstan once and reads level and baseline', function () {
 
     $result = (new PhpstanStep)->run($context);
 
-    expect($result->data)->toMatchArray(['level' => '6', 'level_source' => 'phpstan.neon', 'errors' => 4, 'baselined' => 4])
-        ->and($context->readJson('phpstan/phpstan-grouped.json')['level'])->toBe('6');
+    expect($result->data)->level->toBe('6')->levelSource->toBe('phpstan.neon')->errors->toBe(4)->baselined->toBe(4)
+        ->and(data_get($context->readJson('phpstan/phpstan-grouped.json'), 'level'))->toBe('6');
 });
 
 it('marks phpstan as error when it produces no JSON', function () {
@@ -118,8 +119,8 @@ it('runs composer tools and writes the dependency facts', function () {
     $result = (new ComposerStep)->run($context);
 
     expect($result->status)->toBe(StepStatus::Ok)
-        ->and($result->data)->toMatchArray(['advisories' => 1, 'advisory_packages' => 1, 'abandoned' => 2, 'lock_in_sync' => true])
-        ->and($context->readJson('composer/dependency-facts.json')['advisories'][0]['via'])->toBe(['laravel/framework'])
+        ->and($result->data)->advisories->toBe(1)->advisoryPackages->toBe(1)->abandoned->toBe(2)->lockInSync->toBeTrue()
+        ->and(data_get($context->readJson('composer/dependency-facts.json'), 'advisories.0.via'))->toBe(['laravel/framework'])
         ->and($context->preflightDir.'/composer/usage-map.json')->toBeFile();
 })->skip(fn () => (new ProjectInspector(fixture('project')))->findExecutable('composer') === null, 'composer not in PATH');
 
@@ -161,9 +162,26 @@ it('runs tests in the background without the browser suite and condenses the res
         && ! str_contains(implode(' ', (array) $process->command), '--coverage-clover'));
 
     expect($process)->toBeInstanceOf(InvokedProcess::class)
-        ->and($result->data)->toMatchArray(['total' => 6, 'failed' => 2, 'errors' => 1, 'coverage_available' => false, 'suites' => ['Unit', 'Feature']])
-        ->and($result->data['database']['safe'])->toBeTrue()
+        ->and($result->data)->total->toBe(6)->failed->toBe(2)->errors->toBe(1)->coverageAvailable->toBeFalse()->suites->toBe(['Unit', 'Feature'])
+        ->and($result->data?->database?->safe)->toBeTrue()
         ->and($context->preflightDir.'/tests/route-test-map.json')->toBeFile();
+});
+
+it('starts the test run without the variables the audit process loaded from .env', function () {
+    Process::fake(['*artisan*test*' => Process::result('')]);
+    $dir = tempDir('steps');
+    $context = new PreflightContext(
+        new ProjectInspector(fixture('project')),
+        $dir.'/preflight',
+        $dir.'/logs',
+        require dirname(__DIR__, 2).'/config/audit.php',
+        RunSelection::resolve(['tests' => true, 'frontend' => false, 'backend' => false, 'dependencies' => false], [], ['coverage']),
+        new ChildEnvironment(['APP_ENV', 'DB_DATABASE']),
+    );
+
+    (new TestsStep(safeGuard($context->project)))->start($context)->wait();
+
+    Process::assertRan(fn ($process) => $process->environment === ['APP_ENV' => false, 'DB_DATABASE' => false]);
 });
 
 it('refuses to run tests against the app database', function () {

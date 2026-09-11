@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
+use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
 use Astro2006\LaravelAudit\Enums\PackageManager;
+use Illuminate\Support\Collection;
 use SimpleXMLElement;
 use Symfony\Component\Process\ExecutableFinder;
 
@@ -13,8 +15,22 @@ use Symfony\Component\Process\ExecutableFinder;
  */
 class ProjectInspector
 {
-    /** @var array<string, mixed> */
-    private array $cache = [];
+    /** @var array<mixed>|null */
+    private ?array $composerJson = null;
+
+    /** @var array<mixed>|null */
+    private ?array $composerLock = null;
+
+    /** @var array<mixed>|null */
+    private ?array $packageJson = null;
+
+    /** @var list<InstalledPackage>|null */
+    private ?array $installed = null;
+
+    /** @var Collection<string, string>|null package => version */
+    private ?Collection $locked = null;
+
+    private SimpleXMLElement|false|null $phpunitXml = null;
 
     public function __construct(public readonly string $basePath) {}
 
@@ -31,74 +47,77 @@ class ProjectInspector
         return str_starts_with($absolute, $base) ? substr($absolute, strlen($base)) : $absolute;
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     public function composerJson(): array
     {
-        return $this->cache['composer.json'] ??= Json::readFile($this->path('composer.json'));
+        return $this->composerJson ??= Json::readFile($this->path('composer.json'));
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     public function composerLock(): array
     {
-        return $this->cache['composer.lock'] ??= Json::readFile($this->path('composer.lock'));
+        return $this->composerLock ??= Json::readFile($this->path('composer.lock'));
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<mixed> */
     public function packageJson(): array
     {
-        return $this->cache['package.json'] ??= Json::readFile($this->path('package.json'));
+        return $this->packageJson ??= Json::readFile($this->path('package.json'));
     }
 
-    /** @return array<string, mixed> */
-    public function installedJson(): array
+    /** @return list<InstalledPackage> */
+    public function installedPackages(): array
     {
-        return $this->cache['installed.json'] ??= Json::readFile($this->path('vendor/composer/installed.json'));
+        return $this->installed ??= InstalledPackage::listFromJson(Json::readFile($this->path('vendor/composer/installed.json')));
     }
 
     /**
      * Locked packages with their version, from require and require-dev.
      *
-     * @return array<string, string>
+     * @return Collection<string, string>
      */
-    public function lockedPackages(): array
+    public function lockedPackages(): Collection
     {
-        if (isset($this->cache['locked'])) {
-            return $this->cache['locked'];
+        if ($this->locked !== null) {
+            return $this->locked;
         }
 
-        $lock = $this->composerLock();
-        $packages = [];
+        $locked = new Collection;
 
-        foreach (['packages', 'packages-dev'] as $section) {
-            foreach ((array) ($lock[$section] ?? []) as $package) {
-                if (isset($package['name'])) {
-                    $packages[strtolower((string) $package['name'])] = (string) ($package['version'] ?? '');
-                }
+        foreach ([...Read::arrays($this->composerLock(), 'packages'), ...Read::arrays($this->composerLock(), 'packages-dev')] as $package) {
+            $name = strtolower(Read::string($package, 'name'));
+
+            if ($name !== '') {
+                $locked->put($name, Read::string($package, 'version'));
             }
         }
 
-        return $this->cache['locked'] = $packages;
+        return $this->locked = $locked;
     }
 
     public function isInstalled(string $package): bool
     {
-        return array_key_exists(strtolower($package), $this->lockedPackages());
+        return $this->lockedPackages()->has(strtolower($package));
     }
 
     public function installedVersion(string $package): ?string
     {
-        return $this->lockedPackages()[strtolower($package)] ?? null;
+        return $this->lockedPackages()->get(strtolower($package));
     }
 
     public function majorVersion(string $package): ?int
     {
         $version = $this->installedVersion($package);
 
-        if ($version === null || preg_match('/^v?(\d+)/', $version, $match) !== 1) {
+        $parts = $version === null ? null : Regex::groups('/^v?(\d+)/', $version);
+
+        if ($parts === null) {
             return null;
         }
 
-        return (int) $match[1];
+        [$major] = $parts;
+
+        return (int) $major;
     }
 
     /**
@@ -108,18 +127,17 @@ class ProjectInspector
      */
     public function directPackages(): array
     {
-        $composer = $this->composerJson();
         $direct = [];
 
         foreach (['require', 'require-dev'] as $section) {
-            foreach (array_keys((array) ($composer[$section] ?? [])) as $name) {
-                $name = strtolower((string) $name);
+            foreach (Read::keys($this->composerJson(), $section) as $name) {
+                $name = strtolower($name);
 
                 if ($name === 'php' || str_starts_with($name, 'ext-') || str_starts_with($name, 'lib-') || $name === 'composer-plugin-api' || $name === 'composer-runtime-api') {
                     continue;
                 }
 
-                $direct[$name] = $section;
+                $direct = [...$direct, $name => $section];
             }
         }
 
@@ -165,17 +183,10 @@ class ProjectInspector
             return [];
         }
 
-        $names = [];
-
-        foreach ($xml->xpath('//testsuite') ?: [] as $suite) {
-            $name = (string) ($suite['name'] ?? '');
-
-            if ($name !== '') {
-                $names[] = $name;
-            }
-        }
-
-        return $names;
+        return array_values(array_filter(array_map(
+            fn (SimpleXMLElement $suite): string => Xml::attr($suite, 'name'),
+            Xml::xpath($xml, '//testsuite'),
+        )));
     }
 
     /**
@@ -183,24 +194,19 @@ class ProjectInspector
      *
      * @return array<string, string>
      */
-    public function phpunitEnv(): array
+    public function phpunitEnv(bool $forcedOnly = false): array
     {
         $xml = $this->phpunitXml();
-        $env = [];
 
         if ($xml === null) {
             return [];
         }
 
-        foreach ($xml->xpath('//php/env | //php/server') ?: [] as $node) {
-            $name = (string) ($node['name'] ?? '');
-
-            if ($name !== '') {
-                $env[$name] = (string) ($node['value'] ?? '');
-            }
-        }
-
-        return $env;
+        return (new Collection(Xml::xpath($xml, '//php/env | //php/server')))
+            ->filter(fn (SimpleXMLElement $node): bool => Xml::attr($node, 'name') !== '')
+            ->filter(fn (SimpleXMLElement $node): bool => ! $forcedOnly || in_array(strtolower(Xml::attr($node, 'force')), ['true', '1'], true))
+            ->mapWithKeys(fn (SimpleXMLElement $node): array => [Xml::attr($node, 'name') => Xml::attr($node, 'value')])
+            ->all();
     }
 
     public function coverageDriver(): ?string
@@ -243,45 +249,37 @@ class ProjectInspector
         return is_dir($this->path('node_modules/'.$name));
     }
 
-    /**
-     * The Laravel Boost MCP server entry from .mcp.json, if Boost is installed.
-     *
-     * @return array{name: string, config: array<string, mixed>}|null
-     */
-    public function boostMcpServer(): ?array
+    /** The Laravel Boost MCP server from .mcp.json, if Boost is installed. */
+    public function boostMcpServer(): ?McpServer
     {
         if (! $this->isInstalled('laravel/boost')) {
             return null;
         }
 
-        $servers = (array) (Json::readFile($this->path('.mcp.json'))['mcpServers'] ?? []);
+        foreach (Read::array(Json::readFile($this->path('.mcp.json')), 'mcpServers') as $name => $config) {
+            if (! is_array($config)) {
+                continue;
+            }
 
-        foreach ($servers as $name => $config) {
-            $args = implode(' ', array_map('strval', (array) ($config['args'] ?? [])));
-
-            if ($name === 'laravel-boost' || str_contains($args, 'boost:mcp')) {
-                return ['name' => (string) $name, 'config' => (array) $config];
+            if ($name === 'laravel-boost' || str_contains(implode(' ', Read::strings($config, 'args')), 'boost:mcp')) {
+                return new McpServer((string) $name, $config);
             }
         }
 
         return null;
     }
 
-    /**
-     * Where the Pest browser tests live: a test suite or a directory with tests.
-     *
-     * @return array{type: 'suite'|'path', value: string, path: string}|null
-     */
-    public function browserTests(string $suite, string $path): ?array
+    /** Where the Pest browser tests live: a test suite or a directory with tests. */
+    public function browserTests(string $suite, string $path): ?BrowserTestLocation
     {
         $path = trim($path, '/');
 
         if (in_array($suite, $this->testSuites(), true)) {
-            return ['type' => 'suite', 'value' => $suite, 'path' => $this->suiteDirectory($suite) ?? $path];
+            return new BrowserTestLocation('suite', $suite, $this->suiteDirectory($suite) ?? $path);
         }
 
         if (is_dir($this->path($path)) && $this->phpFiles($path) !== []) {
-            return ['type' => 'path', 'value' => $path, 'path' => $path];
+            return new BrowserTestLocation('path', $path, $path);
         }
 
         return null;
@@ -336,9 +334,11 @@ class ProjectInspector
     {
         $xml = $this->phpunitXml();
 
-        foreach ($xml?->xpath('//testsuite') ?: [] as $node) {
-            if ((string) ($node['name'] ?? '') === $suite && isset($node->directory)) {
-                return trim((string) $node->directory[0], './');
+        foreach ($xml === null ? [] : Xml::xpath($xml, '//testsuite') as $node) {
+            $directory = Xml::child($node, 'directory');
+
+            if (Xml::attr($node, 'name') === $suite && $directory !== null) {
+                return trim((string) $directory, './');
             }
         }
 
@@ -347,19 +347,11 @@ class ProjectInspector
 
     private function phpunitXml(): ?SimpleXMLElement
     {
-        if (array_key_exists('phpunit.xml', $this->cache)) {
-            return $this->cache['phpunit.xml'];
+        if ($this->phpunitXml === null) {
+            $path = $this->phpunitConfigPath();
+            $this->phpunitXml = ($path === null ? null : Xml::load($path)) ?? false;
         }
 
-        $path = $this->phpunitConfigPath();
-        $xml = null;
-
-        if ($path !== null) {
-            $previous = libxml_use_internal_errors(true);
-            $xml = simplexml_load_file($path) ?: null;
-            libxml_use_internal_errors($previous);
-        }
-
-        return $this->cache['phpunit.xml'] = $xml;
+        return $this->phpunitXml ?: null;
     }
 }

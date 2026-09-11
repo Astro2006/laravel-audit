@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Support\Read;
 
 /**
  * Experimental, no grade: Σ weight[severity] × factor[confidence].
@@ -13,8 +14,8 @@ use Astro2006\LaravelAudit\Reports\Finding;
 final class RiskPoints
 {
     /**
-     * @param  array<string, int|float>  $weights
-     * @param  array<string, int|float>  $factors
+     * @param  array<mixed>  $weights  config audit.risk_points.weights
+     * @param  array<mixed>  $factors  config audit.risk_points.confidence
      */
     public function __construct(
         private readonly array $weights,
@@ -27,8 +28,8 @@ final class RiskPoints
         $points = 0.0;
 
         foreach ($findings as $finding) {
-            $points += (float) ($this->weights[$finding->severity->value] ?? 0)
-                * (float) ($this->factors[$finding->confidence->value] ?? 1);
+            $points += Read::float($this->weights, $finding->severity->value)
+                * Read::float($this->factors, $finding->confidence->value, 1.0);
         }
 
         return round($points, 1);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\Condensers\TranslationDiff;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
@@ -28,15 +29,11 @@ final class TranslationsStep implements Step
             ? $context->project->path('lang')
             : $context->project->path('resources/lang');
 
-        $diff = $this->diff->diff($directory, $this->defaultLocale);
-        $diff['directory'] = $diff['directory'] === null ? null : $context->project->relative($diff['directory']);
+        $report = $this->diff->diff($directory, $this->defaultLocale);
+        $report = $report->withDirectory($report->directory === null ? null : $context->project->relative($report->directory));
 
-        $context->writeJson('translations.json', $diff);
+        $context->writeJson('translations.json', $report);
 
-        return StepResult::ok($this->step(), [
-            'locales' => $diff['locales'],
-            'missing' => array_sum(array_column($diff['missing'], 'count')),
-            'file' => 'translations.json',
-        ]);
+        return StepResult::ok($this->step(), new TranslationsData($report->locales, $report->missingCount()));
     }
 }

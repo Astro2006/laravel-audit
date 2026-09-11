@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents;
 
+use Astro2006\LaravelAudit\Support\Read;
+
 /**
  * Token, cost and time usage of one or more agent calls.
  */
@@ -17,6 +19,19 @@ final readonly class Telemetry
         public int $turns = 0,
         public int $durationMs = 0,
     ) {}
+
+    /** @param array<mixed> $data */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            Read::int($data, 'input_tokens'),
+            Read::int($data, 'output_tokens'),
+            Read::int($data, 'cache_read_tokens'),
+            Read::nullableFloat($data, 'cost_usd'),
+            Read::int($data, 'turns'),
+            (int) round(Read::float($data, 'duration_s') * 1000),
+        );
+    }
 
     public function plus(self $other): self
     {

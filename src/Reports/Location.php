@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
+use Astro2006\LaravelAudit\Support\Regex;
 use Stringable;
 
 /**
@@ -27,9 +28,8 @@ final readonly class Location implements Stringable
      */
     public static function parseList(string $value): array
     {
-        preg_match_all('/`([^`]+)`/', $value, $matches);
-
-        $items = $matches[1] !== [] ? $matches[1] : explode(',', $value);
+        $quoted = Regex::all('/`([^`]+)`/', $value);
+        $items = $quoted !== [] ? $quoted : explode(',', $value);
 
         $locations = [];
 
@@ -52,19 +52,31 @@ final readonly class Location implements Stringable
             return null;
         }
 
-        if (preg_match('/^route:\s*(.+)$/i', $raw, $match) === 1) {
-            return new self(route: self::normalizeRoute($match[1]));
+        $route = Regex::groups('/^route:\s*(.+)$/i', $raw);
+
+        if ($route !== null) {
+            [$value] = $route;
+
+            return new self(route: self::normalizeRoute($value));
         }
 
-        if (preg_match('/^package:\s*(\S+)$/i', $raw, $match) === 1) {
-            return new self(package: strtolower($match[1]));
+        $package = Regex::groups('/^package:\s*(\S+)$/i', $raw);
+
+        if ($package !== null) {
+            [$value] = $package;
+
+            return new self(package: strtolower($value));
         }
 
-        if (preg_match('/^(.+?):(\d+)(?:\s*-\s*(\d+))?$/', $raw, $match) === 1) {
+        $lines = Regex::groups('/^(.+?):(\d+)(?:\s*-\s*(\d+))?$/', $raw);
+
+        if ($lines !== null) {
+            [$file, $line, $endLine] = $lines;
+
             return new self(
-                file: self::normalizePath($match[1]),
-                line: (int) $match[2],
-                endLine: isset($match[3]) ? (int) $match[3] : null,
+                file: self::normalizePath($file),
+                line: (int) $line,
+                endLine: $endLine === '' ? null : (int) $endLine,
             );
         }
 
@@ -124,12 +136,15 @@ final readonly class Location implements Stringable
     private static function normalizeRoute(string $route): string
     {
         $route = (string) preg_replace('/\s+/', ' ', trim($route));
+        $parts = Regex::groups('/^([A-Za-z|]+)\s+(.+)$/', $route);
 
-        if (preg_match('/^([A-Za-z|]+)\s+(.+)$/', $route, $match) === 1) {
-            return strtoupper($match[1]).' '.$match[2];
+        if ($parts === null) {
+            return $route;
         }
 
-        return $route;
+        [$methods, $uri] = $parts;
+
+        return strtoupper($methods).' '.$uri;
     }
 
     private static function normalizePath(string $path): string

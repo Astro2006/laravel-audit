@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\ValidatedReport;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Facades\Process;
@@ -32,13 +33,14 @@ final class AgentRunner
         private readonly int $concurrency = 4,
         private readonly int $timeout = 1800,
         private readonly int $pollMicroseconds = 250_000,
+        private readonly ChildEnvironment $environment = new ChildEnvironment,
     ) {}
 
     /**
      * @param  list<AgentJob>  $jobs
      * @param  (Closure(AgentJob): void)|null  $onStarted
      * @param  (Closure(AuditOutcome): void)|null  $onFinished
-     * @return array<string, AuditOutcome> audit key => outcome
+     * @return list<AuditOutcome> in the order the audits finished
      */
     public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null): array
     {
@@ -50,28 +52,33 @@ final class AgentRunner
             while (count($running) < max(1, $this->concurrency) && $queue !== []) {
                 $job = array_shift($queue);
                 $onStarted?->__invoke($job);
-                $running[$job->audit->type()->value] = $this->start($job, $job->request->prompt, $this->driver->command($job->request), false);
+                $running[] = $this->start($job, $job->request->prompt, $this->driver->command($job->request), false);
             }
 
-            foreach ($running as $key => $attempt) {
+            $stillRunning = [];
+
+            foreach ($running as $attempt) {
                 $result = $this->poll($attempt);
 
                 if ($result === null) {
+                    $stillRunning[] = $attempt;
+
                     continue;
                 }
 
-                unset($running[$key]);
                 $next = $this->handle($attempt, $result);
 
                 if ($next instanceof Attempt) {
-                    $running[$key] = $next;
+                    $stillRunning[] = $next;
 
                     continue;
                 }
 
-                $outcomes[$key] = $next;
+                $outcomes[] = $next;
                 $onFinished?->__invoke($next);
             }
+
+            $running = $stillRunning;
 
             if ($running !== []) {
                 usleep($this->pollMicroseconds);
@@ -86,7 +93,7 @@ final class AgentRunner
     {
         $process = Process::path($job->request->workingDirectory)
             ->timeout($this->timeout + 60)
-            ->env($this->driver->environment())
+            ->env([...$this->environment->overrides(), ...$this->driver->environment()])
             ->input($input)
             ->start($command);
 

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
+use Astro2006\LaravelAudit\Data\Tests\CoverageReport;
+use Astro2006\LaravelAudit\Support\Xml;
 use SimpleXMLElement;
 
 /**
@@ -11,74 +14,77 @@ use SimpleXMLElement;
  */
 final class CoverageCondenser
 {
-    /**
-     * @return array{lines_pct: float|null, files: int, classes: list<array<string, mixed>>}|null
-     */
-    public function condense(string $cloverPath, string $basePath, string $sourceDir = 'app'): ?array
+    public function condense(string $cloverPath, string $basePath, string $sourceDir = 'app'): ?CoverageReport
     {
-        if (! is_file($cloverPath)) {
-            return null;
-        }
+        $xml = Xml::load($cloverPath);
 
-        $previous = libxml_use_internal_errors(true);
-        $xml = simplexml_load_file($cloverPath);
-        libxml_use_internal_errors($previous);
-
-        if (! $xml instanceof SimpleXMLElement) {
+        if ($xml === null) {
             return null;
         }
 
         $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
+        $prefix = rtrim($sourceDir, '/').'/';
         $classes = [];
         $statements = 0;
         $covered = 0;
 
-        foreach ($xml->xpath('//file') ?: [] as $file) {
-            $path = str_replace('\\', '/', (string) ($file['name'] ?? ''));
+        foreach (Xml::xpath($xml, '//file') as $file) {
+            $path = str_replace('\\', '/', Xml::attr($file, 'name'));
             $relative = str_starts_with($path, $base) ? substr($path, strlen($base)) : $path;
 
-            if (! str_starts_with($relative, rtrim($sourceDir, '/').'/')) {
+            if (! str_starts_with($relative, $prefix)) {
                 continue;
             }
 
-            $metrics = $file->metrics[0] ?? null;
-            $fileStatements = (int) ($metrics['statements'] ?? 0);
-            $fileCovered = (int) ($metrics['coveredstatements'] ?? 0);
+            $metrics = Xml::child($file, 'metrics');
+            $fileStatements = $metrics === null ? 0 : (int) Xml::attr($metrics, 'statements', '0');
+            $fileCovered = $metrics === null ? 0 : (int) Xml::attr($metrics, 'coveredstatements', '0');
             $statements += $fileStatements;
             $covered += $fileCovered;
 
-            $uncovered = [];
-
-            foreach ($file->line as $line) {
-                if ((string) ($line['type'] ?? '') === 'method' && (int) ($line['count'] ?? 0) === 0 && count($uncovered) < 10) {
-                    $uncovered[] = (string) ($line['name'] ?? '');
-                }
-            }
-
-            $className = null;
-
-            if (isset($file->class[0])) {
-                $name = (string) $file->class[0]['name'];
-                $namespace = (string) ($file->class[0]['namespace'] ?? '');
-                $className = str_contains($name, '\\') || $namespace === '' ? $name : $namespace.'\\'.$name;
-            }
-
-            $classes[] = [
-                'class' => $className,
-                'file' => $relative,
-                'lines_pct' => $this->percent($fileCovered, $fileStatements),
-                'statements' => $fileStatements,
-                'uncovered_methods' => array_values(array_filter($uncovered)),
-            ];
+            $classes[] = new ClassCoverage(
+                class: $this->className($file),
+                file: $relative,
+                linesPct: $this->percent($fileCovered, $fileStatements),
+                statements: $fileStatements,
+                uncoveredMethods: $this->uncoveredMethods($file),
+            );
         }
 
-        usort($classes, fn (array $a, array $b): int => [$a['lines_pct'], -$a['statements']] <=> [$b['lines_pct'], -$b['statements']]);
+        usort($classes, fn (ClassCoverage $a, ClassCoverage $b): int => [$a->linesPct, -$a->statements] <=> [$b->linesPct, -$b->statements]);
 
-        return [
-            'lines_pct' => $statements === 0 ? null : $this->percent($covered, $statements),
-            'files' => count($classes),
-            'classes' => $classes,
-        ];
+        return new CoverageReport($statements === 0 ? null : $this->percent($covered, $statements), $classes);
+    }
+
+    private function className(SimpleXMLElement $file): ?string
+    {
+        $class = Xml::child($file, 'class');
+
+        if ($class === null) {
+            return null;
+        }
+
+        $name = Xml::attr($class, 'name');
+        $namespace = Xml::attr($class, 'namespace');
+
+        return str_contains($name, '\\') || $namespace === '' ? $name : $namespace.'\\'.$name;
+    }
+
+    /** @return list<string> at most ten */
+    private function uncoveredMethods(SimpleXMLElement $file): array
+    {
+        $methods = [];
+
+        foreach ($file->children() as $line) {
+            if ($line->getName() === 'line'
+                && Xml::attr($line, 'type') === 'method'
+                && (int) Xml::attr($line, 'count', '0') === 0
+                && Xml::attr($line, 'name') !== '') {
+                $methods[] = Xml::attr($line, 'name');
+            }
+        }
+
+        return array_slice($methods, 0, 10);
     }
 
     private function percent(int $covered, int $total): float

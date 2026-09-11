@@ -1,14 +1,16 @@
 <?php
 
+use Astro2006\LaravelAudit\Data\Run\RunRecord;
 use Astro2006\LaravelAudit\Eval\EvalReport;
 use Astro2006\LaravelAudit\Eval\ExpectedSet;
 
-function evalRun(string $id, array $findings, array $extra = []): array
+function evalRun(string $id, array $findings, array $extra = []): RunRecord
 {
-    return [
+    return RunRecord::fromArray([
         'run_id' => $id,
         'overlaps' => 1,
-        'outcomes' => ['backend' => array_merge([
+        'outcomes' => [array_merge([
+            'audit' => 'backend',
             'status' => 'completed',
             'repaired' => false,
             'prompt_hash' => 'abc12345',
@@ -16,7 +18,7 @@ function evalRun(string $id, array $findings, array $extra = []): array
             'findings' => $findings,
             'warnings' => [],
         ], $extra)],
-    ];
+    ]);
 }
 
 function evalFinding(string $key, string $check, string $target, string $severity = 'high'): array
@@ -55,19 +57,24 @@ it('measures recall, severity, control hits, stability, format and cost', functi
     ];
 
     $result = (new EvalReport)->evaluate(expectedSet(), $runs);
-    $backend = $result['audits']['backend'];
+    $backend = $result->audit('backend');
 
-    expect($backend['planted'])->toBe(2)
-        ->and($backend['found'])->toBe([2, 1])
-        ->and($backend['recall'])->toBe(75.0)
-        ->and($backend['severity_ok'])->toBe([1, 1])
-        ->and($backend['control_hits'])->toBe([1, 0])
-        ->and($backend['stability'])->toBe(['jaccard' => 0.25, 'in_all_runs' => 0.25])
-        ->and($backend['format'])->toBe(['completed' => 2, 'repaired' => 1, 'failed' => 0, 'hallucinated_locations' => 1])
-        ->and($backend['cost']['cost_usd'])->toBe(['mean' => 2.0, 'max' => 2.0])
-        ->and($backend['missed'])->toBe([])
-        ->and(array_column($backend['extra_findings'], 'key'))->toBe(['k4'])
-        ->and($result['duplicates'])->toBe([1, 1]);
+    expect($backend)->not->toBeNull()
+        ->planted->toBe(2)
+        ->found->toBe([2, 1])
+        ->severityOk->toBe([1, 1])
+        ->controlHits->toBe([1, 0])
+        ->completed->toBe(2)
+        ->repaired->toBe(1)
+        ->failed->toBe(0)
+        ->hallucinatedLocations->toBe(1)
+        ->missed->toBe([])
+        ->and($backend->recall())->toBe(75.0)
+        ->and($backend->stability)->jaccard->toBe(0.25)->inAllRuns->toBe(0.25)
+        ->and($backend->cost)->costMean->toBe(2.0)->costMax->toBe(2.0)
+        ->and(array_map(fn ($finding) => $finding->key, $backend->extraFindings))->toBe(['k4'])
+        ->and($result->duplicates)->toBe([1, 1])
+        ->and($result->controlHitsTotal())->toBe([1, 0]);
 });
 
 it('renders a markdown report with missed and extra findings', function () {
@@ -84,5 +91,7 @@ it('renders a markdown report with missed and extra findings', function () {
 });
 
 it('matches packages case-insensitively via the package key', function () {
-    expect(expectedSet()->plantedFor('dependencies')[0]->target)->toBe('package:guzzlehttp/psr7');
+    [$planted] = expectedSet()->plantedFor('dependencies');
+
+    expect($planted->target)->toBe('package:guzzlehttp/psr7');
 });

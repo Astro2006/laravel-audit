@@ -7,7 +7,6 @@ use Astro2006\LaravelAudit\Agents\McpConfigWriter;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-
 it('builds a read-only headless command', function () {
     $driver = new ClaudeCodeDriver(
         binary: 'claude',

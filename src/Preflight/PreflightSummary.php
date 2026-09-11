@@ -4,65 +4,54 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
+use Astro2006\LaravelAudit\Audits\DependenciesAudit;
+use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
-use Astro2006\LaravelAudit\Enums\StepStatus;
-use Illuminate\Support\Arr;
+use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\Read;
 
 /**
- * Read access to preflight/summary.json.
+ * preflight/summary.json — the first file every agent reads.
  */
 final readonly class PreflightSummary
 {
-    /** @param array<string, mixed> $data */
     public function __construct(
-        public array $data,
+        public string $runId,
+        public GateDecision $gate,
+        public StepResults $steps,
         public ?string $directory = null,
     ) {}
 
     public static function fromDirectory(string $preflightDir): self
     {
-        $path = $preflightDir.'/summary.json';
-        $data = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+        $data = Json::readFile($preflightDir.'/summary.json');
+        $steps = new StepResults;
 
-        return new self(is_array($data) ? $data : [], $preflightDir);
-    }
+        foreach (PreflightStep::cases() as $step) {
+            $stepData = Read::array($data, 'steps.'.$step->value);
 
-    public function get(string $key, mixed $default = null): mixed
-    {
-        return Arr::get($this->data, $key, $default);
-    }
-
-    /** @return array<string, mixed> */
-    public function step(PreflightStep $step): array
-    {
-        $data = $this->get('steps.'.$step->value, []);
-
-        return is_array($data) ? $data : [];
-    }
-
-    public function status(PreflightStep $step): ?StepStatus
-    {
-        return StepStatus::tryFrom((string) ($this->step($step)['status'] ?? ''));
-    }
-
-    public function ran(PreflightStep $step): bool
-    {
-        return $this->status($step) === StepStatus::Ok;
-    }
-
-    /**
-     * Decodes a JSON file below the preflight directory.
-     *
-     * @return array<mixed>
-     */
-    public function json(string $relativePath): array
-    {
-        if ($this->directory === null || ! is_file($this->directory.'/'.$relativePath)) {
-            return [];
+            if ($stepData !== []) {
+                $steps->put(StepResult::fromArray($step, $stepData));
+            }
         }
 
-        $data = json_decode((string) file_get_contents($this->directory.'/'.$relativePath), true);
+        return new self(
+            Read::string($data, 'run_id'),
+            GateDecision::tryFrom(Read::string($data, 'gate')) ?? GateDecision::NotRun,
+            $steps,
+            $preflightDir,
+        );
+    }
 
-        return is_array($data) ? $data : [];
+    public function dependencyFacts(): ?DependencyFactsReport
+    {
+        if ($this->directory === null || ! $this->steps->ran(PreflightStep::Composer)) {
+            return null;
+        }
+
+        $data = Json::readFile($this->directory.'/'.DependenciesAudit::FACTS_FILE);
+
+        return $data === [] ? null : DependencyFactsReport::fromArray($data);
     }
 }

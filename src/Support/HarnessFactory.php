@@ -54,7 +54,13 @@ class HarnessFactory
             $project,
             (array) config('database.connections', []),
             (string) config('database.default', 'sqlite'),
+            $this->childEnvironment($project)->inherited(),
         );
+    }
+
+    public function childEnvironment(ProjectInspector $project): ChildEnvironment
+    {
+        return ChildEnvironment::for($project, app()->environmentFile());
     }
 
     /** @return list<Step> */

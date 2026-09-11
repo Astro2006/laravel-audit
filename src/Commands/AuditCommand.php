@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Agents\McpConfigWriter;
 use Astro2006\LaravelAudit\Console\StepFormatter;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\GateDecision;
@@ -27,6 +28,7 @@ use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\SummaryBuilder;
 use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Prompts\PromptContextBuilder;
+use Astro2006\LaravelAudit\Requirements\Check;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Run\GitInfo;
@@ -38,6 +40,7 @@ use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\HarnessFactory;
 use Astro2006\LaravelAudit\Support\Messages;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Astro2006\LaravelAudit\Support\Read;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
 
@@ -65,17 +68,20 @@ class AuditCommand extends Command
 
     private StepFormatter $formatter;
 
-    /** @var array<string, mixed> */
-    private array $config = [];
+    private HarnessFactory $factory;
 
     public function handle(HarnessFactory $factory): int
     {
+        $this->factory = $factory;
         $this->messages = Messages::fromConfig();
         $this->formatter = new StepFormatter($this->messages);
-        $this->config = $config = $factory->allConfig();
 
         try {
-            $selection = RunSelection::resolve((array) ($config['audits'] ?? []), $this->explicitAudits(), array_values((array) $this->option('without')));
+            $selection = RunSelection::resolve(
+                array_map('boolval', Read::array($factory->allConfig(), 'audits')),
+                $this->explicitAudits(),
+                array_values(array_map('strval', (array) $this->option('without'))),
+            );
         } catch (InvalidSelection $exception) {
             $this->components->error($exception->getMessage());
 
@@ -87,38 +93,37 @@ class AuditCommand extends Command
         $driver = $factory->driver($project);
         $preflightOnly = (bool) $this->option('preflight-only');
 
-        $checks = (new RequirementChecker($project, $config, $guard, $driver, $this->messages))
+        $checks = (new RequirementChecker($project, $factory->allConfig(), $guard, $driver, $this->messages))
             ->check($selection, ! $preflightOnly, app()->environment('production'));
 
-        $this->header($driver, $selection, $config);
+        $this->header($driver, $selection);
         $this->printChecks($checks);
 
         if (RequirementChecker::hasFailures($checks)) {
             return self::HARNESS_ERROR;
         }
 
-        $run = AuditRun::create((string) ($config['output_path'] ?? storage_path('audit')));
+        $run = AuditRun::create((string) $factory->config('output_path', storage_path('audit')));
         $manifest = new RunManifest($run, $selection, GitInfo::read($project->basePath), $driver->name(), $this->packageVersion());
         $manifest->write();
 
         $this->section('preflight');
 
-        $preflight = $this->input->hasParameterOption('--reuse-preflight')
+        $summary = $this->input->hasParameterOption('--reuse-preflight')
             ? $this->reusePreflight($run, $manifest, $selection, $project)
-            : $this->runPreflight($factory, $run, $manifest, $selection, $project, $guard, $config);
+            : $this->runPreflight($run, $manifest, $selection, $project, $guard);
 
-        if ($preflight === null) {
+        if ($summary === null) {
             $manifest->finish(RunStatus::Failed);
             $manifest->write();
 
             return self::HARNESS_ERROR;
         }
 
-        [$summary, $gate] = $preflight;
-        $manifest->gate = $gate;
+        $manifest->gate = $summary->gate;
         $manifest->browser = $this->browserLabel($summary);
 
-        if (! $gate->allowsAgents()) {
+        if (! $summary->gate->allowsAgents()) {
             $manifest->finish(RunStatus::Aborted);
             $manifest->write();
             $this->newLine();
@@ -138,11 +143,11 @@ class AuditCommand extends Command
             return self::OK;
         }
 
-        $outcomes = $this->runAgents($factory, $driver, $run, $selection, $project, $summary, $config);
+        $outcomes = $this->runAgents($driver, $run, $selection, $project, $summary);
 
         $riskPoints = new RiskPoints(
-            (array) ($config['risk_points']['weights'] ?? []),
-            (array) ($config['risk_points']['confidence'] ?? []),
+            Read::array($factory->allConfig(), 'risk_points.weights'),
+            Read::array($factory->allConfig(), 'risk_points.confidence'),
         );
         (new RunFinalizer($riskPoints))->finalize($manifest, $summary, $outcomes, $driver->name());
 
@@ -158,31 +163,24 @@ class AuditCommand extends Command
         ));
     }
 
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array{PreflightSummary, GateDecision}
-     */
-    private function runPreflight(HarnessFactory $factory, AuditRun $run, RunManifest $manifest, RunSelection $selection, ProjectInspector $project, DatabaseGuard $guard, array $config): array
+    private function runPreflight(AuditRun $run, RunManifest $manifest, RunSelection $selection, ProjectInspector $project, DatabaseGuard $guard): PreflightSummary
     {
-        $context = new PreflightContext($project, $run->preflightDir(), $run->logsDir(), $config, $selection);
-        $runner = new PreflightRunner($factory->steps($project, $guard));
+        $context = new PreflightContext($project, $run->preflightDir(), $run->logsDir(), $this->factory->allConfig(), $selection, $this->factory->childEnvironment($project));
 
-        $gate = $runner->run(
+        $gate = (new PreflightRunner($this->factory->steps($project, $guard)))->run(
             $context,
             fn (StepResult $result) => $this->printStep($result),
             fn (StepResult $tests) => $this->gate($tests),
         );
 
         $summary = (new SummaryBuilder)->write($context, $run->id, $gate);
-        $manifest->recordSteps($context->results());
-        $manifest->preflightComplete = $gate->allowsAgents()
-            && ! in_array(StepStatus::Error, array_map(fn (StepResult $result) => $result->status, $context->results()), true);
+        $manifest->steps = $context->results;
+        $manifest->preflightComplete = $gate->allowsAgents() && ! $context->results->hasErrors();
 
-        return [$summary, $gate];
+        return $summary;
     }
 
-    /** @return array{PreflightSummary, GateDecision}|null */
-    private function reusePreflight(AuditRun $run, RunManifest $manifest, RunSelection $selection, ProjectInspector $project): ?array
+    private function reusePreflight(AuditRun $run, RunManifest $manifest, RunSelection $selection, ProjectInspector $project): ?PreflightSummary
     {
         $reuse = new PreflightReuse;
         $value = $this->option('reuse-preflight');
@@ -194,78 +192,78 @@ class AuditCommand extends Command
             return null;
         }
 
-        $reuse->copy($run->outputRoot.'/'.$source['run'].'/preflight', $run->preflightDir());
-        $summary = PreflightSummary::fromDirectory($run->preflightDir());
-        $missing = $reuse->missingSteps($summary, $selection->requiredSteps());
+        $reuse->copy($run->outputRoot.'/'.$source->runId.'/preflight', $run->preflightDir());
+        $stored = PreflightSummary::fromDirectory($run->preflightDir());
+        $missing = $reuse->missingSteps($stored, $selection->requiredSteps());
 
         if ($missing !== []) {
-            $this->components->error($this->messages->get('reuse.incomplete', ['run' => $source['run'], 'steps' => implode(', ', $missing)]));
+            $this->components->error($this->messages->get('reuse.incomplete', ['run' => $source->runId, 'steps' => implode(', ', $missing)]));
 
             return null;
         }
 
-        $this->line('  '.$this->messages->get('reuse.using', ['run' => $source['run']]));
+        $this->line('  '.$this->messages->get('reuse.using', ['run' => $source->runId]));
 
-        $then = ($source['manifest']['git_commit'] ?? '').(($source['manifest']['git_dirty'] ?? '') === 'true' ? '+dirty' : '');
         $now = ($manifest->git->commit ?? '').($manifest->git->dirty ? '+dirty' : '');
 
-        if ($then !== $now || str_contains($now, '+dirty')) {
-            $this->line('  <fg=yellow>⚠</> '.$this->messages->get('reuse.commit_changed', ['then' => $then ?: '?', 'now' => $now ?: '?']));
+        if ($source->codeState() !== $now || str_contains($now, '+dirty')) {
+            $this->line('  <fg=yellow>⚠</> '.$this->messages->get('reuse.commit_changed', ['then' => $source->codeState() ?: '?', 'now' => $now ?: '?']));
         }
 
-        $results = [];
-
-        foreach ($selection->requiredSteps() as $step) {
-            $results[$step->value] = StepResult::fromArray($step, $summary->step($step));
-            $this->printStep($results[$step->value]);
+        foreach ($stored->steps->all() as $result) {
+            if (in_array($result->step, $selection->requiredSteps(), true)) {
+                $this->printStep($result);
+            }
         }
 
-        $manifest->preflightFrom = $source['run'];
+        $manifest->preflightFrom = $source->runId;
         $manifest->preflightComplete = true;
-        $manifest->recordSteps($results);
+        $manifest->steps = $stored->steps;
 
-        $gate = isset($results[PreflightStep::Tests->value])
-            ? $this->gate($results[PreflightStep::Tests->value])
-            : GateDecision::NotRun;
+        $tests = $stored->steps->get(PreflightStep::Tests);
+        $gate = $tests === null ? GateDecision::NotRun : $this->gate($tests);
 
-        return [$summary, $gate];
+        return new PreflightSummary($run->id, $gate, $stored->steps, $run->preflightDir());
     }
 
     private function gate(StepResult $tests): GateDecision
     {
-        if ($tests->isOk() && TestGate::failures($tests) > 0) {
-            $this->newLine();
-            $this->line('  <fg=yellow>'.$this->messages->get('gate.failing', ['count' => TestGate::failures($tests)]).'</>');
+        $data = TestGate::data($tests);
 
-            foreach (array_slice((array) $tests->get('failing', []), 0, 5) as $name) {
+        if ($data !== null && $data->failures() > 0) {
+            $this->newLine();
+            $this->line('  <fg=yellow>'.$this->messages->get('gate.failing', ['count' => $data->failures()]).'</>');
+
+            foreach ($data->failing as $name) {
                 $this->line('    · '.$name);
             }
 
-            if ($tests->get('environment_error')) {
-                $this->line('  <fg=red>✘ '.$this->messages->get('gate.broken', ['reason' => (string) $tests->get('top_failure', '?')]).'</>');
+            if ($data->environmentError) {
+                $this->line('  <fg=red>✘ '.$this->messages->get('gate.broken', ['reason' => $data->topFailure ?? '?']).'</>');
             }
         }
 
-        $mode = GateMode::tryFrom((string) ($this->config['preflight']['tests']['gate'] ?? 'ask')) ?? GateMode::Ask;
+        // Without agents there is nothing to protect; the remaining steps still
+        // run. --reuse-preflight asks again before agents start.
+        if ($this->option('preflight-only') && $data !== null && $data->failures() > 0) {
+            return GateDecision::Continued;
+        }
 
         return (new TestGate)->decide(
             $tests,
-            $mode,
+            GateMode::tryFrom((string) $this->factory->config('preflight.tests.gate', 'ask')) ?? GateMode::Ask,
             (bool) $this->option('force'),
             $this->input->isInteractive(),
-            fn () => $this->confirm($this->messages->get('gate.question'), false),
+            fn (TestsData $data): bool => $this->confirm($this->messages->get('gate.question'), false),
         );
     }
 
-    /**
-     * @param  array<string, mixed>  $config
-     * @return array<string, AuditOutcome>
-     */
-    private function runAgents(HarnessFactory $factory, AgentDriver $driver, AuditRun $run, RunSelection $selection, ProjectInspector $project, PreflightSummary $summary, array $config): array
+    /** @return list<AuditOutcome> */
+    private function runAgents(AgentDriver $driver, AuditRun $run, RunSelection $selection, ProjectInspector $project, PreflightSummary $summary): array
     {
         $mcp = (new McpConfigWriter)->write($project, $run->logsDir().'/mcp.json');
-        $context = (new PromptContextBuilder)->build($summary, $run, $project, $config, $this->messages->locale, $mcp !== null);
-        $renderer = $factory->promptRenderer();
+        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $mcp !== null);
+        $renderer = $this->factory->promptRenderer();
         $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
 
         $jobs = [];
@@ -287,10 +285,11 @@ class AuditCommand extends Command
 
         $runner = new AgentRunner(
             $driver,
-            $factory->validator($project),
+            $this->factory->validator($project),
             $run->logsDir(),
-            (int) ($config['agent']['concurrency'] ?? 4),
-            (int) ($config['agent']['timeout'] ?? 1800),
+            (int) $this->factory->config('agent.concurrency', 4),
+            (int) $this->factory->config('agent.timeout', 1800),
+            environment: $this->factory->childEnvironment($project),
         );
 
         return $runner->run(
@@ -300,17 +299,17 @@ class AuditCommand extends Command
         );
     }
 
-    /** @param array<string, AuditOutcome> $outcomes */
+    /** @param list<AuditOutcome> $outcomes */
     private function printSummary(RunManifest $manifest, array $outcomes, ProjectInspector $project): int
     {
         $findings = [];
         $failed = [];
 
-        foreach ($outcomes as $audit => $outcome) {
+        foreach ($outcomes as $outcome) {
             array_push($findings, ...$outcome->findings);
 
             if (! $outcome->completed()) {
-                $failed[] = $audit;
+                $failed[] = $outcome->audit->value;
             }
         }
 
@@ -328,25 +327,25 @@ class AuditCommand extends Command
         return $failed === [] ? self::OK : self::HARNESS_ERROR;
     }
 
-    /** @param array<string, mixed> $config */
-    private function header(AgentDriver $driver, RunSelection $selection, array $config): void
+    private function header(AgentDriver $driver, RunSelection $selection): void
     {
-        $model = $config['agent']['model'] ?? null;
+        $model = $this->factory->config('agent.model');
 
         $this->newLine();
         $this->line(' <options=bold>'.$this->messages->get('header', [
             'version' => $this->packageVersion(),
-            'agent' => $driver->name().($model ? ' ('.$model.')' : ''),
+            'agent' => $driver->name().(is_string($model) && $model !== '' ? ' ('.$model.')' : ''),
         ]).'</>');
 
         if ($selection->without !== [] || count($selection->audits) < count(AuditType::cases())) {
-            $this->line(' <fg=gray>'.implode(', ', $selection->auditValues()).($selection->without === [] ? '' : ' · '.$this->messages->get('without', ['items' => implode(', ', $selection->withoutValues())])).'</>');
+            $without = $selection->without === [] ? '' : ' · '.$this->messages->get('without', ['items' => implode(', ', $selection->withoutValues())]);
+            $this->line(' <fg=gray>'.implode(', ', $selection->auditValues()).$without.'</>');
         }
 
         $this->section('requirements');
     }
 
-    /** @param list<\Astro2006\LaravelAudit\Requirements\Check> $checks */
+    /** @param list<Check> $checks */
     private function printChecks(array $checks): void
     {
         foreach ($checks as $check) {
@@ -364,7 +363,7 @@ class AuditCommand extends Command
     private function printStep(StepResult $result): void
     {
         $line = $this->formatter->format($result);
-        $this->components->twoColumnDetail(sprintf('<fg=%s>%s</> %s', $line['color'], $line['symbol'], $line['label']), $line['detail']);
+        $this->components->twoColumnDetail(sprintf('<fg=%s>%s</> %s', $line->color, $line->symbol, $line->label), $line->detail);
 
         foreach ($this->formatter->warnings($result) as $warning) {
             $this->line('    <fg=yellow>⚠</> '.$warning);
@@ -382,13 +381,14 @@ class AuditCommand extends Command
         }
 
         $t = $outcome->telemetry;
+        $seconds = intdiv($t->durationMs, 1000);
         $detail = $this->messages->get('agents.finished', [
             'findings' => count($outcome->findings),
             'turns' => $t->turns,
             'input' => $this->tokens($t->inputTokens + $t->cacheReadTokens),
             'output' => $this->tokens($t->outputTokens),
             'cost' => $t->costUsd === null ? '–' : '$'.number_format($t->costUsd, 2),
-            'duration' => sprintf('%dm%02ds', intdiv(intdiv($t->durationMs, 1000), 60), intdiv($t->durationMs, 1000) % 60),
+            'duration' => sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60),
         ]).($outcome->repaired ? ' · '.$this->messages->get('agents.repaired') : '');
 
         $this->components->twoColumnDetail('<fg=green>✔</> '.$name, $detail);
@@ -402,9 +402,11 @@ class AuditCommand extends Command
 
     private function browserLabel(PreflightSummary $summary): string
     {
-        return match ($summary->status(PreflightStep::Browser)) {
+        $result = $summary->steps->get(PreflightStep::Browser);
+
+        return match ($result?->status) {
             StepStatus::Ok => 'playwright',
-            StepStatus::Skipped => 'skipped ('.$summary->get('steps.browser.reason').')',
+            StepStatus::Skipped => 'skipped ('.$result->reason?->value.')',
             StepStatus::Error => 'error',
             null => 'not part of this run',
         };

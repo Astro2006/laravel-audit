@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Prompts;
 
+use Astro2006\LaravelAudit\Support\Read;
+
 /**
  * Run-specific values the prompt placeholders are filled with.
  */
@@ -30,4 +32,10 @@ final readonly class PromptContext
         public int $maxFindings,
         public bool $boostAvailable,
     ) {}
+
+    /** @return list<string> */
+    public function customChecksFor(string $audit): array
+    {
+        return Read::strings($this->customChecks, $audit);
+    }
 }

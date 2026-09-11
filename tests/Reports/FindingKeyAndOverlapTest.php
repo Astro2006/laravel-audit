@@ -50,9 +50,11 @@ it('detects possible duplicates across audits', function () {
         'dependencies' => [makeFinding('DEP-001', 'abandoned-package', ['package:a/b'])],
     ]);
 
+    [$overlap] = $overlaps;
+
     expect($overlaps)->toHaveCount(1)
-        ->and($overlaps[0]->findingA->id)->toBe('BE-001')
-        ->and($overlaps[0]->findingB->id)->toBe('FE-001');
+        ->and($overlap->findingA->id)->toBe('BE-001')
+        ->and($overlap->findingB->id)->toBe('FE-001');
 });
 
 it('writes frontmatter and title before the body', function () {

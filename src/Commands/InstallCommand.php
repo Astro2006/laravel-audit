@@ -13,6 +13,7 @@ use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Support\HarnessFactory;
 use Astro2006\LaravelAudit\Support\Messages;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Process as SymfonyProcess;
 
@@ -100,15 +101,24 @@ class InstallCommand extends Command
             $this->line(' '.$this->messages->get('install.need'));
             $this->newLine();
 
+            $width = max(array_map(fn (PlannedPackage $package): int => mb_strlen($package->name), $plan->packages)) + 2;
+
             foreach ($plan->packages as $package) {
                 $manager = $package->manager === 'npm' ? 'npm --save-dev' : 'composer --dev';
-                $tag = $package->isUpgrade() ? ' <fg=yellow>['.$this->messages->get('install.upgrade_tag').': '.$package->upgradeReason.']</>' : '';
-                $this->components->twoColumnDetail('  '.$package->name.$tag, $this->messages->get('install.purposes.'.$package->name).'  <fg=gray>'.$manager.'</>');
+                $tag = $package->isUpgrade() ? '  <fg=yellow>['.$this->messages->get('install.upgrade_tag').': '.$package->upgradeReason.']</>' : '';
+
+                $this->line(sprintf(
+                    '  %s%s  <fg=gray>%s</>%s',
+                    str_pad($package->name, $width),
+                    $this->messages->get('install.purposes.'.$package->name),
+                    $manager,
+                    $tag,
+                ));
             }
         }
 
         foreach ($plan->notes as $note) {
-            $this->line('  <fg=blue>ℹ</> '.$this->messages->get($note['key'], $note['replace'] ?? []));
+            $this->line('  <fg=blue>ℹ</> '.$this->messages->get($note->key, $note->replace));
         }
 
         $commands = $this->commandLines($plan, $executor, $stubLevel);
@@ -136,7 +146,7 @@ class InstallCommand extends Command
 
         foreach ($plan->setup as $step) {
             $lines[] = match ($step) {
-                'phpstan-stub' => 'phpstan.neon (level '.$stubLevel.')',
+                'phpstan-stub' => $this->messages->get('install.stub_planned', ['level' => $stubLevel]),
                 'boost' => 'php artisan boost:install    ('.$this->messages->get('install.interactive').')',
                 default => $this->display((array) $executor->setupCommand($step)),
             };
@@ -265,7 +275,8 @@ class InstallCommand extends Command
      */
     private function finish(ProjectInspector $project, array $config, InstallPlan $plan, array $declined, array $failed, bool $stub, int $stubLevel): int
     {
-        AuditRun::ensureOutputRoot((string) ($config['output_path'] ?? storage_path('audit')));
+        $outputPath = Read::string($config, 'output_path', storage_path('audit'));
+        AuditRun::ensureOutputRoot($outputPath);
 
         // Re-check from the files: composer.lock and node_modules tell the
         // truth, independent of what this process has loaded.
@@ -284,7 +295,7 @@ class InstallCommand extends Command
             $done[] = $this->messages->get('install.stub_created', ['level' => $stubLevel]);
         }
 
-        $done[] = $this->messages->get('install.gitignore', ['path' => $project->relative((string) ($config['output_path'] ?? storage_path('audit')))]);
+        $done[] = $this->messages->get('install.gitignore', ['path' => $project->relative($outputPath)]);
 
         $this->newLine();
         $this->line(' '.$this->messages->get('install.done'));
@@ -304,7 +315,7 @@ class InstallCommand extends Command
 
         foreach ($plan->manual as $key) {
             $this->line('  <fg=yellow>⚠</> '.$this->messages->get($key === 'node' ? 'install.node_hint' : ($key === 'requirements.coverage_missing' ? 'install.coverage_hint' : $key), [
-                'binary' => (string) ($config['agent']['binary'] ?? 'claude'),
+                'binary' => Read::string($config, 'agent.binary', 'claude'),
             ]));
         }
 
@@ -316,10 +327,8 @@ class InstallCommand extends Command
     /** @param list<string> $command */
     private function display(array $command): string
     {
-        if (($command[0] ?? null) === PHP_BINARY) {
-            $command[0] = 'php';
-        }
+        $parts = array_map(fn (string $part): string => $part === PHP_BINARY ? 'php' : $part, $command);
 
-        return implode(' ', array_map(fn (string $part): string => preg_match('/^[\w@:.\/=+-]+$/', $part) === 1 ? $part : escapeshellarg($part), $command));
+        return implode(' ', array_map(fn (string $part): string => preg_match('/^[\w@:.\/=+-]+$/', $part) === 1 ? $part : escapeshellarg($part), $parts));
     }
 }

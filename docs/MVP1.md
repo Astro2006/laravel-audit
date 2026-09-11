@@ -193,14 +193,14 @@ Der Installer wird gebaut, sobald `php artisan audit` läuft (siehe 15). Er nutz
 | Paket | Wofür | Nötig wenn |
 |---|---|---|
 | `laravel/boost` (composer, dev) | Kontext für die Agents (MCP: Schema, Routen, Doku-Suche) | empfohlen; der Audit läuft auch ohne |
-| `larastan/larastan` (composer, dev) | Statische Analyse mit PHPStan | Audits `tests` oder `backend` aktiv |
-| `laravel/pint` (composer, dev) | Lint-Schritt | Audit `backend` aktiv |
 | `brianium/paratest` (composer, dev) | parallele Tests | Audit `tests` aktiv und das Projekt nutzt nur PHPUnit (Pest bringt es mit) |
 | `pestphp/pest-plugin-browser` (composer, dev) | Browser-Tests mit Playwright | Audit `tests` oder `frontend` aktiv |
 | `pestphp/pest` (composer, dev) | Voraussetzung für das Browser-Plugin | wie oben, und das Projekt nutzt nur PHPUnit |
 | `playwright` (npm, dev) + Browser-Binaries | Browser-Engine | wie oben |
 
-Welche Audits aktiv sind, kommt aus `config('audit.audits')`. Wer `backend` nie laufen lässt, wird nicht nach Pint gefragt.
+Welche Audits aktiv sind, kommt aus `config('audit.audits')`. Wer weder `tests` noch `frontend` laufen lässt, wird nicht nach den Browser-Paketen gefragt.
+
+**Larastan und Pint** sind Abhängigkeiten des Pakets (`require`, nicht `require-dev`): Der Preflight ruft sie im Zielprojekt auf, also müssen sie dort installiert sein. Sie kommen mit `composer require --dev astro2006/laravel-audit` automatisch mit und erscheinen im Installer unter „Bereits vorhanden“. Was fehlen kann, ist nur die `phpstan.neon`; die legt der Installer aus dem Stub an.
 
 **Browser-Tests:** MVP1 unterstützt nur Playwright über das Pest-Browser-Plugin (Pest 4+). Dusk ist die ältere Lösung und entfällt. Das Plugin wird auch angeboten, wenn das Projekt noch keine Browser-Tests hat. Der Hinweis in der Liste sagt dann: „Noch keine Browser-Tests, der Browser-Schritt wird übersprungen, bis es welche gibt.“
 
@@ -231,9 +231,9 @@ Welche Audits aktiv sind, kommt aus `config('audit.audits')`. Wer `backend` nie 
      - `phpstan.neon` aus dem Stub (nur wenn weder `phpstan.neon` noch `phpstan.neon.dist` existiert), mit Level aus `preflight.phpstan.stub_level` (Default 5)
      - `php artisan boost:install` interaktiv mit Terminal-Übergabe. Ohne Terminal (z. B. in CI) wird der Befehl als „manuell erledigen“ gelistet.
      - `npx playwright install`
-7. **Erneut prüfen, in einem neuen PHP-Prozess.** Der laufende Prozess kennt die gerade installierten Pakete nicht, weil sein Autoloader beim Start geladen wurde.
+7. **Erneut prüfen.** Die Prüfung liest `composer.lock`, `vendor/composer/installed.json`, `package.json` und die Configs neu von der Platte. Sie braucht keine Klassen der neuen Pakete, deshalb genügt der laufende Prozess, obwohl sein Autoloader die neuen Pakete nicht kennt.
 8. `storage/audit/.gitignore` anlegen (`*` und `!.gitignore`). Die Projekt-`.gitignore` bleibt unverändert.
-9. Abschlussübersicht: installiert, abgelehnt (mit Konsequenz, z. B. „Ohne Larastan läuft PHPStan nicht, `tests` und `backend` arbeiten ohne“), manuell zu erledigen, Umgebungs-Hinweise.
+9. Abschlussübersicht: installiert, abgelehnt (mit Konsequenz, z. B. „Ohne Boost arbeiten die Agents ohne Boost-Kontext“), manuell zu erledigen, Umgebungs-Hinweise.
 
 Warum Stub-Level 5 statt 9: Auf einem Projekt, das noch nie analysiert wurde, erzeugt Level 9 tausende Fehler, fast nur `mixed`-Rauschen. Das macht PHPStan langsam und den Tests-Report unbrauchbar. Wer mehr will, erhöht das Level in `phpstan.neon`; der Audit übernimmt es beim nächsten Run.
 
@@ -245,21 +245,23 @@ $ php artisan audit:install
  laravel-audit · Setup
 
  Bereits vorhanden
+  ✔ larastan/larastan
   ✔ laravel/pint
   ✔ pestphp/pest
 
  Ich brauche diese Pakete:
 
-  larastan/larastan ............. Statische Analyse (tests, backend)    composer --dev
-  laravel/boost ................. Kontext für die Agents (MCP)          composer --dev
-  pestphp/pest-plugin-browser ... Browser-Tests mit Playwright          composer --dev
-  playwright .................... Browser-Engine (~ mehrere 100 MB)    npm --save-dev
+  laravel/boost                Kontext für die Agents (MCP)  composer --dev
+  pestphp/pest-plugin-browser  Browser-Tests mit Playwright  composer --dev
+  playwright                   Browser-Engine (~ mehrere 100 MB)  npm --save-dev
+  ℹ Noch keine Browser-Tests — der Browser-Schritt wird übersprungen, bis es welche gibt.
 
  Dafür würde ich ausführen:
-  composer require --dev larastan/larastan laravel/boost pestphp/pest-plugin-browser
+  composer require --dev laravel/boost pestphp/pest-plugin-browser --with-all-dependencies
   npm install --save-dev playwright@latest
-  npx playwright install
   php artisan boost:install    (interaktiv)
+  npx playwright install
+  phpstan.neon anlegen (Level 5)
 
  Darf ich diese Pakete installieren?
   › Ja, alle
@@ -269,7 +271,7 @@ $ php artisan audit:install
  …
 
  Fertig.
-  ✔ 4 Pakete installiert, phpstan.neon erstellt (Level 5), storage/audit/.gitignore angelegt
+  ✔ 2 Pakete installiert, phpstan.neon erstellt (Level 5), storage/audit/.gitignore angelegt
   ⚠ Kein Coverage-Treiber aktiv → z. B. `pecl install pcov`
   ⚠ Tests würden gegen die App-Datenbank laufen → in phpunit.xml DB_CONNECTION=sqlite und DB_DATABASE=:memory: setzen
   ⚠ Agent-CLI `claude` nicht im PATH → siehe Claude-Code-Doku
@@ -303,11 +305,11 @@ Würde Composer zusätzlich bestehende Pakete ändern, erscheint nach der Zustim
 | Browser-Plugin + Playwright installiert (siehe 7.4) | Browser-Tests vorhanden, aber Plugin oder Playwright fehlt → Browser-Schritt überspringen, Hinweis `php artisan audit:install` |
 | Coverage-Treiber (`pcov` oder `xdebug` in `php -m`) | Tests ohne Coverage, Hinweis. Das Tests-Audit weiß: Coverage unbekannt. |
 | `brianium/paratest` (nur bei reinem PHPUnit) | Tests ohne `--parallel`, Hinweis `php artisan audit:install` |
-| `larastan/larastan` + `phpstan.neon(.dist)` | PHPStan-Schritt überspringen, Hinweis `php artisan audit:install`. Kein Abbruch. |
-| `vendor/bin/pint` | Pint-Schritt überspringen, Hinweis `php artisan audit:install` |
+| `phpstan.neon(.dist)` (Larastan kommt mit dem Paket) | PHPStan-Schritt überspringen, Hinweis `php artisan audit:install`. Kein Abbruch. |
+| `vendor/bin/pint` (kommt mit dem Paket) | Pint-Schritt überspringen (nur bei kaputter Installation) |
 | Laravel Boost (`laravel/boost` + MCP-Eintrag in `.mcp.json`) | Agents laufen ohne Boost-MCP, Hinweis `php artisan audit:install` |
 
-Unterstützt: Laravel 12 und 13, PHP ≥ 8.2. Browser-Tests brauchen das Pest-Browser-Plugin (Pest 4: PHP ≥ 8.3, Pest 5: PHP ≥ 8.4). (Matrix vor Release gegen die Laravel- und Pest-Doku prüfen.)
+Unterstützt: Laravel 12 und 13, PHP ≥ 8.3 (Larastan 3 und Pest 4 setzen das ohnehin voraus). Browser-Tests brauchen das Pest-Browser-Plugin (Pest 4: PHP ≥ 8.3, Pest 5: PHP ≥ 8.4). (Matrix vor Release gegen die Laravel- und Pest-Doku prüfen.)
 
 ## 7. Preflight
 
@@ -320,7 +322,7 @@ Unterstützt: Laravel 12 und 13, PHP ≥ 8.2. Browser-Tests brauchen das Pest-Br
 | LOC | nicht-leere Zeilen in `app/**/*.php` | in `summary.json` | ✓ | ✓ | ✓ | ✓ |
 | Pint | `vendor/bin/pint --test --format=json` | `pint.json`, `pint-grouped.json` | | | ✓ | |
 | Routen | `php artisan route:list --json` | `routes.json`, `route-facts.json` | ✓ | ✓ | ✓ | |
-| Übersetzungen | `lang/**` (PHP- und JSON-Dateien) vergleichen | `lang-diff.json` | | ✓ | | |
+| Übersetzungen | `lang/**` (PHP- und JSON-Dateien) vergleichen | `translations.json` | | ✓ | | |
 | Tests | `php artisan test` mit JUnit und Clover (siehe 7.3) | `tests/junit.xml`, `tests/coverage.xml`, `tests/tests-condensed.json`, `tests/coverage-by-class.json`, `tests/route-test-map.json` | ✓ | | | |
 | Browser | `php artisan test --testsuite=Browser …`, nur wenn Browser-Tests existieren (siehe 7.4) | `tests/browser-junit.xml`, `tests/browser-condensed.json`, `tests/browser-artifacts/` | ✓ | ✓ | | |
 | PHPStan | `vendor/bin/phpstan analyse --error-format=json --no-progress --memory-limit=…` mit Projekt-Config, dazu Baseline auslesen (siehe 7.6) | `phpstan/phpstan.json`, `phpstan/phpstan-grouped.json` | ✓ | | ✓ | |
@@ -345,23 +347,26 @@ Ist `tests` nicht gewählt, entfällt das Gate. Bei `--frontend` besteht der sch
 
 ### 7.3 Test-Schritt
 
-**Test-DB-Guard.** Tests mit `RefreshDatabase` löschen die Datenbank, gegen die sie laufen. Bei einer falsch konfigurierten `phpunit.xml` ist das die Dev-Datenbank. Vor dem Test-Schritt ermittelt der Harness deshalb die Test-Verbindung:
+**Test-DB-Guard.** Tests mit `RefreshDatabase` löschen die Datenbank, gegen die sie laufen. Bei einer falsch konfigurierten `phpunit.xml` ist das die Dev-Datenbank. Vor dem Test-Schritt ermittelt der Harness deshalb die Test-Verbindung (`DB_CONNECTION`, `DB_DATABASE`, `DB_HOST`) so, wie Laravel sie auflöst, pro Variable, von schwach nach stark:
 
-1. `<env>`-Einträge `DB_CONNECTION`, `DB_DATABASE`, `DB_HOST` in `phpunit.xml` bzw. `phpunit.xml.dist`
-2. sonst `.env.testing`
-3. sonst `.env`
+1. `.env.testing`, falls vorhanden, sonst `.env`
+2. `<env>`-Einträge in `phpunit.xml` bzw. `phpunit.xml.dist`
+3. Variablen, die in der Shell oder von CI exportiert sind (sie gewinnen gegen `<env>` ohne `force`)
+4. `<env … force="true">`
+
+**Saubere Umgebung für Kindprozesse.** `php artisan audit` hat die `.env` der App per putenv in die eigene Umgebung geladen, und Kindprozesse erben sie. Ohne Gegenmaßnahme liefen die Tests mit `APP_ENV=local` und der `DB_DATABASE` der App, weil `<env>` ohne `force` bestehende Variablen nicht überschreibt. Das hätte den Guard ausgehebelt (im E2E-Test mit einer frischen Laravel-App schlug deshalb der Beispieltest fehl). Jeder Preflight- und Agent-Prozess startet deshalb ohne die Variablen aus der `.env`, wie aus einer frischen Shell. Das Ergebnis des Guards ist damit auch das, was die Tests wirklich nutzen.
 
 Zeigt das Ergebnis auf dieselbe Verbindung, denselben Host und dieselbe Datenbank wie die App und ist es nicht `sqlite` mit `:memory:`, wird der Test-Schritt übersprungen (`"status": "skipped", "reason": "shared-database"`). Override nur bewusst über `preflight.allow_shared_database = true`. Die Heuristik entscheidet im Zweifel für „nicht ausführen“.
 
 **Befehl.** Standard:
 
 ```bash
-php artisan test --parallel --log-junit=… --coverage-clover=… --exclude-testsuite=Browser
+php artisan test --parallel --log-junit=… --coverage-clover=… --testsuite=Unit,Feature
 ```
 
 - `--parallel` nur, wenn Pest genutzt wird oder `brianium/paratest` installiert ist
 - `--coverage-clover` nur mit Coverage-Treiber. Bei Xdebug setzt der Harness `XDEBUG_MODE=coverage`.
-- `--exclude-testsuite` für die Browser-Suite (`preflight.browser.testsuite`), falls sie in der `phpunit.xml` existiert. Die Browser-Tests laufen so nicht doppelt, sondern nur im Browser-Schritt.
+- `--testsuite` mit allen Suites außer der Browser-Suite (`preflight.browser.testsuite`), falls diese in der `phpunit.xml` existiert. Die Browser-Tests laufen so nicht doppelt, sondern nur im Browser-Schritt.
 - Mit `preflight.tests.command` lässt sich der Befehl komplett ersetzen
 
 ### 7.4 Browser-Schritt
@@ -403,6 +408,8 @@ Wie CONCEPT 7.4:
 
 Das Gate greift nur, wenn der Test-Schritt gelaufen ist. Browser-Fehlschläge lösen es nicht aus (siehe 7.4).
 
+Bei `--preflight-only` hält das Gate den Run nicht an: Es folgen keine Agents, also gibt es nichts zu schützen, und Browser-Tests und PHPStan laufen trotzdem. Die Fehlschläge werden angezeigt, und ein späteres `--reuse-preflight` fragt vor dem Start der Agents erneut.
+
 ### 7.6 PHPStan
 
 - **Level:** Eine vorhandene `phpstan.neon(.dist)` wird unverändert genutzt, ohne `--level`. Das Level wird bei jedem Run frisch ausgelesen, bevorzugt über `vendor/bin/phpstan dump-parameters --json`, sonst per NEON-Parser über die Config und ihre `includes`. Nicht gefunden → `unknown`. Ein bewusster Override ist über `preflight.phpstan.level` möglich. (Wie CONCEPT 7.7.)
@@ -425,7 +432,7 @@ Agents lesen zuerst die verdichteten Dateien. Die Rohdaten bleiben für Details 
 | `tests/coverage-by-class.json` | pro Klasse in `app/`: Zeilen-Coverage, nicht abgedeckte Methoden. Aufsteigend sortiert, damit die Lücken oben stehen. |
 | `tests/route-test-map.json` | pro Route: Tests, die Routen-Namen (`route('…')`), URI-Literal oder Controller-Klasse referenzieren, inklusive Browser-Tests. Heuristik, der Agent prüft nach. |
 | `route-facts.json` | Kandidaten (keine Findings): nicht-GET-Routen ohne `auth`-Middleware, GET-Routen mit schreibenden Action-Namen (`store`, `update`, `destroy`, `delete`), Auth- und Formular-Routen ohne `throttle`, bekannte Debug-/Tooling-Routen (Telescope, Horizon, Pulse, Log-Viewer, `phpinfo`), Routen mit fehlender Controller-Methode |
-| `lang-diff.json` | pro Locale fehlende Keys im Vergleich zur Default-Locale |
+| `translations.json` | pro Locale fehlende Keys im Vergleich zur Default-Locale |
 
 Beispiel `tests-condensed.json`:
 
@@ -479,22 +486,25 @@ Nur Claude Code. Prompt per STDIN, Antwort als JSON:
 ```bash
 claude -p \
   --output-format json \
-  --max-turns 150 \
+  --restricted \
+  --permission-prompts none \
   --strict-mcp-config --mcp-config storage/audit/{run}/logs/mcp.json \
-  --allowedTools "Read" "Grep" "Glob" "mcp__laravel-boost__<tool>" … \
-  --disallowedTools "Edit" "Write" "NotebookEdit" "Bash" "WebFetch" "WebSearch" "mcp__laravel-boost__tinker" … "Read(./.env)" … \
-  [--model "$AUDIT_MODEL"]
+  --tools Read,Grep,Glob \
+  --allowedTools=mcp__laravel-boost__<tool>,… \
+  --disallowedTools=Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch,mcp__laravel-boost__tinker,…,"Read(./.env)",… \
+  [--model "$AUDIT_MODEL"] [--effort "$AUDIT_EFFORT"] [--max-budget-usd "$AUDIT_MAX_BUDGET_USD"]
 ```
 
-**Flags vor dem Bau gegen die aktuelle Claude-Code-Doku prüfen** (Syntax für MCP-Tool-Namen, `--strict-mcp-config`, Einschränkung der Settings-Quellen). Die Anforderungen dahinter gelten unabhängig von der Syntax:
+Geprüft gegen Claude Code 2.1.268. `--restricted` entfernt die Tools, die Befehle oder Code ausführen, ignoriert User-, Projekt- und lokale Settings-Dateien und hält die Datei-Tools im Arbeitsverzeichnis. `--permission-prompts none` lehnt alles ab, was eine Rückfrage auslösen würde. Statt `--max-turns` begrenzt `--max-budget-usd` die Kosten pro Agent (`agent.max_budget_usd`, Default: keine Grenze). Die Anforderungen dahinter:
 
 - **Keine Schreib-Tools, keine Shell, kein Web.** Deny-Regeln gewinnen gegen Allow-Regeln, auch gegen Allows aus `.claude/settings.json` des Projekts.
 - **Nur Boost als MCP-Server.** Der Harness erzeugt eine eigene `mcp.json` mit genau dem Boost-Eintrag aus der Projekt-`.mcp.json`. Andere MCP-Server des Nutzers laden nicht.
 - **Boost-Tools per expliziter Allowlist** (`agent.boost_tools`): Application Info, Database Schema, List Routes, Search Docs, Get Config. **Gesperrt:** Tinker, Database Query, Log-Tools. Tool-Namen gegen die installierte Boost-Version prüfen.
 - **`.env`-Dateien gesperrt.** Der Harness expandiert `agent.deny_read` (`.env*`, `auth.json`, `storage/*.key`) zu den tatsächlich existierenden Dateien, zieht `agent.allow_read` (`.env.example`) ab und übergibt jede als eigene Deny-Regel. So bleibt `.env.example` für den Secret-Check lesbar.
-- **Settings-Quellen einschränken**, soweit die CLI das erlaubt, damit User-Hooks, User-`CLAUDE.md` und Plugins den Audit nicht beeinflussen. Geht das nicht, landen die geladenen Quellen als Hinweis in `run.md`.
+- **Settings-Quellen einschränken:** `--restricted` ignoriert User-, Projekt- und lokale Settings-Dateien, damit User-Hooks, Allow-Regeln des Projekts und Plugins den Audit nicht beeinflussen.
+- **Keine Secrets in der Umgebung.** `php artisan audit` hat die `.env` per putenv geladen. Der Agent-Prozess (und jeder Preflight-Prozess) startet ohne die Variablen aus der `.env`, wie aus einer frischen Shell (`ChildEnvironment`). Variablen, die an die Eltern-Session von Claude Code binden (`CLAUDECODE` u. a.), werden ebenfalls entfernt.
 
-Das Modell ist der CLI-Default. Optional kann `AUDIT_MODEL` ein Modell für alle Audits vorgeben. Das dient der Eval, nicht der Kostensteuerung.
+Das Modell ist der CLI-Default. Optional kann `AUDIT_MODEL` ein Modell für alle Audits vorgeben (und `AUDIT_EFFORT` die Effort-Stufe). Das dient der Eval, nicht der Kostensteuerung; dafür gibt es `AUDIT_MAX_BUDGET_USD`.
 
 ### 8.2 Driver-Interface
 
@@ -508,6 +518,8 @@ interface AgentDriver
     /** @return list<string> argv, setzt die Session fort */
     public function resumeCommand(AgentResult $previous, string $message): array;
     public function parse(string $stdout, int $exitCode): AgentResult;
+    /** @return array<string, string|false> Umgebung des Agent-Prozesses (false = entfernen) */
+    public function environment(): array;
 }
 
 final readonly class AgentResult
@@ -522,14 +534,14 @@ final readonly class AgentResult
         public ?float $costUsd,
         public int $turns,
         public int $durationMs,
-        public AgentExit $exit,   // success | max_turns | timeout | error
+        public AgentExit $exit,   // success | max_turns | budget | timeout | error
     ) {}
 }
 ```
 
 ### 8.3 Parallelisierung
 
-`Process::pool()` mit `agent.concurrency` (Default 4, also alle Audits gleichzeitig). Timeout pro Agent 30 min, Live-Status über Laravel Prompts. Rohausgabe nach `logs/{audit}.json`, gerenderter Prompt nach `logs/{audit}.prompt.md`. Den Prompt zu speichern ist Voraussetzung, um Eval-Ergebnisse einer Prompt-Version zuordnen zu können.
+Eigener Runner über `Process::start()` mit `agent.concurrency` (Default 4, also alle Audits gleichzeitig): Er startet Agents, pollt sie und startet den Repair-Pass eines Agents, sobald dessen Antwort da ist, ohne auf die anderen zu warten. Timeout pro Agent 30 min (`agent.timeout`). Rohausgabe nach `logs/{audit}.json` (Repair: `logs/{audit}.repair.json`, stderr: `logs/{audit}.stderr.log`), gerenderter Prompt nach `logs/{audit}.prompt.md`. Den Prompt zu speichern ist Voraussetzung, um Eval-Ergebnisse einer Prompt-Version zuordnen zu können.
 
 Vier parallele Sessions können bei einem Claude-Abo schnell ins Rate-Limit laufen. Ist das der Fall, `agent.concurrency` auf 2 senken. Die Telemetrie zeigt, ob Agents daran gescheitert sind.
 
@@ -539,7 +551,7 @@ Vier parallele Sessions können bei einem Claude-Abo schnell ins Rate-Limit lauf
 2. **Normalisieren** (ohne LLM): Enum-Werte lowercase, `–`/`-` als ID-Trenner zu `—`, fehlendes `Occurrences` → `1`, Whitespace in Tabellen.
 3. **Parsen und Linten** (siehe 9.5).
 4. **Repair-Pass** bei Fehlern: genau einer, per `resumeCommand()` in derselben Session (Kontext ist gecacht, daher günstig), Nachricht = Fehlerliste. Danach erneut Schritte 1–3. Bleiben Fehler, gilt das Audit als gescheitert.
-5. **Abgeschnittene Antwort** (`## Limitations` fehlt, oder `exit = max_turns`): kein Repair, das Audit gilt als gescheitert. Grund und Telemetrie stehen in `run.md`. Taucht das in der Eval auf, wird es in v0.2 gezielt gelöst.
+5. **Abgeschnittene Antwort** (`## Limitations` fehlt, oder `exit = max_turns`/`budget`): kein Repair, das Audit gilt als gescheitert. Grund und Telemetrie stehen in `run.md`. Taucht das in der Eval auf, wird es in v0.2 gezielt gelöst.
 6. **Schreiben:** Der Harness setzt Frontmatter und H1 vor den Report und speichert ihn als `{audit}.md`.
 7. **Doppelmeldungen markieren**, sobald alle Audits fertig sind (siehe 9.5).
 
@@ -659,7 +671,7 @@ Die Verzeichnisse aus den Prompts sagen, **wo** ein Agent sucht. Die Check-Liste
 | Unbenutzter Job, Listener, Controller, Command | `dead-code` | backend |
 | Unbenutzte View, Blade-/Livewire-Komponente, JS/CSS, Übersetzungs-Key | `dead-frontend-code` | frontend |
 
-Sieht ein Agent etwas, das zu einem fremden Check gehört, meldet er es **nicht** als Finding. Er notiert es in einem Satz unter `## Limitations` → `### Außerhalb des Scopes beobachtet`. Diese Notizen werden nicht gezählt, gehen aber nicht verloren. Die Summary (v0.2) kann sie mit den Findings der anderen Audits abgleichen.
+Sieht ein Agent etwas, das zu einem fremden Check gehört, meldet er es **nicht** als Finding. Er notiert es in einem Satz unter `## Limitations` → `### Out of scope observations`. Diese Notizen werden nicht gezählt, gehen aber nicht verloren. Die Summary (v0.2) kann sie mit den Findings der anderen Audits abgleichen.
 
 ### 9.5 Linter
 
@@ -704,12 +716,13 @@ storage/audit/
 ├── .gitignore                 (* und !.gitignore, von audit:install angelegt)
 └── 2026-10-02_09-15-40/
     ├── run.md
+    ├── run.json                (dasselbe maschinenlesbar, Grundlage für audit:eval)
     ├── tests.md
     ├── frontend.md
     ├── backend.md
     ├── dependencies.md
     ├── preflight/
-    │   ├── summary.json, about.json, routes.json, route-facts.json, lang-diff.json,
+    │   ├── summary.json, about.json, routes.json, route-facts.json, translations.json,
     │   │   pint.json, pint-grouped.json
     │   ├── tests/       junit.xml, coverage.xml, tests-condensed.json, coverage-by-class.json,
     │   │                route-test-map.json, browser-junit.xml, browser-condensed.json,
@@ -717,8 +730,8 @@ storage/audit/
     │   ├── phpstan/     phpstan.json, phpstan-grouped.json
     │   └── composer/    audit.json, show.json, outdated.json, licenses.json, why.json,
     │                    validate.txt, usage-map.json, dependency-facts.json
-    └── logs/            {audit}.json, {audit}.prompt.md, {audit}.repair.json, mcp.json,
-                         browser-server.log, asset-build.log
+    └── logs/            {audit}.json, {audit}.prompt.md, {audit}.repair.json, {audit}.stderr.log,
+                         {audit}.invalid.md, mcp.json, tests.log, browser.log, phpstan.log, asset-build.log
 ```
 
 Warum `storage/audit` statt `Audit/`: Das ist ein üblicher Laravel-Ort, der Ordner wird nie ausgeliefert, und eine eigene `.gitignore` im Ordner erspart Änderungen an der Projekt-`.gitignore`. Über `AUDIT_OUTPUT_PATH` bleibt der Pfad konfigurierbar. Die Reports enthalten konkrete Schwachstellen und gehören nicht ins Repo.
@@ -917,7 +930,7 @@ Werden die Ziele verfehlt, wird zuerst an Prompts, Check-Listen und Verdichtung 
 
 - Antwort beginnt mit `## Summary`. Frontmatter, H1, `agent` und `generated_at` entfallen.
 - `Check` als Pflichtfeld in Template und Format-Regeln, Check-Liste per `{{checks}}`.
-- Ownership-Regel aus 9.4: nur eigene Checks melden, Fremdes unter `### Außerhalb des Scopes beobachtet` notieren.
+- Ownership-Regel aus 9.4: nur eigene Checks melden, Fremdes unter `### Out of scope observations` notieren.
 - `Related` nur mit IDs aus dem eigenen Report.
 - Sortierregel entfällt. Neu: maximal `{{max_findings}}` Findings, darüber hinaus gruppieren. `## Limitations` ist immer die letzte Section.
 - Ausschlüsse: `storage/` gilt als ausgeschlossen, **außer** `{{preflight_dir}}`. Ältere Runs dürfen nicht gelesen werden.
@@ -935,7 +948,7 @@ Werden die Ziele verfehlt, wird zuerst an Prompts, Check-Listen und Verdichtung 
 
 **`frontend.md`**
 
-- Neue Inputs: `route-facts.json` (Kandidaten, bestätigen oder verwerfen), `lang-diff.json`, `browser-condensed.json` und Screenshots als Beleg für eigene Checks (statt `browser-junit.xml`).
+- Neue Inputs: `route-facts.json` (Kandidaten, bestätigen oder verwerfen), `translations.json`, `browser-condensed.json` und Screenshots als Beleg für eigene Checks (statt `browser-junit.xml`).
 - Streichen, weil sie zu backend gehören: „SQL / column injection from list views“ und „Mass assignment at the edge“.
 - N+1 aus Views bleibt als `view-query`.
 - Die bisherige Ownership-Regel für Überschneidungen wird durch 9.4 ersetzt.
@@ -968,9 +981,10 @@ return [
         'driver'      => 'claude',
         'binary'      => env('AUDIT_CLAUDE_BINARY', 'claude'),
         'model'       => env('AUDIT_MODEL'),   // null = CLI-Default
+        'effort'      => env('AUDIT_EFFORT'),  // null = CLI-Default
+        'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // pro Agent, null = keine Grenze
         'concurrency' => 4,                    // bei Rate-Limits auf 2 senken
         'timeout'     => 1800,
-        'max_turns'   => 150,                  // Startwert, per Eval justieren
         'boost_tools' => [/* Allowlist, Namen gegen Boost-Version prüfen */],
         'deny_read'   => ['.env*', 'auth.json', 'storage/*.key'],
         'allow_read'  => ['.env.example'],

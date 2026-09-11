@@ -1,6 +1,8 @@
 <?php
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Contracts\StepData;
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
@@ -12,11 +14,11 @@ use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-function fakeStep(PreflightStep $step, array $data = [], ?Closure $run = null): Step
+function fakeStep(PreflightStep $step, ?StepData $data = null, ?Closure $run = null): Step
 {
     return new class($step, $data, $run) implements Step
     {
-        public function __construct(private PreflightStep $step, private array $data, private ?Closure $callback) {}
+        public function __construct(private PreflightStep $step, private ?StepData $data, private ?Closure $callback) {}
 
         public function step(): PreflightStep
         {
@@ -25,9 +27,24 @@ function fakeStep(PreflightStep $step, array $data = [], ?Closure $run = null): 
 
         public function run(PreflightContext $context): StepResult
         {
-            return $this->callback ? ($this->callback)() : StepResult::ok($this->step, $this->data);
+            if ($this->callback !== null) {
+                return ($this->callback)();
+            }
+
+            $class = $this->step->dataClass();
+
+            return StepResult::ok($this->step, $this->data ?? new $class);
         }
     };
+}
+
+/** @return list<Step> */
+function fakeSteps(?TestsData $tests = null): array
+{
+    return array_map(
+        fn (PreflightStep $step) => fakeStep($step, $step === PreflightStep::Tests ? $tests : null),
+        PreflightStep::cases(),
+    );
 }
 
 function runnerContext(array $explicit = []): PreflightContext
@@ -45,9 +62,8 @@ function runnerContext(array $explicit = []): PreflightContext
 
 it('runs tests first (async in real runs), light steps, then gate, browser and phpstan', function () {
     $order = [];
-    $steps = array_map(fn (PreflightStep $step) => fakeStep($step, ['failed' => 0]), PreflightStep::cases());
 
-    $decision = (new PreflightRunner($steps))->run(
+    $decision = (new PreflightRunner(fakeSteps()))->run(
         runnerContext(),
         function (StepResult $result) use (&$order) {
             $order[] = $result->step->value;
@@ -60,23 +76,21 @@ it('runs tests first (async in real runs), light steps, then gate, browser and p
 });
 
 it('skips heavy steps after an aborted gate', function () {
-    $steps = array_map(fn (PreflightStep $step) => fakeStep($step, ['failed' => 3]), PreflightStep::cases());
     $context = runnerContext();
 
-    $decision = (new PreflightRunner($steps))->run($context, fn () => null, fn () => GateDecision::Aborted);
+    $decision = (new PreflightRunner(fakeSteps(new TestsData(failed: 3))))->run($context, fn () => null, fn () => GateDecision::Aborted);
 
     expect($decision)->toBe(GateDecision::Aborted)
-        ->and($context->result(PreflightStep::Browser)->reason)->toBe(SkipReason::GateAborted)
-        ->and($context->result(PreflightStep::Phpstan)->reason)->toBe(SkipReason::GateAborted);
+        ->and($context->results->get(PreflightStep::Browser)->reason)->toBe(SkipReason::GateAborted)
+        ->and($context->results->get(PreflightStep::Phpstan)->reason)->toBe(SkipReason::GateAborted);
 });
 
 it('runs only the steps the selected audits need', function () {
     $context = runnerContext(['dependencies']);
-    $steps = array_map(fn (PreflightStep $step) => fakeStep($step), PreflightStep::cases());
 
-    (new PreflightRunner($steps))->run($context, fn () => null, fn () => GateDecision::NotRun);
+    (new PreflightRunner(fakeSteps()))->run($context, fn () => null, fn () => GateDecision::NotRun);
 
-    expect(array_keys($context->results()))->toBe(['about', 'stack', 'loc', 'composer']);
+    expect($context->results->steps())->toBe([PreflightStep::About, PreflightStep::Stack, PreflightStep::LinesOfCode, PreflightStep::Composer]);
 });
 
 it('turns a crashing step into an error result', function () {
@@ -88,18 +102,30 @@ it('turns a crashing step into an error result', function () {
 
     (new PreflightRunner($steps))->run($context, fn () => null, fn () => GateDecision::NotRun);
 
-    expect($context->result(PreflightStep::Composer)->error)->toBe('RuntimeException: boom');
+    expect($context->results->get(PreflightStep::Composer)->error)->toBe('RuntimeException: boom')
+        ->and($context->results->hasErrors())->toBeTrue();
 });
 
 it('decides the test gate', function (?StepResult $tests, GateMode $mode, bool $force, bool $interactive, bool $answer, GateDecision $expected) {
     expect((new TestGate)->decide($tests, $mode, $force, $interactive, fn () => $answer))->toBe($expected);
 })->with([
     'no tests' => [null, GateMode::Ask, false, true, false, GateDecision::NotRun],
-    'green' => [StepResult::ok(PreflightStep::Tests, ['failed' => 0]), GateMode::Ask, false, true, false, GateDecision::Passed],
-    'forced' => [StepResult::ok(PreflightStep::Tests, ['failed' => 1]), GateMode::Ask, true, false, false, GateDecision::Forced],
-    'continue mode' => [StepResult::ok(PreflightStep::Tests, ['errors' => 1]), GateMode::Continue, false, false, false, GateDecision::Continued],
-    'abort mode' => [StepResult::ok(PreflightStep::Tests, ['failed' => 1]), GateMode::Abort, false, true, true, GateDecision::Aborted],
-    'no interaction' => [StepResult::ok(PreflightStep::Tests, ['failed' => 1]), GateMode::Ask, false, false, true, GateDecision::Aborted],
-    'user says yes' => [StepResult::ok(PreflightStep::Tests, ['failed' => 1]), GateMode::Ask, false, true, true, GateDecision::Continued],
-    'user says no' => [StepResult::ok(PreflightStep::Tests, ['failed' => 1]), GateMode::Ask, false, true, false, GateDecision::Aborted],
+    'skipped' => [StepResult::skipped(PreflightStep::Tests, SkipReason::SharedDatabase), GateMode::Ask, false, true, false, GateDecision::NotRun],
+    'green' => [StepResult::ok(PreflightStep::Tests, new TestsData(total: 3)), GateMode::Ask, false, true, false, GateDecision::Passed],
+    'forced' => [StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)), GateMode::Ask, true, false, false, GateDecision::Forced],
+    'continue mode' => [StepResult::ok(PreflightStep::Tests, new TestsData(errors: 1)), GateMode::Continue, false, false, false, GateDecision::Continued],
+    'abort mode' => [StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)), GateMode::Abort, false, true, true, GateDecision::Aborted],
+    'no interaction' => [StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)), GateMode::Ask, false, false, true, GateDecision::Aborted],
+    'user says yes' => [StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)), GateMode::Ask, false, true, true, GateDecision::Continued],
+    'user says no' => [StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)), GateMode::Ask, false, true, false, GateDecision::Aborted],
 ]);
+
+it('round-trips step results through summary.json data', function () {
+    $result = StepResult::ok(PreflightStep::Tests, new TestsData(total: 5, failed: 2, coveragePct: 71.4, failing: ['A::b']))->withDuration(1.5);
+
+    $restored = StepResult::fromArray(PreflightStep::Tests, $result->toArray());
+
+    expect($restored->data)->toEqual($result->data)
+        ->and($restored->duration)->toBe(1.5)
+        ->and(TestGate::data($restored)?->failures())->toBe(2);
+});

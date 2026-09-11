@@ -138,7 +138,7 @@ final class RequirementChecker
         }
 
         return Check::ok($this->messages->get('requirements.browser', [
-            'location' => $location['type'] === 'suite' ? 'Suite "'.$location['value'].'"' : $location['value'],
+            'location' => $location->isSuite() ? 'Suite "'.$location->value.'"' : $location->value,
         ]));
     }
 

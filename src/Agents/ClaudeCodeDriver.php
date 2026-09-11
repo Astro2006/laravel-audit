@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Agents;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\Read;
 use Symfony\Component\Process\ExecutableFinder;
 
 /**
@@ -116,28 +117,29 @@ final class ClaudeCodeDriver implements AgentDriver
     {
         $data = Json::decode($stdout);
 
-        if ($data === [] || ! array_key_exists('result', $data) && ! array_key_exists('subtype', $data)) {
+        if (data_get($data, 'result') === null && data_get($data, 'subtype') === null) {
             return AgentResult::failed(AgentExit::Error, sprintf('Claude Code returned no JSON result (exit code %d).', $exitCode));
         }
 
-        $subtype = (string) ($data['subtype'] ?? '');
+        $subtype = Read::string($data, 'subtype');
         $exit = match (true) {
-            $subtype === 'success' && ! ($data['is_error'] ?? false) => AgentExit::Success,
+            $subtype === 'success' && ! Read::bool($data, 'is_error') => AgentExit::Success,
             str_contains($subtype, 'max_turns') => AgentExit::MaxTurns,
             str_contains($subtype, 'budget') => AgentExit::Budget,
             default => AgentExit::Error,
         };
 
         [$telemetry, $model] = $this->usage($data);
+        $answer = Read::string($data, 'result');
 
         return new AgentResult(
-            answer: is_string($data['result'] ?? null) ? $data['result'] : '',
-            sessionId: isset($data['session_id']) ? (string) $data['session_id'] : null,
+            answer: $answer,
+            sessionId: Read::nullableString($data, 'session_id'),
             model: $model,
             telemetry: $telemetry,
             exit: $exit,
-            truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
-            error: $exit === AgentExit::Success ? null : trim($subtype.' '.(is_string($data['result'] ?? null) ? mb_substr($data['result'], 0, 300) : '')),
+            truncated: Read::string($data, 'stop_reason') === 'max_tokens',
+            error: $exit === AgentExit::Success ? null : trim($subtype.' '.mb_substr($answer, 0, 300)),
         );
     }
 
@@ -166,7 +168,7 @@ final class ClaudeCodeDriver implements AgentDriver
      * Sums token usage over all models (the CLI may use a small model for
      * housekeeping) and names the model that did most of the work.
      *
-     * @param  array<string, mixed>  $data
+     * @param  array<mixed>  $data
      * @return array{Telemetry, string|null}
      */
     private function usage(array $data): array
@@ -177,21 +179,22 @@ final class ClaudeCodeDriver implements AgentDriver
         $model = null;
         $topCost = -1.0;
 
-        foreach ((array) ($data['modelUsage'] ?? []) as $name => $usage) {
-            $input += (int) ($usage['inputTokens'] ?? 0) + (int) ($usage['cacheCreationInputTokens'] ?? 0);
-            $output += (int) ($usage['outputTokens'] ?? 0);
-            $cacheRead += (int) ($usage['cacheReadInputTokens'] ?? 0);
+        foreach (Read::array($data, 'modelUsage') as $name => $usage) {
+            $usage = is_array($usage) ? $usage : [];
+            $input += Read::int($usage, 'inputTokens') + Read::int($usage, 'cacheCreationInputTokens');
+            $output += Read::int($usage, 'outputTokens');
+            $cacheRead += Read::int($usage, 'cacheReadInputTokens');
 
-            if ((float) ($usage['costUSD'] ?? 0) > $topCost) {
-                $topCost = (float) ($usage['costUSD'] ?? 0);
-                $model = (string) ($usage['canonicalModel'] ?? preg_replace('/\[.*\]$/', '', (string) $name));
+            if (Read::float($usage, 'costUSD') > $topCost) {
+                $topCost = Read::float($usage, 'costUSD');
+                $model = Read::nullableString($usage, 'canonicalModel') ?? (string) preg_replace('/\[.*\]$/', '', (string) $name);
             }
         }
 
-        if ($input === 0 && isset($data['usage'])) {
-            $input = (int) ($data['usage']['input_tokens'] ?? 0) + (int) ($data['usage']['cache_creation_input_tokens'] ?? 0);
-            $output = (int) ($data['usage']['output_tokens'] ?? 0);
-            $cacheRead = (int) ($data['usage']['cache_read_input_tokens'] ?? 0);
+        if ($input === 0) {
+            $input = Read::int($data, 'usage.input_tokens') + Read::int($data, 'usage.cache_creation_input_tokens');
+            $output = Read::int($data, 'usage.output_tokens');
+            $cacheRead = Read::int($data, 'usage.cache_read_input_tokens');
         }
 
         return [
@@ -199,9 +202,9 @@ final class ClaudeCodeDriver implements AgentDriver
                 inputTokens: $input,
                 outputTokens: $output,
                 cacheReadTokens: $cacheRead,
-                costUsd: isset($data['total_cost_usd']) ? (float) $data['total_cost_usd'] : null,
-                turns: (int) ($data['num_turns'] ?? 0),
-                durationMs: (int) ($data['duration_ms'] ?? 0),
+                costUsd: Read::nullableFloat($data, 'total_cost_usd'),
+                turns: Read::int($data, 'num_turns'),
+                durationMs: Read::int($data, 'duration_ms'),
             ),
             $model,
         ];

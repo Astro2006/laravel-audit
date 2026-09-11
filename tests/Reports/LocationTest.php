@@ -21,8 +21,10 @@ it('parses file, line, range, route and package locations', function (string $ra
 it('parses a locations cell with backticks and commas', function () {
     $locations = Location::parseList('`app/A.php:1`, `route:GET /a`, `package:vendor/b`');
 
+    [, $route] = $locations;
+
     expect($locations)->toHaveCount(3)
-        ->and($locations[1]->route)->toBe('GET /a');
+        ->and($route->route)->toBe('GET /a');
 });
 
 it('falls back to comma separated values without backticks', function () {

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Translations\MissingTranslations;
+use Astro2006\LaravelAudit\Data\Translations\TranslationReport;
+use Illuminate\Support\Collection;
+
 /**
  * Translation keys that exist in the default locale but not in another one.
  */
@@ -11,16 +15,14 @@ final class TranslationDiff
 {
     private const int MAX_KEYS = 50;
 
-    /**
-     * @return array{directory: string|null, default: string, locales: list<string>, missing: array<string, array{count: int, keys: list<string>}>}
-     */
-    public function diff(string $langDir, string $defaultLocale): array
+    public function diff(string $langDir, string $defaultLocale): TranslationReport
     {
         if (! is_dir($langDir)) {
-            return ['directory' => null, 'default' => $defaultLocale, 'locales' => [], 'missing' => []];
+            return new TranslationReport(null, $defaultLocale, [], []);
         }
 
-        $keys = [];
+        /** @var Collection<string, list<string>> $keys locale => keys */
+        $keys = new Collection;
 
         foreach (glob($langDir.'/*', GLOB_ONLYDIR) ?: [] as $directory) {
             $locale = basename($directory);
@@ -30,42 +32,35 @@ final class TranslationDiff
             }
 
             foreach (glob($directory.'/*.php') ?: [] as $file) {
-                $values = $this->load($file);
-
-                foreach ($this->flatten($values, basename($file, '.php')) as $key) {
-                    $keys[$locale][$key] = true;
-                }
+                $keys->put($locale, [...$keys->get($locale, []), ...$this->flatten($this->load($file), basename($file, '.php'))]);
             }
         }
 
         foreach (glob($langDir.'/*.json') ?: [] as $file) {
             $values = json_decode((string) file_get_contents($file), true);
-
-            foreach (array_keys(is_array($values) ? $values : []) as $key) {
-                $keys[basename($file, '.json')]['json:'.$key] = true;
-            }
+            $locale = basename($file, '.json');
+            $jsonKeys = array_map(fn (int|string $key): string => 'json:'.$key, array_keys(is_array($values) ? $values : []));
+            $keys->put($locale, [...$keys->get($locale, []), ...$jsonKeys]);
         }
 
-        $locales = array_keys($keys);
-        sort($locales);
-
+        $locales = $keys->keys()->map(fn (int|string $locale): string => (string) $locale)->sort()->values()->all();
+        $reference = $keys->get($defaultLocale, []);
         $missing = [];
-        $reference = $keys[$defaultLocale] ?? [];
 
         foreach ($locales as $locale) {
             if ($locale === $defaultLocale) {
                 continue;
             }
 
-            $absent = array_keys(array_diff_key($reference, $keys[$locale]));
+            $absent = array_values(array_diff($reference, $keys->get($locale, [])));
             sort($absent);
 
             if ($absent !== []) {
-                $missing[$locale] = ['count' => count($absent), 'keys' => array_slice($absent, 0, self::MAX_KEYS)];
+                $missing[] = new MissingTranslations($locale, count($absent), array_slice($absent, 0, self::MAX_KEYS));
             }
         }
 
-        return ['directory' => $langDir, 'default' => $defaultLocale, 'locales' => $locales, 'missing' => $missing];
+        return new TranslationReport($langDir, $defaultLocale, $locales, $missing);
     }
 
     /** @return array<mixed> */

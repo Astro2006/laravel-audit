@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\ComposerData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
@@ -13,7 +14,9 @@ use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
+use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\Pool;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -40,36 +43,31 @@ final class ComposerStep implements Step
             return StepResult::skipped($this->step(), SkipReason::NotInstalled);
         }
 
-        $commands = [
+        $commands = new Collection([
             'audit' => ['audit', '--format=json', '--locked'],
             'show' => ['show', '--direct', '--format=json'],
             'validate' => ['validate', '--no-check-publish'],
-        ];
+        ]);
 
         if ($context->config('preflight.composer.outdated', true)) {
-            $commands['outdated'] = ['outdated', '--direct', '--format=json'];
+            $commands->put('outdated', ['outdated', '--direct', '--format=json']);
         }
 
         if ($context->config('preflight.composer.licenses', true)) {
-            $commands['licenses'] = ['licenses', '--format=json'];
+            $commands->put('licenses', ['licenses', '--format=json']);
         }
 
-        $results = $this->pool($context, array_map(fn (array $arguments): array => [...$composer, ...$arguments, '--no-interaction'], $commands));
+        $results = $this->pool($context, $commands->map(fn (array $arguments): array => [...$composer, ...$arguments, '--no-interaction']));
+        $json = fn (string $key): array => Json::decode($results->get($key)?->output() ?? '');
 
-        $audit = Json::decode($results['audit']->output());
-        $show = Json::decode($results['show']->output());
-        $outdated = isset($results['outdated']) ? Json::decode($results['outdated']->output()) : [];
-        $licenses = isset($results['licenses']) ? Json::decode($results['licenses']->output()) : [];
-        $validateOutput = $results['validate']->output()."\n".$results['validate']->errorOutput();
-
-        $warnings = [];
-
-        if ($audit === []) {
-            $warnings[] = 'composer-audit-no-json';
-        }
+        $audit = $json('audit');
+        $outdated = $json('outdated');
+        $licenses = $json('licenses');
+        $validate = $results->get('validate');
+        $validateOutput = ($validate?->output() ?? '')."\n".($validate?->errorOutput() ?? '');
 
         $context->writeJson('composer/audit.json', $audit);
-        $context->writeJson('composer/show.json', $show);
+        $context->writeJson('composer/show.json', $json('show'));
         $context->writeJson('composer/outdated.json', $outdated);
         $context->writeJson('composer/licenses.json', $licenses);
         file_put_contents($context->path('composer/validate.txt'), trim($validateOutput)."\n");
@@ -86,24 +84,23 @@ final class ComposerStep implements Step
             outdated: $outdated,
             licenses: $licenses,
             validateOutput: $validateOutput,
-            validateExitCode: (int) $results['validate']->exitCode(),
+            validateExitCode: (int) $validate?->exitCode(),
             usageMap: $usageMap,
             why: $why,
-            licenseAllowlist: (array) $context->config('preflight.license_allowlist', []),
+            licenseAllowlist: array_values(array_map('strval', (array) $context->config('preflight.license_allowlist', []))),
         );
 
         $context->writeJson(DependenciesAudit::FACTS_FILE, $facts);
 
-        return StepResult::ok($this->step(), [
-            'direct' => count($project->directPackages()),
-            'advisories' => count($facts['advisories']),
-            'advisory_packages' => count(array_unique(array_column($facts['advisories'], 'package'))),
-            'abandoned' => count($facts['abandoned']),
-            'outdated_major' => count($facts['outdated_major']),
-            'unused_candidates' => count($facts['unused_candidates']),
-            'lock_in_sync' => $facts['validate']['lock_in_sync'],
-            'file' => DependenciesAudit::FACTS_FILE,
-        ], $warnings);
+        return StepResult::ok($this->step(), new ComposerData(
+            direct: count($project->directPackages()),
+            advisories: count($facts->advisories),
+            advisoryPackages: count($facts->advisoryPackages()),
+            abandoned: count($facts->abandoned),
+            outdatedMajor: count($facts->outdatedMajor),
+            unusedCandidates: count($facts->unusedCandidates),
+            lockInSync: $facts->validate->lockInSync,
+        ), $audit === [] ? ['composer-audit-no-json'] : []);
     }
 
     /** @return list<string>|null */
@@ -123,12 +120,12 @@ final class ComposerStep implements Step
     }
 
     /**
-     * @param  array<string, list<string>>  $commands
-     * @return array<string, \Illuminate\Contracts\Process\ProcessResult>
+     * @param  iterable<string, list<string>>  $commands
+     * @return Collection<string, ProcessResult>
      */
-    private function pool(PreflightContext $context, array $commands): array
+    private function pool(PreflightContext $context, iterable $commands): Collection
     {
-        $results = Process::pool(function (Pool $pool) use ($context, $commands): void {
+        return Process::pool(function (Pool $pool) use ($context, $commands): void {
             foreach ($commands as $key => $command) {
                 $pool->as($key)
                     ->path($context->project->basePath)
@@ -136,16 +133,7 @@ final class ComposerStep implements Step
                     ->env(['COMPOSER_NO_INTERACTION' => '1'])
                     ->command($command);
             }
-        })->start()->wait();
-
-        $byKey = [];
-        $collected = $results->collect();
-
-        foreach (array_keys($commands) as $key) {
-            $byKey[$key] = $collected->get($key);
-        }
-
-        return $byKey;
+        })->start()->wait()->collect();
     }
 
     /**
@@ -159,18 +147,10 @@ final class ComposerStep implements Step
             return [];
         }
 
-        $commands = [];
+        $commands = (new Collection($packages))->mapWithKeys(fn (string $package): array => [$package => [...$composer, 'why', $package, '--no-interaction']]);
 
-        foreach ($packages as $package) {
-            $commands[$package] = [...$composer, 'why', $package, '--no-interaction'];
-        }
-
-        $why = [];
-
-        foreach ($this->pool($context, $commands) as $package => $result) {
-            $why[$package] = array_values(array_filter(array_map('trim', preg_split('/\R/', $result->output()) ?: [])));
-        }
-
-        return $why;
+        return $this->pool($context, $commands)
+            ->map(fn (ProcessResult $result): array => array_values(array_filter(array_map('trim', preg_split('/\R/', $result->output()) ?: []))))
+            ->all();
     }
 }

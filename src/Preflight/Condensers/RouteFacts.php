@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Data\Routes\RouteFactsReport;
 use Closure;
 
 /**
@@ -22,6 +24,9 @@ final class RouteFacts
 
     private const string PUBLIC_WRITES = '#^/?(login|logout|register|forgot-password|reset-password|email/verification-notification|two-factor-challenge|livewire(-[a-z0-9]+)?/|broadcasting/auth|sanctum/|_ignition|_boost/)#i';
 
+    // Local disk serve/upload routes (Laravel 12+) check a signed URL themselves.
+    private const string FRAMEWORK_SIGNED_ROUTES = '/^storage\.[\w-]+\.(serve|upload)$/';
+
     /** @var Closure(string): bool */
     private Closure $actionExists;
 
@@ -37,91 +42,44 @@ final class RouteFacts
         };
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $routes  decoded route:list --json
-     * @return array<string, mixed>
-     */
-    public function facts(array $routes): array
+    /** @param list<RouteDefinition> $routes */
+    public function facts(array $routes): RouteFactsReport
     {
-        $facts = [
-            'total' => count($routes),
-            'unauthenticated_write' => [],
-            'state_changing_get' => [],
-            'missing_throttle' => [],
-            'debug_routes' => [],
-            'broken_routes' => [],
-        ];
+        $unauthenticatedWrite = [];
+        $stateChangingGet = [];
+        $missingThrottle = [];
+        $debugRoutes = [];
+        $brokenRoutes = [];
 
         foreach ($routes as $route) {
-            $methods = $this->methods($route);
-            $uri = '/'.ltrim((string) ($route['uri'] ?? ''), '/');
-            $name = (string) ($route['name'] ?? '');
-            $action = (string) ($route['action'] ?? '');
-            $middleware = $this->middleware($route);
-            $entry = [
-                'method' => implode('|', $methods),
-                'uri' => $uri,
-                'name' => $name !== '' ? $name : null,
-                'action' => $action,
-                'middleware' => $middleware,
-            ];
-
-            $authed = $this->hasAuth($middleware);
+            $methods = $route->methods();
+            $authed = $this->hasAuth($route->middleware);
             $writes = array_intersect($methods, self::WRITE_METHODS) !== [];
 
-            if (preg_match(self::DEBUG_ROUTES, $uri) === 1) {
-                $facts['debug_routes'][] = [...$entry, 'authenticated' => $authed];
+            if (preg_match(self::DEBUG_ROUTES, $route->uri) === 1) {
+                $debugRoutes[] = $route;
 
                 continue;
             }
 
-            if ($writes && ! $authed && preg_match(self::PUBLIC_WRITES, $uri) !== 1) {
-                $facts['unauthenticated_write'][] = $entry;
+            if ($writes && ! $authed && preg_match(self::PUBLIC_WRITES, $route->uri) !== 1 && preg_match(self::FRAMEWORK_SIGNED_ROUTES, $route->name) !== 1) {
+                $unauthenticatedWrite[] = $route;
             }
 
-            if (in_array('GET', $methods, true) && in_array(strtolower($this->actionMethod($action)), self::MUTATING_ACTIONS, true)) {
-                $facts['state_changing_get'][] = $entry;
+            if (in_array('GET', $methods, true) && in_array(strtolower($route->actionMethod()), self::MUTATING_ACTIONS, true)) {
+                $stateChangingGet[] = $route;
             }
 
-            if ($writes && ! $this->hasThrottle($middleware) && preg_match(self::SENSITIVE_FORMS, $uri.' '.$name) === 1) {
-                $facts['missing_throttle'][] = $entry;
+            if ($writes && ! $this->hasThrottle($route->middleware) && preg_match(self::SENSITIVE_FORMS, $route->uri.' '.$route->name) === 1) {
+                $missingThrottle[] = $route;
             }
 
-            if ($this->isControllerAction($action) && ! ($this->actionExists)($action)) {
-                $facts['broken_routes'][] = $entry;
+            if ($route->isControllerAction() && ! ($this->actionExists)($route->action)) {
+                $brokenRoutes[] = $route;
             }
         }
 
-        $facts['flagged'] = count($facts['unauthenticated_write']) + count($facts['state_changing_get'])
-            + count($facts['missing_throttle']) + count($facts['debug_routes']) + count($facts['broken_routes']);
-
-        return $facts;
-    }
-
-    /**
-     * @param  array<string, mixed>  $route
-     * @return list<string>
-     */
-    private function methods(array $route): array
-    {
-        $methods = explode('|', strtoupper((string) ($route['method'] ?? '')));
-
-        return array_values(array_filter($methods, fn (string $method): bool => $method !== '' && $method !== 'HEAD'));
-    }
-
-    /**
-     * @param  array<string, mixed>  $route
-     * @return list<string>
-     */
-    private function middleware(array $route): array
-    {
-        $middleware = $route['middleware'] ?? [];
-
-        if (is_string($middleware)) {
-            $middleware = preg_split('/[\n,]+/', $middleware) ?: [];
-        }
-
-        return array_values(array_filter(array_map(fn ($item): string => trim((string) $item), (array) $middleware)));
+        return new RouteFactsReport(count($routes), $unauthenticatedWrite, $stateChangingGet, $missingThrottle, $debugRoutes, $brokenRoutes);
     }
 
     /** @param list<string> $middleware */
@@ -146,15 +104,5 @@ final class RouteFacts
         }
 
         return false;
-    }
-
-    private function actionMethod(string $action): string
-    {
-        return str_contains($action, '@') ? substr($action, strrpos($action, '@') + 1) : '';
-    }
-
-    private function isControllerAction(string $action): bool
-    {
-        return $action !== '' && $action !== 'Closure' && str_contains($action, '\\');
     }
 }

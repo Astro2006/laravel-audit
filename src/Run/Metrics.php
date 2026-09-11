@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
-use Astro2006\LaravelAudit\Audits\DependenciesAudit;
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 
 /**
@@ -13,62 +11,60 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
  */
 final class Metrics
 {
-    /** @return list<array{string, string}> label => value */
+    /** @return list<Metric> */
     public function rows(PreflightSummary $preflight, ?float $riskPoints = null): array
     {
-        $rows = [];
-        $loc = $preflight->get('loc');
+        $steps = $preflight->steps;
+        $loc = $steps->linesOfCode()?->loc;
+        $rows = [new Metric('LOC (app/)', $loc === null ? '–' : (string) $loc)];
 
-        $rows[] = ['LOC (app/)', $loc === null ? '–' : (string) $loc];
+        $tests = $steps->tests();
 
-        $tests = $preflight->step(PreflightStep::Tests);
-        if ($preflight->ran(PreflightStep::Tests)) {
-            $rows[] = ['Tests (passed / failed / skipped)', sprintf('%d / %d / %d', $tests['passed'] ?? 0, ($tests['failed'] ?? 0) + ($tests['errors'] ?? 0), $tests['skipped'] ?? 0)];
-            $rows[] = ['Line coverage', isset($tests['coverage_pct']) ? $tests['coverage_pct'].' %' : '–'];
+        if ($tests !== null) {
+            $rows[] = new Metric('Tests (passed / failed / skipped)', sprintf('%d / %d / %d', $tests->passed, $tests->failures(), $tests->skipped));
+            $rows[] = new Metric('Line coverage', $tests->coveragePct === null ? '–' : $tests->coveragePct.' %');
         }
 
-        $browser = $preflight->step(PreflightStep::Browser);
-        if ($preflight->ran(PreflightStep::Browser)) {
-            $rows[] = ['Browser tests (passed / failed)', sprintf('%d / %d', $browser['passed'] ?? 0, ($browser['failed'] ?? 0) + ($browser['errors'] ?? 0))];
+        $browser = $steps->browser();
+
+        if ($browser !== null) {
+            $rows[] = new Metric('Browser tests (passed / failed)', sprintf('%d / %d', $browser->passed, $browser->failures()));
         }
 
-        $phpstan = $preflight->step(PreflightStep::Phpstan);
-        if ($preflight->ran(PreflightStep::Phpstan)) {
-            $rows[] = ['PHPStan errors (active / baselined) · level', sprintf('%d / %d · %s', $phpstan['errors'] ?? 0, $phpstan['baselined'] ?? 0, $phpstan['level'] ?? '?')];
+        $phpstan = $steps->phpstan();
+
+        if ($phpstan !== null) {
+            $rows[] = new Metric('PHPStan errors (active / baselined) · level', sprintf('%d / %d · %s', $phpstan->errors, $phpstan->baselined, $phpstan->level ?? '?'));
         }
 
-        if ($preflight->ran(PreflightStep::Pint)) {
-            $rows[] = ['Pint files with issues', (string) ($preflight->step(PreflightStep::Pint)['files_with_issues'] ?? 0)];
+        $pint = $steps->pint();
+
+        if ($pint !== null) {
+            $rows[] = new Metric('Pint files with issues', (string) $pint->filesWithIssues);
         }
 
-        if ($preflight->ran(PreflightStep::Routes)) {
-            $routes = $preflight->step(PreflightStep::Routes);
-            $rows[] = ['Routes (total / flagged)', sprintf('%d / %d', $routes['count'] ?? 0, $routes['flagged'] ?? 0)];
+        $routes = $steps->routes();
+
+        if ($routes !== null) {
+            $rows[] = new Metric('Routes (total / flagged)', sprintf('%d / %d', $routes->count, $routes->flagged));
         }
 
-        if ($preflight->ran(PreflightStep::Translations)) {
-            $rows[] = ['Missing translation keys', (string) ($preflight->step(PreflightStep::Translations)['missing'] ?? 0)];
+        $translations = $steps->translations();
+
+        if ($translations !== null) {
+            $rows[] = new Metric('Missing translation keys', (string) $translations->missing);
         }
 
-        if ($preflight->ran(PreflightStep::Composer)) {
-            $facts = $preflight->json(DependenciesAudit::FACTS_FILE);
-            $bySeverity = ['critical' => 0, 'high' => 0, 'medium' => 0, 'low' => 0];
+        $facts = $preflight->dependencyFacts();
 
-            foreach ((array) ($facts['advisories'] ?? []) as $advisory) {
-                $severity = strtolower((string) ($advisory['severity'] ?? ''));
-
-                if (isset($bySeverity[$severity])) {
-                    $bySeverity[$severity]++;
-                }
-            }
-
-            $rows[] = ['Advisories (critical/high/medium/low)', implode('/', $bySeverity)];
-            $rows[] = ['Abandoned packages · outdated majors', sprintf('%d · %d', count((array) ($facts['abandoned'] ?? [])), count((array) ($facts['outdated_major'] ?? [])))];
+        if ($facts !== null) {
+            $rows[] = new Metric('Advisories (critical/high/medium/low)', implode('/', $facts->advisoriesBySeverity()));
+            $rows[] = new Metric('Abandoned packages · outdated majors', sprintf('%d · %d', count($facts->abandoned), count($facts->outdatedMajor)));
         }
 
         if ($riskPoints !== null) {
-            $perKloc = RiskPoints::perThousandLines($riskPoints, $loc === null ? null : (int) $loc);
-            $rows[] = ['Risk points (experimental)', $riskPoints.($perKloc === null ? '' : ' · '.$perKloc.' per 1k LOC')];
+            $perKloc = RiskPoints::perThousandLines($riskPoints, $loc);
+            $rows[] = new Metric('Risk points (experimental)', $riskPoints.($perKloc === null ? '' : ' · '.$perKloc.' per 1k LOC'));
         }
 
         return $rows;

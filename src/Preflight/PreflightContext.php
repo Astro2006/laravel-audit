@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Process;
 
 final class PreflightContext
 {
-    /** @var array<string, StepResult> */
-    private array $results = [];
+    public readonly StepResults $results;
 
     /**
      * @param  array<string, mixed>  $config  the "audit" config array
@@ -24,28 +26,31 @@ final class PreflightContext
         public readonly string $logsDir,
         public readonly array $config,
         public readonly RunSelection $selection,
+        public readonly ChildEnvironment $environment = new ChildEnvironment,
         public readonly string $phpBinary = PHP_BINARY,
-    ) {}
+    ) {
+        $this->results = new StepResults;
+    }
 
     public function config(string $key, mixed $default = null): mixed
     {
         return Arr::get($this->config, $key, $default);
     }
 
+    /**
+     * A process in the project directory, without the variables the audit
+     * process loaded from .env.
+     *
+     * @param  array<string, string|false>  $environment
+     */
+    public function process(array $environment = []): PendingProcess
+    {
+        return Process::path($this->project->basePath)->env([...$this->environment->overrides(), ...$environment]);
+    }
+
     public function record(StepResult $result): void
     {
-        $this->results[$result->step->value] = $result;
-    }
-
-    public function result(PreflightStep $step): ?StepResult
-    {
-        return $this->results[$step->value] ?? null;
-    }
-
-    /** @return array<string, StepResult> */
-    public function results(): array
-    {
-        return $this->results;
+        $this->results->put($result);
     }
 
     /** Absolute path below the preflight directory; parent directories are created. */
@@ -69,10 +74,11 @@ final class PreflightContext
         return $this->logsDir.'/'.$file;
     }
 
-    public function writeJson(string $relative, mixed $data): string
+    /** @param Arrayable<array-key, mixed>|array<mixed> $data */
+    public function writeJson(string $relative, Arrayable|array $data): string
     {
         $path = $this->path($relative);
-        Json::writeFile($path, $data);
+        Json::writeFile($path, $data instanceof Arrayable ? $data->toArray() : $data);
 
         return $path;
     }

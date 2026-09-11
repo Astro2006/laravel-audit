@@ -4,90 +4,78 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Phpstan\BaselineEntry;
+use Astro2006\LaravelAudit\Data\Phpstan\FileCount;
+use Astro2006\LaravelAudit\Data\Phpstan\IdentifierGroup;
+use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Data\Phpstan\PhpstanReport;
+use Illuminate\Support\Collection;
+
 /**
- * Groups PHPStan's JSON output by identifier and file, and adds the
- * baseline entries as "baselined" so hidden errors stay visible.
+ * Groups PHPStan errors by identifier and file, and adds the baseline
+ * entries as "baselined" so hidden errors stay visible.
  */
 final class PhpstanGrouper
 {
     /**
-     * @param  array<string, mixed>  $result  phpstan analyse --error-format=json
-     * @param  list<array{identifier: string|null, message: string, count: int, path: string}>  $baseline
-     * @return array<string, mixed>
+     * @param  list<PhpstanMessage>  $messages
+     * @param  list<BaselineEntry>  $baseline
+     * @param  list<string>  $generalErrors
      */
-    public function group(array $result, array $baseline, string $basePath): array
+    public function group(string $level, array $messages, array $baseline, array $generalErrors = []): PhpstanReport
     {
-        $groups = [];
-        $total = 0;
+        $identifiers = (new Collection($messages))
+            ->groupBy(fn (PhpstanMessage $message): string => $message->identifier)
+            ->map(fn (Collection $group, int|string $identifier): IdentifierGroup => new IdentifierGroup(
+                identifier: (string) $identifier,
+                count: $group->count(),
+                fileCount: $group->unique(fn (PhpstanMessage $message): string => $message->file)->count(),
+                topFiles: $this->topFiles($group->map(fn (PhpstanMessage $message): FileCount => new FileCount($message->file, 1))),
+                examples: $group->take(3)->values()->all(),
+            ));
 
-        foreach ((array) ($result['files'] ?? []) as $file => $data) {
-            $relative = $this->relative((string) $file, $basePath);
+        $baselined = (new Collection($baseline))
+            ->groupBy(fn (BaselineEntry $entry): string => $entry->identifier ?? 'unknown')
+            ->map(fn (Collection $group, int|string $identifier): IdentifierGroup => new IdentifierGroup(
+                identifier: (string) $identifier,
+                count: (int) $group->sum(fn (BaselineEntry $entry): int => $entry->count),
+                fileCount: $group->unique(fn (BaselineEntry $entry): string => $entry->path)->count(),
+                topFiles: $this->topFiles($group->map(fn (BaselineEntry $entry): FileCount => new FileCount($entry->path, $entry->count))),
+                examples: [],
+                baselined: true,
+            ));
 
-            foreach ((array) ($data['messages'] ?? []) as $message) {
-                $identifier = (string) ($message['identifier'] ?? 'unknown');
-                $total++;
-
-                $groups[$identifier] ??= ['identifier' => $identifier, 'count' => 0, 'files' => [], 'examples' => []];
-                $groups[$identifier]['count']++;
-                $groups[$identifier]['files'][$relative] = ($groups[$identifier]['files'][$relative] ?? 0) + 1;
-
-                if (count($groups[$identifier]['examples']) < 3) {
-                    $groups[$identifier]['examples'][] = [
-                        'file' => $relative,
-                        'line' => $message['line'] ?? null,
-                        'message' => (string) ($message['message'] ?? ''),
-                    ];
-                }
-            }
-        }
-
-        $baselined = [];
-        $baselinedTotal = 0;
-
-        foreach ($baseline as $entry) {
-            $identifier = $entry['identifier'] ?? 'unknown';
-            $count = max(1, $entry['count']);
-            $baselinedTotal += $count;
-
-            $baselined[$identifier] ??= ['identifier' => $identifier, 'count' => 0, 'files' => [], 'baselined' => true];
-            $baselined[$identifier]['count'] += $count;
-            $baselined[$identifier]['files'][$entry['path']] = ($baselined[$identifier]['files'][$entry['path']] ?? 0) + $count;
-        }
-
-        return [
-            'errors' => $total,
-            'baselined' => $baselinedTotal,
-            'identifiers' => $this->finish($groups),
-            'baselined_identifiers' => $this->finish($baselined),
-            'general_errors' => array_values(array_map('strval', (array) ($result['errors'] ?? []))),
-        ];
+        return new PhpstanReport(
+            level: $level,
+            errors: count($messages),
+            baselined: array_sum(array_map(fn (BaselineEntry $entry): int => $entry->count, $baseline)),
+            identifiers: $this->sorted($identifiers),
+            baselinedIdentifiers: $this->sorted($baselined),
+            generalErrors: $generalErrors,
+        );
     }
 
     /**
-     * @param  array<string, array<string, mixed>>  $groups
-     * @return list<array<string, mixed>>
+     * @param  Collection<int, FileCount>  $counts
+     * @return list<FileCount>
      */
-    private function finish(array $groups): array
+    private function topFiles(Collection $counts): array
     {
-        foreach ($groups as &$group) {
-            arsort($group['files']);
-            $group['file_count'] = count($group['files']);
-            $group['top_files'] = array_slice($group['files'], 0, 5, true);
-            unset($group['files']);
-        }
-
-        unset($group);
-
-        usort($groups, fn (array $a, array $b): int => $b['count'] <=> $a['count']);
-
-        return $groups;
+        return $counts
+            ->groupBy(fn (FileCount $count): string => $count->file)
+            ->map(fn (Collection $group, int|string $file): FileCount => new FileCount((string) $file, (int) $group->sum(fn (FileCount $count): int => $count->count)))
+            ->sortByDesc(fn (FileCount $count): int => $count->count)
+            ->take(5)
+            ->values()
+            ->all();
     }
 
-    private function relative(string $file, string $basePath): string
+    /**
+     * @param  Collection<array-key, IdentifierGroup>  $groups
+     * @return list<IdentifierGroup>
+     */
+    private function sorted(Collection $groups): array
     {
-        $file = str_replace('\\', '/', $file);
-        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
-
-        return str_starts_with($file, $base) ? substr($file, strlen($base)) : $file;
+        return $groups->sortByDesc(fn (IdentifierGroup $group): int => $group->count)->values()->all();
     }
 }

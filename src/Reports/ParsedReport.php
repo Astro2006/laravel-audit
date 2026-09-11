@@ -7,29 +7,38 @@ namespace Astro2006\LaravelAudit\Reports;
 final readonly class ParsedReport
 {
     /**
-     * @param  list<string>  $sections  level-2 headings in order of appearance
-     * @param  array<string, string>  $sectionContent  heading => raw content
+     * @param  list<ReportSection>  $sections  level-2 sections in order of appearance
      * @param  list<ParsedFinding>  $findings
-     * @param  list<array{line: int, text: string}>  $invalidHeadings  level-3 headings in "Findings" that are not findings
+     * @param  list<InvalidHeading>  $invalidHeadings  level-3 headings in "Findings" that are not findings
      */
     public function __construct(
         public array $sections,
-        public array $sectionContent,
         public array $findings,
         public array $invalidHeadings,
         public bool $noFindingsMarker,
     ) {}
 
+    /** @return list<string> */
+    public function sectionTitles(): array
+    {
+        return array_map(fn (ReportSection $section): string => $section->title, $this->sections);
+    }
+
     public function hasSection(string $title): bool
     {
-        return $this->sectionTitle($title) !== null;
+        return $this->find($title) !== null;
     }
 
     public function section(string $title): ?string
     {
-        $match = $this->sectionTitle($title);
+        return $this->find($title)?->content();
+    }
 
-        return $match === null ? null : $this->sectionContent[$match];
+    public function lastSection(): ?ReportSection
+    {
+        $sections = $this->sections;
+
+        return $sections === [] ? null : end($sections);
     }
 
     public function summary(): string
@@ -37,10 +46,10 @@ final readonly class ParsedReport
         return trim((string) $this->section('Summary'));
     }
 
-    private function sectionTitle(string $title): ?string
+    private function find(string $title): ?ReportSection
     {
         foreach ($this->sections as $section) {
-            if (strcasecmp($section, $title) === 0) {
+            if ($section->is($title)) {
                 return $section;
             }
         }

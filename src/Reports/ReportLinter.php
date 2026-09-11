@@ -36,8 +36,8 @@ final class ReportLinter
         foreach ($report->invalidHeadings as $heading) {
             $errors[] = sprintf(
                 'Line %d: "%s" is not a valid finding heading. Use `### %s-001 — Title`.',
-                $heading['line'],
-                trim($heading['text']),
+                $heading->line,
+                trim($heading->text),
                 $audit->idPrefix(),
             );
         }
@@ -47,13 +47,13 @@ final class ReportLinter
         $findings = [];
 
         foreach ($report->findings as $parsed) {
-            if (isset($seen[$parsed->id])) {
+            if (in_array($parsed->id, $seen, true)) {
                 $errors[] = sprintf('%s: duplicate finding ID.', $parsed->id);
 
                 continue;
             }
 
-            $seen[$parsed->id] = true;
+            $seen[] = $parsed->id;
 
             $finding = $this->lintFinding($parsed, $audit, $ids, $errors, $warnings);
 
@@ -100,9 +100,9 @@ final class ReportLinter
             }
         }
 
-        $last = $report->sections[count($report->sections) - 1] ?? null;
+        $last = $report->lastSection();
 
-        if ($report->hasSection('Limitations') && ($last === null || strcasecmp($last, 'Limitations') !== 0)) {
+        if ($report->hasSection('Limitations') && ($last === null || ! $last->is('Limitations'))) {
             $errors[] = '`## Limitations` must be the last level-2 section.';
         }
     }

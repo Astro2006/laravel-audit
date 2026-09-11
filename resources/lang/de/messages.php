@@ -5,7 +5,7 @@ return [
     'without' => 'Ohne: :items',
 
     'sections' => [
-        'requirements' => 'Requirements',
+        'requirements' => 'Voraussetzungen',
         'preflight' => 'Preflight',
         'agents' => 'Agents',
     ],
@@ -43,6 +43,7 @@ return [
         'tests' => 'Tests',
         'browser' => 'Browser (Playwright)',
         'phpstan' => 'PHPStan (Level :level)',
+        'phpstan_plain' => 'PHPStan',
     ],
 
     'details' => [
@@ -52,6 +53,7 @@ return [
         'pint' => ':files Dateien, :rules Regeln',
         'routes' => ':count (:flagged Auffälligkeiten)',
         'translations' => ':locales · :missing fehlende Keys',
+        'translations_none' => 'kein lang-Ordner',
         'composer' => ':advisories Advisories, :abandoned abandoned, :outdated Major-Updates',
         'tests' => ':failed/:total fehlgeschlagen',
         'tests_green' => ':total bestanden',
@@ -129,6 +131,7 @@ return [
         'not_interactive' => 'Nichts installiert (--no-interaction ohne --yes).',
         'done' => 'Fertig.',
         'installed' => ':count Pakete installiert',
+        'stub_planned' => 'phpstan.neon anlegen (Level :level)',
         'stub_created' => 'phpstan.neon erstellt (Level :level)',
         'gitignore' => ':path/.gitignore angelegt',
         'declined' => 'Abgelehnt: :package — :consequence',

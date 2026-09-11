@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Tests\FailureGroup;
+use Astro2006\LaravelAudit\Data\Tests\JunitReport;
+use Astro2006\LaravelAudit\Data\Tests\SkippedTest;
+use Astro2006\LaravelAudit\Data\Tests\SlowTest;
+use Astro2006\LaravelAudit\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Support\Xml;
+use Illuminate\Support\Collection;
 use SimpleXMLElement;
 
 /**
@@ -16,91 +23,101 @@ final class JunitCondenser
 
     private const int MAX_SKIPPED = 30;
 
-    /**
-     * @return array{total: int, passed: int, failed: int, errors: int, skipped: int, duration_s: float, environment_error: bool, failure_groups: list<array<string, mixed>>, skipped_tests: list<array<string, string>>, slowest: list<array<string, mixed>>}|null
-     */
-    public function condense(string $junitPath, string $basePath): ?array
+    public function condense(string $junitPath, string $basePath): ?JunitReport
     {
-        if (! is_file($junitPath)) {
+        $xml = Xml::load($junitPath);
+
+        if ($xml === null) {
             return null;
         }
 
-        $previous = libxml_use_internal_errors(true);
-        $xml = simplexml_load_file($junitPath);
-        libxml_use_internal_errors($previous);
-
-        if (! $xml instanceof SimpleXMLElement) {
-            return null;
-        }
-
-        $counts = ['total' => 0, 'passed' => 0, 'failed' => 0, 'errors' => 0, 'skipped' => 0];
-        $groups = [];
+        $total = 0;
+        $passed = 0;
+        $failures = [];
         $skipped = [];
         $durations = [];
-        $duration = 0.0;
+        $errors = 0;
+        $skippedCount = 0;
 
-        foreach ($xml->xpath('//testcase') ?: [] as $case) {
-            $counts['total']++;
+        foreach (Xml::xpath($xml, '//testcase') as $case) {
+            $total++;
             $name = $this->testName($case);
-            $file = $this->relativeFile((string) ($case['file'] ?? ''), $basePath);
-            $time = (float) ($case['time'] ?? 0);
-            $duration += $time;
-            $durations[] = ['test' => $name, 'seconds' => round($time, 3)];
+            $file = $this->relativeFile(Xml::attr($case, 'file'), $basePath);
+            $time = (float) Xml::attr($case, 'time', '0');
+            $durations[] = new SlowTest($name, round($time, 3));
 
-            $problem = $case->failure[0] ?? $case->error[0] ?? null;
+            $failure = Xml::child($case, 'failure');
+            $error = Xml::child($case, 'error');
+            $problem = $failure ?? $error;
 
             if ($problem !== null) {
-                $isError = isset($case->error[0]) && ! isset($case->failure[0]);
-                $counts[$isError ? 'errors' : 'failed']++;
-
-                $type = (string) ($problem['type'] ?? ($isError ? 'Error' : 'Failure'));
-                $message = $this->firstLine((string) ($problem['message'] ?? '') ?: (string) $problem);
-                $key = $type.'|'.$message;
-
-                $groups[$key] ??= ['exception' => $type, 'message' => $message, 'count' => 0, 'tests' => [], 'files' => []];
-                $groups[$key]['count']++;
-
-                if (count($groups[$key]['tests']) < 5) {
-                    $groups[$key]['tests'][] = $name;
-                }
-
-                if ($file !== '' && ! in_array($file, $groups[$key]['files'], true)) {
-                    $groups[$key]['files'][] = $file;
-                }
+                $isError = $failure === null;
+                $errors += $isError ? 1 : 0;
+                // PHPUnit 12 starts the text with "Class::method"; that is not the message.
+                $identifier = Xml::attr($case, 'class') !== '' ? Xml::attr($case, 'class').'::'.Xml::attr($case, 'name') : null;
+                $message = $this->firstLine(Xml::attr($problem, 'message') ?: (string) $problem, $identifier);
+                $failures[] = new TestFailure(Xml::attr($problem, 'type', $isError ? 'Error' : 'Failure'), $message, $name, $file);
 
                 continue;
             }
 
-            if (isset($case->skipped[0])) {
-                $counts['skipped']++;
+            $skip = Xml::child($case, 'skipped');
+
+            if ($skip !== null) {
+                $skippedCount++;
 
                 if (count($skipped) < self::MAX_SKIPPED) {
-                    $skipped[] = [
-                        'test' => $name,
-                        'reason' => $this->firstLine((string) ($case->skipped[0]['message'] ?? '') ?: (string) $case->skipped[0]),
-                        'file' => $file,
-                    ];
+                    $skipped[] = new SkippedTest($name, $this->firstLine(Xml::attr($skip, 'message') ?: (string) $skip), $file);
                 }
 
                 continue;
             }
 
-            $counts['passed']++;
+            $passed++;
         }
 
-        usort($groups, fn (array $a, array $b): int => $b['count'] <=> $a['count']);
-        usort($durations, fn (array $a, array $b): int => $b['seconds'] <=> $a['seconds']);
+        $groups = $this->group($failures);
+        $failed = count($failures) - $errors;
 
-        $broken = $counts['failed'] + $counts['errors'];
+        usort($durations, fn (SlowTest $a, SlowTest $b): int => $b->seconds <=> $a->seconds);
 
-        return [
-            ...$counts,
-            'duration_s' => round($duration, 2),
-            'environment_error' => $this->looksLikeBrokenEnvironment($counts['total'], $broken, $groups[0]['count'] ?? 0),
-            'failure_groups' => array_slice($groups, 0, self::MAX_GROUPS),
-            'skipped_tests' => $skipped,
-            'slowest' => array_slice($durations, 0, 10),
-        ];
+        return new JunitReport(
+            total: $total,
+            passed: $passed,
+            failed: $failed,
+            errors: $errors,
+            skipped: $skippedCount,
+            durationSeconds: round(array_sum(array_map(fn (SlowTest $test): float => $test->seconds, $durations)), 2),
+            environmentError: $this->looksLikeBrokenEnvironment($total, count($failures), max([0, ...array_map(fn (FailureGroup $group): int => $group->count, $groups)])),
+            failureGroups: array_slice($groups, 0, self::MAX_GROUPS),
+            skippedTests: $skipped,
+            slowest: array_slice($durations, 0, 10),
+        );
+    }
+
+    /**
+     * @param  list<TestFailure>  $failures
+     * @return list<FailureGroup> largest first
+     */
+    private function group(array $failures): array
+    {
+        return (new Collection($failures))
+            ->groupBy(fn (TestFailure $failure): string => $failure->groupKey())
+            ->map(function (Collection $group): FailureGroup {
+                /** @var TestFailure $first */
+                $first = $group->first();
+
+                return new FailureGroup(
+                    $first->type,
+                    $first->message,
+                    $group->count(),
+                    $group->take(5)->map(fn (TestFailure $failure): string => $failure->test)->values()->all(),
+                    $group->map(fn (TestFailure $failure): string => $failure->file)->filter()->unique()->values()->all(),
+                );
+            })
+            ->sortByDesc(fn (FailureGroup $group): int => $group->count)
+            ->values()
+            ->all();
     }
 
     /**
@@ -116,13 +133,8 @@ final class JunitCondenser
 
     private function testName(SimpleXMLElement $case): string
     {
-        $class = (string) ($case['class'] ?? '');
-
-        if ($class === '' && isset($case['classname'])) {
-            $class = str_replace('.', '\\', (string) $case['classname']);
-        }
-
-        $name = (string) ($case['name'] ?? '');
+        $class = Xml::attr($case, 'class') ?: str_replace('.', '\\', Xml::attr($case, 'classname'));
+        $name = Xml::attr($case, 'name');
 
         return $class === '' ? $name : $class.'::'.$name;
     }
@@ -135,10 +147,14 @@ final class JunitCondenser
         return str_starts_with($file, $base) ? substr($file, strlen($base)) : $file;
     }
 
-    private function firstLine(string $text): string
+    private function firstLine(string $text, ?string $skipPrefix = null): string
     {
         foreach (preg_split('/\R/', trim($text)) ?: [] as $line) {
             $line = trim($line);
+
+            if ($skipPrefix !== null && str_starts_with($line, $skipPrefix)) {
+                continue;
+            }
 
             if ($line !== '') {
                 return mb_substr($line, 0, 300);

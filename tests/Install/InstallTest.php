@@ -34,7 +34,7 @@ it('plans only the optional parts for a pest 5 project', function () use ($allAu
     expect($plan->present)->toBe(['larastan/larastan', 'laravel/pint', 'pestphp/pest'])
         ->and($plan->names())->toBe(['laravel/boost', 'pestphp/pest-plugin-browser', 'playwright'])
         ->and($plan->setup)->toContain('boost', 'phpstan-stub')
-        ->and(array_column($plan->notes, 'key'))->toContain('install.no_browser_tests');
+        ->and(array_map(fn ($note) => $note->key, $plan->notes))->toContain('install.no_browser_tests');
 });
 
 it('marks pest as an upgrade for phpunit-only projects and adds paratest', function () use ($allAudits) {
@@ -45,7 +45,7 @@ it('marks pest as an upgrade for phpunit-only projects and adds paratest', funct
 
     expect($pest->isUpgrade())->toBeTrue()
         ->and($plan->names())->toContain('brianium/paratest')
-        ->and(array_column($plan->notes, 'key'))->toContain('install.phpunit_only');
+        ->and(array_map(fn ($note) => $note->key, $plan->notes))->toContain('install.phpunit_only');
 });
 
 it('marks old pest versions as an upgrade', function () use ($allAudits) {

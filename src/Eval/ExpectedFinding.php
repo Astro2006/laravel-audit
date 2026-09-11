@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Eval;
 
+use Astro2006\LaravelAudit\Data\Run\FindingRecord;
 use Astro2006\LaravelAudit\Enums\Severity;
+use Astro2006\LaravelAudit\Support\Read;
 
 /**
  * A planted problem or a negative control in the fixture app.
@@ -19,36 +21,33 @@ final readonly class ExpectedFinding
         public ?Severity $minSeverity = null,
     ) {}
 
-    /** @param array<string, mixed> $data */
+    /** @param array<mixed> $data */
     public static function fromArray(array $data): self
     {
-        $target = match (true) {
-            isset($data['route']) => 'route:'.$data['route'],
-            isset($data['package']) => 'package:'.strtolower((string) $data['package']),
-            default => (string) ($data['file'] ?? ''),
-        };
+        $route = Read::nullableString($data, 'route');
+        $package = Read::nullableString($data, 'package');
 
         return new self(
-            id: (string) ($data['id'] ?? '?'),
-            audit: (string) ($data['audit'] ?? ''),
-            check: (string) ($data['check'] ?? ''),
-            target: $target,
-            minSeverity: isset($data['min_severity']) ? Severity::tryFrom((string) $data['min_severity']) : null,
+            id: Read::string($data, 'id', '?'),
+            audit: Read::string($data, 'audit'),
+            check: Read::string($data, 'check'),
+            target: match (true) {
+                $route !== null => 'route:'.$route,
+                $package !== null => 'package:'.strtolower($package),
+                default => Read::string($data, 'file'),
+            },
+            minSeverity: Severity::tryFrom(Read::string($data, 'min_severity')),
         );
     }
 
-    /**
-     * @param  array{check: string, targets: list<string>}  $finding  a finding from run.json
-     */
-    public function matches(array $finding): bool
+    public function matches(FindingRecord $finding): bool
     {
-        return $finding['check'] === $this->check && in_array($this->target, $finding['targets'], true);
+        return $finding->check === $this->check && in_array($this->target, $finding->targets, true);
     }
 
-    /** @param array{severity: string} $finding */
-    public function severityOk(array $finding): bool
+    public function severityOk(FindingRecord $finding): bool
     {
-        $severity = Severity::tryFrom($finding['severity']);
+        $severity = Severity::tryFrom($finding->severity);
 
         return $this->minSeverity === null || ($severity !== null && $severity->rank() >= $this->minSeverity->rank());
     }

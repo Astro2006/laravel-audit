@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Support\Collection;
 use Throwable;
 
 /**
@@ -20,15 +21,13 @@ use Throwable;
  */
 final class PreflightRunner
 {
-    /** @var array<string, Step> */
-    private array $steps = [];
+    /** @var Collection<string, Step> */
+    private Collection $steps;
 
     /** @param iterable<Step> $steps */
     public function __construct(iterable $steps)
     {
-        foreach ($steps as $step) {
-            $this->steps[$step->step()->value] = $step;
-        }
+        $this->steps = (new Collection($steps))->keyBy(fn (Step $step): string => $step->step()->value);
     }
 
     /**
@@ -39,13 +38,14 @@ final class PreflightRunner
     public function run(PreflightContext $context, Closure $onResult, Closure $gate, ?Closure $onStart = null): GateDecision
     {
         $required = $context->selection->requiredSteps();
-        $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && isset($this->steps[$step->value]);
+        $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && $this->steps->has($step->value);
 
         $testsRunning = null;
         $testsStarted = 0.0;
 
-        if ($has(PreflightStep::Tests)) {
-            $tests = $this->steps[PreflightStep::Tests->value];
+        $tests = $this->step(PreflightStep::Tests);
+
+        if ($has(PreflightStep::Tests) && $tests !== null) {
             $onStart?->__invoke(PreflightStep::Tests);
             $testsStarted = microtime(true);
 
@@ -68,20 +68,18 @@ final class PreflightRunner
             }
 
             $onStart?->__invoke($step);
-            $this->runStep($context, $this->steps[$step->value], $onResult);
+            $this->runStep($context, $this->step($step), $onResult);
         }
 
-        if ($testsRunning !== null) {
-            /** @var AsyncStep $tests */
-            $tests = $this->steps[PreflightStep::Tests->value];
+        if ($testsRunning !== null && $tests instanceof AsyncStep) {
             $result = $this->attempt(PreflightStep::Tests, fn () => $tests->finish($context, $testsRunning->wait()));
             $this->record($context, $result->withDuration(microtime(true) - $testsStarted), $onResult);
         }
 
-        $decision = $gate($context->result(PreflightStep::Tests) ?? StepResult::skipped(PreflightStep::Tests, SkipReason::Disabled));
+        $decision = $gate($context->results->get(PreflightStep::Tests) ?? StepResult::skipped(PreflightStep::Tests, SkipReason::Disabled));
 
         foreach ([PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
-            if (! $has($step) || $context->result($step) !== null) {
+            if (! $has($step) || $context->results->get($step) !== null) {
                 continue;
             }
 
@@ -92,15 +90,24 @@ final class PreflightRunner
             }
 
             $onStart?->__invoke($step);
-            $this->runStep($context, $this->steps[$step->value], $onResult);
+            $this->runStep($context, $this->step($step), $onResult);
         }
 
         return $decision;
     }
 
-    /** @param Closure(StepResult): void $onResult */
-    private function runStep(PreflightContext $context, Step $step, Closure $onResult): void
+    private function step(PreflightStep $step): ?Step
     {
+        return $this->steps->get($step->value);
+    }
+
+    /** @param Closure(StepResult): void $onResult */
+    private function runStep(PreflightContext $context, ?Step $step, Closure $onResult): void
+    {
+        if ($step === null) {
+            return;
+        }
+
         $started = microtime(true);
         $result = $this->attempt($step->step(), fn () => $step->run($context));
 

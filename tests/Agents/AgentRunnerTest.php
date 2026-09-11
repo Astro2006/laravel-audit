@@ -26,13 +26,13 @@ it('validates a good answer without a repair pass', function () {
     Process::fake(['*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))]))]);
     $logs = tempDir('logs');
 
-    $outcomes = runner($logs)->run([backendJob()]);
+    [$outcome] = runner($logs)->run([backendJob()]);
 
-    expect($outcomes['backend']->status)->toBe(AuditStatus::Completed)
-        ->and($outcomes['backend']->repaired)->toBeFalse()
-        ->and($outcomes['backend']->findings)->toHaveCount(2)
-        ->and($outcomes['backend']->model)->toBe('claude-opus-5')
-        ->and($outcomes['backend']->promptHash)->toBe('abc12345')
+    expect($outcome->status)->toBe(AuditStatus::Completed)
+        ->and($outcome->repaired)->toBeFalse()
+        ->and($outcome->findings)->toHaveCount(2)
+        ->and($outcome->model)->toBe('claude-opus-5')
+        ->and($outcome->promptHash)->toBe('abc12345')
         ->and($logs.'/backend.json')->toBeFile();
 
     Process::assertRanTimes(fn ($process) => $process->input === 'Audit the backend.', 1);
@@ -46,7 +46,7 @@ it('repairs an invalid answer in the same session', function () {
         ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md')), 'total_cost_usd' => 0.08, 'num_turns' => 1])))]);
     $logs = tempDir('logs');
 
-    $outcome = runner($logs)->run([backendJob()])['backend'];
+    [$outcome] = runner($logs)->run([backendJob()]);
 
     expect($outcome->status)->toBe(AuditStatus::Completed)
         ->and($outcome->repaired)->toBeTrue()
@@ -62,7 +62,7 @@ it('fails after an unsuccessful repair pass', function () {
     $broken = str_replace('## Summary', '## Overview', file_get_contents(fixture('reports/backend-valid.md')));
     Process::fake(['*' => Process::result(claudeJson(['result' => $broken]))]);
 
-    $outcome = runner(tempDir('logs'))->run([backendJob()])['backend'];
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
 
     expect($outcome->status)->toBe(AuditStatus::Failed)
         ->and($outcome->reason)->toBe('Report failed validation after the repair pass.')
@@ -72,7 +72,7 @@ it('fails after an unsuccessful repair pass', function () {
 it('does not repair failed or truncated agent runs', function () {
     Process::fake(['*' => Process::result(claudeJson(['subtype' => 'error_max_budget_usd', 'is_error' => true, 'result' => '']), exitCode: 1)]);
 
-    $outcome = runner(tempDir('logs'))->run([backendJob()])['backend'];
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
 
     expect($outcome->status)->toBe(AuditStatus::Failed)
         ->and($outcome->reason)->toContain('error_max_budget_usd');
@@ -83,7 +83,7 @@ it('does not repair failed or truncated agent runs', function () {
 it('asks for missing required findings in the repair pass', function () {
     Process::fake(['*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))]))]);
 
-    $outcome = runner(tempDir('logs'))->run([backendJob([new RequiredFinding('sql-injection', 'the SQL injection from the facts.')])])['backend'];
+    [$outcome] = runner(tempDir('logs'))->run([backendJob([new RequiredFinding('sql-injection', 'the SQL injection from the facts.')])]);
 
     expect($outcome->status)->toBe(AuditStatus::Failed);
     Process::assertRan(fn ($process) => str_contains((string) $process->input, 'Missing required finding: the SQL injection from the facts.'));
@@ -98,6 +98,6 @@ it('runs several audits and reports each when it finishes', function () {
         $finished[] = $outcome->audit->value;
     });
 
-    expect(array_keys($outcomes))->toEqualCanonicalizing(['backend', 'dependencies'])
+    expect(array_map(fn ($outcome) => $outcome->audit->value, $outcomes))->toEqualCanonicalizing(['backend', 'dependencies'])
         ->and($finished)->toEqualCanonicalizing(['backend', 'dependencies']);
 });

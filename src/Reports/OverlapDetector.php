@@ -18,12 +18,16 @@ final class OverlapDetector
     public function detect(array $findingsByAudit): array
     {
         $overlaps = [];
-        $audits = array_keys($findingsByAudit);
+        $audits = [];
 
-        foreach ($audits as $i => $auditA) {
-            foreach (array_slice($audits, $i + 1) as $auditB) {
-                foreach ($findingsByAudit[$auditA] as $findingA) {
-                    foreach ($findingsByAudit[$auditB] as $findingB) {
+        foreach ($findingsByAudit as $audit => $findings) {
+            $audits[] = [$audit, $findings];
+        }
+
+        foreach ($audits as $i => [$auditA, $findingsA]) {
+            foreach (array_slice($audits, $i + 1) as [$auditB, $findingsB]) {
+                foreach ($findingsA as $findingA) {
+                    foreach ($findingsB as $findingB) {
                         $shared = $this->sharedLocation($findingA, $findingB);
 
                         if ($shared !== null) {

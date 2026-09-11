@@ -8,14 +8,16 @@ use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\RunStatus;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Preflight\StepResults;
+use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\Overlap;
 use Astro2006\LaravelAudit\Support\Json;
 use DateTimeImmutable;
 
 /**
- * run.md: what ran, with which result, cost and findings. Written at the
- * start and updated at the end of every run.
+ * run.md (for people) and run.json (for audit:eval): what ran, with which
+ * result, cost and findings. Written at the start and updated at the end.
  */
 final class RunManifest
 {
@@ -33,13 +35,12 @@ final class RunManifest
 
     public ?string $model = null;
 
-    /** @var array<string, array<string, mixed>> step => summary data */
-    public array $steps = [];
+    public StepResults $steps;
 
-    /** @var list<array{string, string}> */
+    /** @var list<Metric> */
     public array $metrics = [];
 
-    /** @var array<string, AuditOutcome> */
+    /** @var list<AuditOutcome> */
     public array $outcomes = [];
 
     /** @var list<Overlap> */
@@ -51,14 +52,8 @@ final class RunManifest
         public readonly GitInfo $git,
         public readonly string $agent,
         public readonly string $packageVersion,
-    ) {}
-
-    /** @param array<string, StepResult> $results */
-    public function recordSteps(array $results): void
-    {
-        foreach ($results as $step => $result) {
-            $this->steps[$step] = $result->toArray();
-        }
+    ) {
+        $this->steps = new StepResults;
     }
 
     public function finish(RunStatus $status): void
@@ -80,26 +75,6 @@ final class RunManifest
      */
     public function toArray(): array
     {
-        $outcomes = [];
-
-        foreach ($this->outcomes as $audit => $outcome) {
-            $outcomes[$audit] = [
-                'status' => $outcome->status->value,
-                'reason' => $outcome->reason,
-                'repaired' => $outcome->repaired,
-                'prompt_hash' => $outcome->promptHash,
-                'model' => $outcome->model,
-                'telemetry' => $outcome->telemetry->toArray(),
-                'findings' => array_map(fn ($finding): array => [
-                    'key' => $finding->key($audit),
-                    ...$finding->toArray(),
-                    'targets' => array_values(array_unique(array_map(fn (Location $location): string => $location->target(), $finding->locations))),
-                ], $outcome->findings),
-                'errors' => $outcome->errors,
-                'warnings' => $outcome->warnings,
-            ];
-        }
-
         return [
             'run_id' => $this->run->id,
             'status' => $this->status->value,
@@ -110,31 +85,24 @@ final class RunManifest
             'agent' => $this->agent,
             'model' => $this->model,
             'git' => ['branch' => $this->git->branch, 'commit' => $this->git->commit, 'dirty' => $this->git->dirty],
-            'outcomes' => $outcomes,
+            'outcomes' => array_map(fn (AuditOutcome $outcome): array => [
+                'audit' => $outcome->audit->value,
+                'status' => $outcome->status->value,
+                'reason' => $outcome->reason,
+                'repaired' => $outcome->repaired,
+                'prompt_hash' => $outcome->promptHash,
+                'model' => $outcome->model,
+                'telemetry' => $outcome->telemetry->toArray(),
+                'findings' => array_map(fn (Finding $finding): array => [
+                    'key' => $finding->key($outcome->audit->value),
+                    ...$finding->toArray(),
+                    'targets' => array_values(array_unique(array_map(fn (Location $location): string => $location->target(), $finding->locations))),
+                ], $outcome->findings),
+                'errors' => $outcome->errors,
+                'warnings' => $outcome->warnings,
+            ], $this->outcomes),
             'overlaps' => count($this->overlaps),
         ];
-    }
-
-    /**
-     * Frontmatter of a run.md.
-     *
-     * @return array<string, string>
-     */
-    public static function read(string $path): array
-    {
-        if (! is_file($path) || preg_match('/^---\n(.*?)\n---/s', (string) file_get_contents($path), $match) !== 1) {
-            return [];
-        }
-
-        $data = [];
-
-        foreach (explode("\n", $match[1]) as $line) {
-            if (preg_match('/^([a-z_]+):\s*(.*?)\s*(#.*)?$/', $line, $parts) === 1) {
-                $data[$parts[1]] = $parts[2];
-            }
-        }
-
-        return $data;
     }
 
     public function render(): string
@@ -165,100 +133,123 @@ final class RunManifest
             $lines[] = rtrim($key.': '.$value);
         }
 
-        $lines[] = '---';
-        $lines[] = '';
-        $lines[] = '# Run '.$this->run->id;
-        $lines[] = '';
+        array_push($lines, '---', '', '# Run '.$this->run->id, '');
 
-        $this->preflightSection($lines);
-        $this->metricsSection($lines);
-        $this->auditsSection($lines);
-        $this->findingsSection($lines);
-        $this->duplicatesSection($lines);
-        $this->warningsSection($lines);
+        array_push(
+            $lines,
+            ...$this->preflightSection(),
+            ...$this->metricsSection(),
+            ...$this->auditsSection(),
+            ...$this->findingsSection(),
+            ...$this->duplicatesSection(),
+            ...$this->warningsSection(),
+        );
 
         return implode("\n", $lines)."\n";
     }
 
-    /** @param list<string> $lines */
-    private function preflightSection(array &$lines): void
+    /**
+     * @param  list<Finding>  $findings
+     * @return array{critical: int, high: int, medium: int, low: int, info: int}
+     */
+    public static function severityCounts(array $findings): array
     {
-        $lines[] = '## Preflight';
-        $lines[] = '';
-        $lines[] = '| Step | Status | Duration | Notes |';
-        $lines[] = '|---|---|---|---|';
+        $count = fn (string $severity): int => count(array_filter($findings, fn (Finding $finding): bool => $finding->severity->value === $severity));
 
-        foreach ($this->steps as $step => $data) {
-            $notes = $data['reason'] ?? $data['error'] ?? implode('; ', (array) ($data['warnings'] ?? []));
-            $lines[] = sprintf('| %s | %s | %ss | %s |', $step, $data['status'], $data['duration_s'] ?? 0, $this->cell((string) $notes));
+        return ['critical' => $count('critical'), 'high' => $count('high'), 'medium' => $count('medium'), 'low' => $count('low'), 'info' => $count('info')];
+    }
+
+    /** @return list<string> */
+    private function preflightSection(): array
+    {
+        $lines = ['## Preflight', '', '| Step | Status | Duration | Notes |', '|---|---|---|---|'];
+
+        foreach ($this->steps->all() as $result) {
+            $lines[] = sprintf(
+                '| %s | %s | %ss | %s |',
+                $result->step->value,
+                $result->status->value,
+                round($result->duration, 2),
+                $this->cell($this->notes($result)),
+            );
         }
 
         $lines[] = '';
+
+        return $lines;
     }
 
-    /** @param list<string> $lines */
-    private function metricsSection(array &$lines): void
+    private function notes(StepResult $result): string
+    {
+        return $result->reason->value ?? $result->error ?? implode('; ', $result->warnings);
+    }
+
+    /** @return list<string> */
+    private function metricsSection(): array
     {
         if ($this->metrics === []) {
-            return;
+            return [];
         }
 
-        $lines[] = '## Metrics';
-        $lines[] = '';
-        $lines[] = '| Metric | Value |';
-        $lines[] = '|---|---|';
+        $lines = ['## Metrics', '', '| Metric | Value |', '|---|---|'];
 
-        foreach ($this->metrics as [$label, $value]) {
-            $lines[] = sprintf('| %s | %s |', $label, $value);
+        foreach ($this->metrics as $metric) {
+            $lines[] = sprintf('| %s | %s |', $metric->label, $metric->value);
         }
 
         $lines[] = '';
+
+        return $lines;
     }
 
-    /** @param list<string> $lines */
-    private function auditsSection(array &$lines): void
+    /** @return list<string> */
+    private function auditsSection(): array
     {
         if ($this->outcomes === []) {
-            return;
+            return [];
         }
 
-        $lines[] = '## Audits';
-        $lines[] = '';
-        $lines[] = '| Audit | Status | Findings | C/H/M/L/I | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Prompt |';
-        $lines[] = '|---|---|---|---|---|---|---|---|---|---|---|---|';
+        $lines = [
+            '## Audits',
+            '',
+            '| Audit | Status | Findings | C/H/M/L/I | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Prompt |',
+            '|---|---|---|---|---|---|---|---|---|---|---|---|',
+        ];
 
-        foreach ($this->outcomes as $audit => $outcome) {
-            $t = $outcome->telemetry->toArray();
+        foreach ($this->outcomes as $outcome) {
+            $t = $outcome->telemetry;
             $lines[] = sprintf(
                 '| %s | %s | %d | %s | %s | %d | %d | %d | %d | %s | %ss | %s |',
-                $audit,
+                $outcome->audit->value,
                 $outcome->status->value.($outcome->reason === null ? '' : ': '.$this->cell($outcome->reason)),
                 count($outcome->findings),
                 implode('/', self::severityCounts($outcome->findings)),
                 $outcome->repaired ? 'yes' : 'no',
-                $t['turns'],
-                $t['input_tokens'],
-                $t['output_tokens'],
-                $t['cache_read_tokens'],
-                $t['cost_usd'] === null ? '–' : number_format($t['cost_usd'], 2),
-                $t['duration_s'],
+                $t->turns,
+                $t->inputTokens,
+                $t->outputTokens,
+                $t->cacheReadTokens,
+                $t->costUsd === null ? '–' : number_format($t->costUsd, 2),
+                round($t->durationMs / 1000, 1),
                 $outcome->promptHash,
             );
         }
 
         $lines[] = '';
+
+        return $lines;
     }
 
-    /** @param list<string> $lines */
-    private function findingsSection(array &$lines): void
+    /** @return list<string> */
+    private function findingsSection(): array
     {
         $rows = [];
 
-        foreach ($this->outcomes as $audit => $outcome) {
+        foreach ($this->outcomes as $outcome) {
             foreach ($outcome->findings as $finding) {
                 $rows[] = sprintf(
                     '| %s | %s | %s | %s | %s | %s |',
-                    $finding->key($audit),
+                    $finding->key($outcome->audit->value),
                     $finding->id,
                     $finding->check,
                     $finding->severity->value,
@@ -268,29 +259,24 @@ final class RunManifest
             }
         }
 
-        if ($rows === []) {
-            return;
-        }
-
-        $lines[] = '## Findings';
-        $lines[] = '';
-        $lines[] = '| Key | ID | Check | Severity | Confidence | Locations |';
-        $lines[] = '|---|---|---|---|---|---|';
-        array_push($lines, ...$rows);
-        $lines[] = '';
+        return $rows === [] ? [] : [
+            '## Findings',
+            '',
+            '| Key | ID | Check | Severity | Confidence | Locations |',
+            '|---|---|---|---|---|---|',
+            ...$rows,
+            '',
+        ];
     }
 
-    /** @param list<string> $lines */
-    private function duplicatesSection(array &$lines): void
+    /** @return list<string> */
+    private function duplicatesSection(): array
     {
         if ($this->overlaps === []) {
-            return;
+            return [];
         }
 
-        $lines[] = '## Possible duplicates';
-        $lines[] = '';
-        $lines[] = '| Keys | IDs | Shared location |';
-        $lines[] = '|---|---|---|';
+        $lines = ['## Possible duplicates', '', '| Keys | IDs | Shared location |', '|---|---|---|'];
 
         foreach ($this->overlaps as $overlap) {
             $lines[] = sprintf(
@@ -304,42 +290,22 @@ final class RunManifest
         }
 
         $lines[] = '';
+
+        return $lines;
     }
 
-    /** @param list<string> $lines */
-    private function warningsSection(array &$lines): void
+    /** @return list<string> */
+    private function warningsSection(): array
     {
         $warnings = [];
 
-        foreach ($this->outcomes as $audit => $outcome) {
+        foreach ($this->outcomes as $outcome) {
             foreach ([...$outcome->warnings, ...$outcome->errors] as $message) {
-                $warnings[] = '- '.$audit.': '.$message;
+                $warnings[] = '- '.$outcome->audit->value.': '.$message;
             }
         }
 
-        if ($warnings === []) {
-            return;
-        }
-
-        $lines[] = '## Linter warnings';
-        $lines[] = '';
-        array_push($lines, ...$warnings);
-        $lines[] = '';
-    }
-
-    /**
-     * @param  list<\Astro2006\LaravelAudit\Reports\Finding>  $findings
-     * @return array{critical: int, high: int, medium: int, low: int, info: int}
-     */
-    public static function severityCounts(array $findings): array
-    {
-        $counts = ['critical' => 0, 'high' => 0, 'medium' => 0, 'low' => 0, 'info' => 0];
-
-        foreach ($findings as $finding) {
-            $counts[$finding->severity->value]++;
-        }
-
-        return $counts;
+        return $warnings === [] ? [] : ['## Linter warnings', '', ...$warnings, ''];
     }
 
     private function cell(string $value): string

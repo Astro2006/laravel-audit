@@ -10,7 +10,7 @@ final class InstallPlan
      * @param  list<string>  $present  relevant packages that are already installed
      * @param  list<PlannedPackage>  $packages
      * @param  list<string>  $setup  setup step keys: boost, playwright-browsers, phpstan-stub
-     * @param  list<array{key: string, replace?: array<string, string>}>  $notes  message keys below install.* or requirements.*
+     * @param  list<InstallNote>  $notes
      * @param  list<string>  $manual  things the installer cannot do
      */
     public function __construct(

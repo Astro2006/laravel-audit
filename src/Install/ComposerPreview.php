@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Install;
 
+use Astro2006\LaravelAudit\Support\Regex;
+
 /**
  * Reads the output of `composer require … --dry-run` and lists changes to
  * packages the user did not ask for: upgrades, downgrades and removals.
@@ -20,16 +22,26 @@ final class ComposerPreview
         $effects = [];
 
         foreach (preg_split('/\R/', $output) ?: [] as $line) {
-            if (preg_match('/-\s+(Upgrading|Downgrading)\s+(\S+)\s+\((\S+)\s+=>\s+(\S+)\)/', $line, $match) === 1) {
-                if (! in_array(strtolower($match[2]), $requested, true)) {
-                    $effects[] = sprintf('%s %s → %s', $match[2], $match[3], $match[4]);
+            $change = Regex::groups('/-\s+(?:Upgrading|Downgrading)\s+(\S+)\s+\((\S+)\s+=>\s+(\S+)\)/', $line);
+
+            if ($change !== null) {
+                [$package, $from, $to] = $change;
+
+                if (! in_array(strtolower($package), $requested, true)) {
+                    $effects[] = sprintf('%s %s → %s', $package, $from, $to);
                 }
 
                 continue;
             }
 
-            if (preg_match('/-\s+Removing\s+(\S+)\s+\((\S+)\)/', $line, $match) === 1 && ! in_array(strtolower($match[1]), $requested, true)) {
-                $effects[] = sprintf('%s %s → removed', $match[1], $match[2]);
+            $removal = Regex::groups('/-\s+Removing\s+(\S+)\s+\((\S+)\)/', $line);
+
+            if ($removal !== null) {
+                [$package, $version] = $removal;
+
+                if (! in_array(strtolower($package), $requested, true)) {
+                    $effects[] = sprintf('%s %s → removed', $package, $version);
+                }
             }
         }
 

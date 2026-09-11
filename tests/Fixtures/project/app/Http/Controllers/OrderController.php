@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Acme\DevTool\Debugger;
 use Acme\Transitive\Client;
 use Acme\UsedLib\Formatter;
+use Acme\UsedLib\Money;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 
@@ -14,6 +15,6 @@ class OrderController
     {
         Debugger::log($request->all());
 
-        return (new Formatter)->format(\Acme\UsedLib\Money::of(1), new Client);
+        return (new Formatter)->format(Money::of(1), new Client);
     }
 }

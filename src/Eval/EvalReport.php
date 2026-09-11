@@ -4,262 +4,195 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Eval;
 
+use Astro2006\LaravelAudit\Data\Run\FindingRecord;
+use Astro2006\LaravelAudit\Data\Run\OutcomeRecord;
+use Astro2006\LaravelAudit\Data\Run\RunRecord;
+
 /**
  * Compares several runs (run.json) with the expected set: recall, negative
  * control hits, stability of finding keys, format problems and cost.
  */
 final class EvalReport
 {
-    /**
-     * @param  list<array<string, mixed>>  $runs  decoded run.json files, oldest first
-     * @return array<string, mixed>
-     */
-    public function evaluate(ExpectedSet $expected, array $runs): array
+    /** @param list<RunRecord> $runs oldest first */
+    public function evaluate(ExpectedSet $expected, array $runs): EvalResult
     {
         $audits = [];
 
         foreach ($runs as $run) {
-            foreach (array_keys((array) ($run['outcomes'] ?? [])) as $audit) {
-                $audits[$audit] = true;
-            }
+            array_push($audits, ...$run->audits());
         }
 
-        $result = ['runs' => array_map(fn (array $run): string => (string) ($run['run_id'] ?? '?'), $runs), 'audits' => []];
-
-        foreach (array_keys($audits) as $audit) {
-            $result['audits'][$audit] = $this->evaluateAudit($expected, $runs, $audit);
-        }
-
-        $result['duplicates'] = array_map(fn (array $run): int => (int) ($run['overlaps'] ?? 0), $runs);
-        $result['control_hits_total'] = array_map(
-            fn (int $index): int => array_sum(array_map(fn (array $audit): int => $audit['control_hits'][$index] ?? 0, $result['audits'])),
-            array_keys($runs),
+        return new EvalResult(
+            runs: array_map(fn (RunRecord $run): string => $run->runId, $runs),
+            audits: array_map(fn (string $audit): AuditEvaluation => $this->evaluateAudit($expected, $runs, $audit), array_values(array_unique($audits))),
+            duplicates: array_map(fn (RunRecord $run): int => $run->overlaps, $runs),
         );
-
-        return $result;
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $runs
-     * @return array<string, mixed>
-     */
-    private function evaluateAudit(ExpectedSet $expected, array $runs, string $audit): array
+    /** @param list<RunRecord> $runs */
+    private function evaluateAudit(ExpectedSet $expected, array $runs, string $audit): AuditEvaluation
     {
         $planted = $expected->plantedFor($audit);
         $controls = $expected->controlsFor($audit);
+        $outcomes = array_values(array_filter(array_map(fn (RunRecord $run): ?OutcomeRecord => $run->outcome($audit), $runs)));
+
         $found = [];
         $severityOk = [];
         $controlHits = [];
-        $keySets = [];
-        $telemetry = [];
-        $format = ['completed' => 0, 'repaired' => 0, 'failed' => 0, 'hallucinated_locations' => 0];
-        $hashes = [];
-        $extra = [];
 
-        foreach ($runs as $index => $run) {
-            $outcome = $run['outcomes'][$audit] ?? null;
-
-            if ($outcome === null) {
-                continue;
-            }
-
-            $findings = (array) ($outcome['findings'] ?? []);
-            $format[$outcome['status'] === 'completed' ? 'completed' : 'failed']++;
-            $format['repaired'] += ($outcome['repaired'] ?? false) ? 1 : 0;
-            $format['hallucinated_locations'] += count(array_filter((array) ($outcome['warnings'] ?? []), fn (string $warning): bool => str_contains($warning, 'possibly hallucinated')));
-            $hashes[(string) ($outcome['prompt_hash'] ?? '')] = true;
-            $telemetry[] = (array) ($outcome['telemetry'] ?? []);
-            $keySets[] = array_values(array_unique(array_column($findings, 'key')));
-
-            $found[$index] = 0;
-            $severityOk[$index] = 0;
-
-            foreach ($planted as $item) {
-                foreach ($findings as $finding) {
-                    if ($item->matches($finding)) {
-                        $found[$index]++;
-                        $severityOk[$index] += $item->severityOk($finding) ? 1 : 0;
-
-                        continue 2;
-                    }
-                }
-            }
-
-            $controlHits[$index] = 0;
-
-            foreach ($controls as $item) {
-                foreach ($findings as $finding) {
-                    if ($item->matches($finding)) {
-                        $controlHits[$index]++;
-
-                        continue 2;
-                    }
-                }
-            }
-
-            if ($index === array_key_last($runs)) {
-                foreach ($findings as $finding) {
-                    $matched = false;
-
-                    foreach ([...$planted, ...$controls] as $item) {
-                        $matched = $matched || $item->matches($finding);
-                    }
-
-                    if (! $matched) {
-                        $extra[] = $finding;
-                    }
-                }
-            }
+        foreach ($outcomes as $outcome) {
+            $matches = $this->firstMatches($planted, $outcome->findings);
+            $found[] = count($matches);
+            $severityOk[] = count(array_filter($matches, fn (array $pair): bool => $this->severityOk($pair)));
+            $controlHits[] = count($this->firstMatches($controls, $outcome->findings));
         }
 
-        $total = count($planted);
+        $last = $outcomes === [] ? null : end($outcomes);
 
-        return [
-            'planted' => $total,
-            'found' => array_values($found),
-            'recall' => $total === 0 || $found === [] ? null : round(array_sum($found) / count($found) / $total * 100, 1),
-            'severity_ok' => array_values($severityOk),
-            'controls' => count($controls),
-            'control_hits' => array_values($controlHits),
-            'stability' => $this->stability($keySets),
-            'format' => $format,
-            'cost' => $this->aggregate($telemetry),
-            'prompt_hashes' => array_keys(array_filter($hashes, fn ($value, $key): bool => $key !== '', ARRAY_FILTER_USE_BOTH)),
-            'extra_findings' => $extra,
-            'missed' => $this->missed($planted, $runs, $audit),
-        ];
+        return new AuditEvaluation(
+            audit: $audit,
+            planted: count($planted),
+            found: $found,
+            severityOk: $severityOk,
+            controls: count($controls),
+            controlHits: $controlHits,
+            stability: Stability::of(array_map(fn (OutcomeRecord $outcome): array => $outcome->keys(), $outcomes)),
+            completed: count(array_filter($outcomes, fn (OutcomeRecord $outcome): bool => $outcome->completed())),
+            repaired: count(array_filter($outcomes, fn (OutcomeRecord $outcome): bool => $outcome->repaired)),
+            failed: count(array_filter($outcomes, fn (OutcomeRecord $outcome): bool => ! $outcome->completed())),
+            hallucinatedLocations: array_sum(array_map(
+                fn (OutcomeRecord $outcome): int => count(array_filter($outcome->warnings, fn (string $warning): bool => str_contains($warning, 'possibly hallucinated'))),
+                $outcomes,
+            )),
+            cost: TelemetryStats::of(array_map(fn (OutcomeRecord $outcome) => $outcome->telemetry, $outcomes)),
+            promptHashes: array_values(array_unique(array_filter(array_map(fn (OutcomeRecord $outcome): string => $outcome->promptHash, $outcomes)))),
+            extraFindings: $last === null ? [] : array_values(array_filter(
+                $last->findings,
+                fn (FindingRecord $finding): bool => ! $expected->explains($audit, $finding),
+            )),
+            missed: $this->missed($planted, $outcomes),
+        );
     }
 
     /**
-     * Mean pairwise Jaccard index of the finding keys, and the share of keys
-     * found in every run.
+     * For each expected item, the first finding that matches it.
      *
-     * @param  list<list<string>>  $keySets
-     * @return array{jaccard: float|null, in_all_runs: float|null}
+     * @param  list<ExpectedFinding>  $expected
+     * @param  list<FindingRecord>  $findings
+     * @return list<array{ExpectedFinding, FindingRecord}>
      */
-    public function stability(array $keySets): array
+    private function firstMatches(array $expected, array $findings): array
     {
-        if (count($keySets) < 2) {
-            return ['jaccard' => null, 'in_all_runs' => null];
-        }
+        $matches = [];
 
-        $scores = [];
+        foreach ($expected as $item) {
+            foreach ($findings as $finding) {
+                if ($item->matches($finding)) {
+                    $matches[] = [$item, $finding];
 
-        foreach ($keySets as $i => $a) {
-            foreach (array_slice($keySets, $i + 1) as $b) {
-                $union = count(array_unique([...$a, ...$b]));
-                $scores[] = $union === 0 ? 1.0 : count(array_intersect($a, $b)) / $union;
+                    break;
+                }
             }
         }
 
-        $union = array_unique(array_merge(...$keySets));
-        $intersection = array_intersect(...$keySets);
-
-        return [
-            'jaccard' => round(array_sum($scores) / count($scores), 2),
-            'in_all_runs' => $union === [] ? null : round(count($intersection) / count($union), 2),
-        ];
+        return $matches;
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $telemetry
-     * @return array<string, array{mean: float, max: float}>
-     */
-    private function aggregate(array $telemetry): array
+    /** @param array{ExpectedFinding, FindingRecord} $pair */
+    private function severityOk(array $pair): bool
     {
-        $result = [];
+        [$item, $finding] = $pair;
 
-        foreach (['cost_usd', 'input_tokens', 'output_tokens', 'turns', 'duration_s'] as $field) {
-            $values = array_map(fn (array $item): float => (float) ($item[$field] ?? 0), $telemetry);
-            $result[$field] = $values === []
-                ? ['mean' => 0.0, 'max' => 0.0]
-                : ['mean' => round(array_sum($values) / count($values), 2), 'max' => round(max($values), 2)];
-        }
-
-        return $result;
+        return $item->severityOk($finding);
     }
 
     /**
      * Planted problems that no run found.
      *
      * @param  list<ExpectedFinding>  $planted
-     * @param  list<array<string, mixed>>  $runs
+     * @param  list<OutcomeRecord>  $outcomes
      * @return list<string>
      */
-    private function missed(array $planted, array $runs, string $audit): array
+    private function missed(array $planted, array $outcomes): array
     {
-        $missed = [];
+        $findings = [];
 
-        foreach ($planted as $item) {
-            foreach ($runs as $run) {
-                foreach ((array) ($run['outcomes'][$audit]['findings'] ?? []) as $finding) {
-                    if ($item->matches($finding)) {
-                        continue 3;
-                    }
-                }
-            }
-
-            $missed[] = $item->id.' ('.$item->check.', '.$item->target.')';
+        foreach ($outcomes as $outcome) {
+            array_push($findings, ...$outcome->findings);
         }
 
-        return $missed;
+        return array_values(array_map(
+            fn (ExpectedFinding $item): string => $item->id.' ('.$item->check.', '.$item->target.')',
+            array_filter($planted, fn (ExpectedFinding $item): bool => $this->firstMatches([$item], $findings) === []),
+        ));
     }
 
-    /** @param array<string, mixed> $result */
-    public function render(array $result): string
+    public function render(EvalResult $result): string
     {
-        $lines = ['# Eval '.date('Y-m-d H:i'), '', 'Runs: '.implode(', ', $result['runs']), ''];
+        $lines = [
+            '# Eval '.date('Y-m-d H:i'),
+            '',
+            'Runs: '.implode(', ', $result->runs),
+            '',
+            '| Audit | Recall | Found per run | Severity ok | Control hits | Jaccard | In all runs | Completed / repaired / failed | Hallucinated locations | Cost mean (max) | Prompt |',
+            '|---|---|---|---|---|---|---|---|---|---|---|',
+        ];
 
-        $lines[] = '| Audit | Recall | Found per run | Severity ok | Control hits | Jaccard | In all runs | Completed / repaired / failed | Hallucinated locations | Cost mean (max) | Prompt |';
-        $lines[] = '|---|---|---|---|---|---|---|---|---|---|---|';
-
-        foreach ($result['audits'] as $audit => $data) {
+        foreach ($result->audits as $audit) {
+            $recall = $audit->recall();
             $lines[] = sprintf(
                 '| %s | %s | %s / %d | %s | %s | %s | %s | %d / %d / %d | %d | $%s ($%s) | %s |',
-                $audit,
-                $data['recall'] === null ? '–' : $data['recall'].' %',
-                implode(', ', $data['found']),
-                $data['planted'],
-                implode(', ', $data['severity_ok']),
-                implode(', ', $data['control_hits']),
-                $data['stability']['jaccard'] ?? '–',
-                $data['stability']['in_all_runs'] ?? '–',
-                $data['format']['completed'],
-                $data['format']['repaired'],
-                $data['format']['failed'],
-                $data['format']['hallucinated_locations'],
-                number_format($data['cost']['cost_usd']['mean'], 2),
-                number_format($data['cost']['cost_usd']['max'], 2),
-                implode(', ', $data['prompt_hashes']),
+                $audit->audit,
+                $recall === null ? '–' : $recall.' %',
+                implode(', ', $audit->found),
+                $audit->planted,
+                implode(', ', $audit->severityOk),
+                implode(', ', $audit->controlHits),
+                $audit->stability->jaccard ?? '–',
+                $audit->stability->inAllRuns ?? '–',
+                $audit->completed,
+                $audit->repaired,
+                $audit->failed,
+                $audit->hallucinatedLocations,
+                number_format($audit->cost->costMean, 2),
+                number_format($audit->cost->costMax, 2),
+                implode(', ', $audit->promptHashes),
             );
         }
 
-        $lines[] = '';
-        $lines[] = 'Possible duplicates per run: '.implode(', ', $result['duplicates']);
-        $lines[] = 'Negative control hits per run (all audits): '.implode(', ', $result['control_hits_total']);
-        $lines[] = '';
+        $lines = [
+            ...$lines,
+            '',
+            'Possible duplicates per run: '.implode(', ', $result->duplicates),
+            'Negative control hits per run (all audits): '.implode(', ', $result->controlHitsTotal()),
+            '',
+        ];
 
-        foreach ($result['audits'] as $audit => $data) {
-            if ($data['missed'] !== []) {
-                $lines[] = '## Missed in every run — '.$audit;
-                $lines[] = '';
-                array_push($lines, ...array_map(fn (string $item): string => '- '.$item, $data['missed']));
-                $lines[] = '';
+        foreach ($result->audits as $audit) {
+            if ($audit->missed !== []) {
+                $lines = [...$lines, '## Missed in every run — '.$audit->audit, '', ...array_map(fn (string $item): string => '- '.$item, $audit->missed), ''];
             }
 
-            if ($data['extra_findings'] !== []) {
-                $lines[] = '## Other findings (last run) — '.$audit;
-                $lines[] = '';
-                $lines[] = 'Rate each: useful / correct but unimportant / wrong.';
-                $lines[] = '';
-                $lines[] = '| ID | Check | Severity | Title | Locations | Rating |';
-                $lines[] = '|---|---|---|---|---|---|';
-
-                foreach ($data['extra_findings'] as $finding) {
-                    $lines[] = sprintf('| %s | %s | %s | %s | %s | |', $finding['id'], $finding['check'], $finding['severity'], str_replace('|', '\\|', $finding['title']), implode(', ', $finding['locations']));
-                }
-
-                $lines[] = '';
+            if ($audit->extraFindings !== []) {
+                $lines = [
+                    ...$lines,
+                    '## Other findings (last run) — '.$audit->audit,
+                    '',
+                    'Rate each: useful / correct but unimportant / wrong.',
+                    '',
+                    '| ID | Check | Severity | Title | Locations | Rating |',
+                    '|---|---|---|---|---|---|',
+                    ...array_map(fn (FindingRecord $finding): string => sprintf(
+                        '| %s | %s | %s | %s | %s | |',
+                        $finding->id,
+                        $finding->check,
+                        $finding->severity,
+                        str_replace('|', '\\|', $finding->title),
+                        implode(', ', $finding->locations),
+                    ), $audit->extraFindings),
+                    '',
+                ];
             }
         }
 

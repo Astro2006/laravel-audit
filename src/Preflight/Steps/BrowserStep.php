@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\BrowserData;
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\AssetBuildMode;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
@@ -13,7 +15,7 @@ use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
-use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Collection;
 
 /**
  * Runs existing Pest browser tests (Playwright). No browser tests → the
@@ -53,13 +55,14 @@ final class BrowserStep implements Step
         }
 
         if (! $project->hasBrowserPlugin() || ! $project->hasNodeModule('playwright')) {
-            return StepResult::skipped($this->step(), SkipReason::PluginMissing, ['path' => $location['path']]);
+            return StepResult::skipped($this->step(), SkipReason::PluginMissing, new BrowserData(path: $location->path));
         }
 
-        $database = $context->result(PreflightStep::Tests)?->get('database') ?? $this->guard->check()->toArray();
+        $testsData = $context->results->get(PreflightStep::Tests)?->data;
+        $database = ($testsData instanceof TestsData ? $testsData->database : null) ?? $this->guard->check();
 
-        if (! ($database['safe'] ?? false) && ! $context->config('preflight.allow_shared_database', false)) {
-            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, ['database' => $database]);
+        if (! $database->safe && ! $context->config('preflight.allow_shared_database', false)) {
+            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new BrowserData(path: $location->path, database: $database));
         }
 
         $warnings = $this->prepareAssets($context);
@@ -69,51 +72,40 @@ final class BrowserStep implements Step
         $startedAt = time();
 
         $custom = $context->config('preflight.browser.command');
-        $target = $location['type'] === 'suite' ? '--testsuite='.$location['value'] : $location['value'];
+        $target = $location->isSuite() ? '--testsuite='.$location->value : $location->value;
         $command = is_string($custom) && $custom !== ''
             ? $custom.' '.escapeshellarg('--log-junit='.$junit)
             : $context->artisan(['test', $target, '--log-junit='.$junit]);
 
-        $result = Process::path($project->basePath)
+        $result = $context->process()
             ->timeout((int) $context->config('preflight.browser.timeout', 1200))
             ->run($command);
 
         file_put_contents($context->logPath('browser.log'), $result->output()."\n".$result->errorOutput());
 
-        $condensed = $this->junit->condense($junit, $project->basePath);
+        $report = $this->junit->condense($junit, $project->basePath);
 
-        if ($condensed === null) {
+        if ($report === null) {
             return StepResult::error(
                 $this->step(),
                 'The browser test run produced no JUnit report (see logs/browser.log): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8),
-                ['path' => $location['path']],
+                new BrowserData(path: $location->path),
             );
         }
 
-        $artifacts = $this->collectArtifacts($context, $location['path'], $startedAt);
+        $artifacts = $this->collectArtifacts($context, $location->path, $startedAt);
 
         $context->writeJson('tests/browser-condensed.json', [
-            ...$condensed,
-            'path' => $location['path'],
-            'visited' => $this->visitedUris($context, $location['path']),
+            ...$report->toArray(),
+            'path' => $location->path,
+            'visited' => $this->visitedUris($context, $location->path),
             'artifacts' => $artifacts,
         ]);
 
-        return StepResult::ok($this->step(), [
-            'total' => $condensed['total'],
-            'passed' => $condensed['passed'],
-            'failed' => $condensed['failed'],
-            'errors' => $condensed['errors'],
-            'skipped' => $condensed['skipped'],
-            'environment_error' => $condensed['environment_error'],
-            'path' => $location['path'],
-            'mode' => $location['type'],
-            'artifacts' => count($artifacts),
-            'file' => 'tests/browser-condensed.json',
-        ], $warnings);
+        return StepResult::ok($this->step(), BrowserData::fromReport($report, $location->path, $location->type, count($artifacts)), $warnings);
     }
 
-    /** @return list<string> warnings */
+    /** @return list<string> warning codes */
     private function prepareAssets(PreflightContext $context): array
     {
         $project = $context->project;
@@ -128,7 +120,7 @@ final class BrowserStep implements Step
         };
 
         if ($build && is_file($project->path('package.json'))) {
-            $result = Process::path($project->basePath)->timeout(600)->run($project->packageManager()->buildCommand());
+            $result = $context->process()->timeout(600)->run($project->packageManager()->buildCommand());
             file_put_contents($context->logPath('asset-build.log'), $result->output()."\n".$result->errorOutput());
 
             if (! $result->successful()) {
@@ -150,16 +142,8 @@ final class BrowserStep implements Step
         $newest = 0;
 
         foreach (['resources/js', 'resources/css'] as $dir) {
-            $path = $context->project->path($dir);
-
-            if (! is_dir($path)) {
-                continue;
-            }
-
-            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS)) as $file) {
-                if ($file instanceof \SplFileInfo) {
-                    $newest = max($newest, $file->getMTime());
-                }
+            foreach ($this->files($context->project->path($dir)) as $file) {
+                $newest = max($newest, $file->getMTime());
             }
         }
 
@@ -169,46 +153,50 @@ final class BrowserStep implements Step
     /** @return list<string> copied files, relative to the preflight directory */
     private function collectArtifacts(PreflightContext $context, string $testPath, int $since): array
     {
-        $source = $context->project->path(rtrim($testPath, '/').'/Screenshots');
         $max = (int) $context->config('preflight.browser.max_artifacts', 10);
 
-        if (! is_dir($source) || $max <= 0) {
+        return (new Collection($this->files($context->project->path(rtrim($testPath, '/').'/Screenshots'))))
+            ->filter(fn (\SplFileInfo $file): bool => $file->getMTime() >= $since)
+            ->sortByDesc(fn (\SplFileInfo $file): int => $file->getMTime())
+            ->take(max(0, $max))
+            ->map(function (\SplFileInfo $file) use ($context): string {
+                $target = 'tests/browser-artifacts/'.$file->getFilename();
+                copy($file->getPathname(), $context->path($target));
+
+                return $target;
+            })
+            ->values()
+            ->all();
+    }
+
+    /** @return list<\SplFileInfo> */
+    private function files(string $directory): array
+    {
+        if (! is_dir($directory)) {
             return [];
         }
 
         $files = [];
 
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof \SplFileInfo && $file->isFile() && $file->getMTime() >= $since) {
-                $files[$file->getPathname()] = $file->getMTime();
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file instanceof \SplFileInfo && $file->isFile()) {
+                $files[] = $file;
             }
         }
 
-        arsort($files);
-        $copied = [];
-
-        foreach (array_slice(array_keys($files), 0, $max) as $file) {
-            $target = 'tests/browser-artifacts/'.basename($file);
-            copy($file, $context->path($target));
-            $copied[] = $target;
-        }
-
-        return $copied;
+        return $files;
     }
 
     /** @return array<string, list<string>> test file => URIs passed to visit() */
     private function visitedUris(PreflightContext $context, string $testPath): array
     {
-        $visited = [];
+        return (new Collection($context->project->phpFiles($testPath)))
+            ->mapWithKeys(function (string $file) use ($context): array {
+                preg_match_all('/visit\(\s*[\'"]([^\'"]+)[\'"]/', (string) file_get_contents($context->project->path($file)), $matches);
 
-        foreach ($context->project->phpFiles($testPath) as $file) {
-            preg_match_all('/visit\(\s*[\'"]([^\'"]+)[\'"]/', (string) file_get_contents($context->project->path($file)), $matches);
-
-            if ($matches[1] !== []) {
-                $visited[$file] = array_values(array_unique($matches[1]));
-            }
-        }
-
-        return $visited;
+                return [$file => array_values(array_unique(array_map('strval', end($matches) ?: [])))];
+            })
+            ->filter()
+            ->all();
     }
 }

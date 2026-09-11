@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Closure;
@@ -15,15 +16,17 @@ use Closure;
 final class TestGate
 {
     /**
-     * @param  Closure(StepResult): bool  $ask  asks the user; only called in "ask" mode with interaction
+     * @param  Closure(TestsData): bool  $ask  asks the user; only called in "ask" mode with interaction
      */
     public function decide(?StepResult $tests, GateMode $mode, bool $force, bool $interactive, Closure $ask): GateDecision
     {
-        if ($tests === null || ! $tests->isOk()) {
+        $data = self::data($tests);
+
+        if ($data === null) {
             return GateDecision::NotRun;
         }
 
-        if (self::failures($tests) === 0) {
+        if ($data->failures() === 0) {
             return GateDecision::Passed;
         }
 
@@ -31,12 +34,13 @@ final class TestGate
             $force => GateDecision::Forced,
             $mode === GateMode::Continue => GateDecision::Continued,
             $mode === GateMode::Abort, ! $interactive => GateDecision::Aborted,
-            default => $ask($tests) ? GateDecision::Continued : GateDecision::Aborted,
+            default => $ask($data) ? GateDecision::Continued : GateDecision::Aborted,
         };
     }
 
-    public static function failures(StepResult $tests): int
+    /** Test data of a successful test step, or null. */
+    public static function data(?StepResult $tests): ?TestsData
     {
-        return (int) $tests->get('failed', 0) + (int) $tests->get('errors', 0);
+        return $tests !== null && $tests->isOk() && $tests->data instanceof TestsData ? $tests->data : null;
     }
 }

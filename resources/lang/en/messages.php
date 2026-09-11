@@ -34,8 +34,8 @@ return [
 
     'steps' => [
         'about' => 'App',
-        'stack' => 'stack',
-        'loc' => 'lines of code',
+        'stack' => 'Stack',
+        'loc' => 'Lines of code',
         'pint' => 'Pint',
         'routes' => 'Routes',
         'translations' => 'Translations',
@@ -43,6 +43,7 @@ return [
         'tests' => 'Tests',
         'browser' => 'Browser (Playwright)',
         'phpstan' => 'PHPStan (level :level)',
+        'phpstan_plain' => 'PHPStan',
     ],
 
     'details' => [
@@ -52,6 +53,7 @@ return [
         'pint' => ':files files, :rules rules',
         'routes' => ':count (:flagged flagged)',
         'translations' => ':locales · :missing missing keys',
+        'translations_none' => 'no lang folder',
         'composer' => ':advisories advisories, :abandoned abandoned, :outdated major updates',
         'tests' => ':failed/:total failed',
         'tests_green' => ':total passed',
@@ -129,6 +131,7 @@ return [
         'not_interactive' => 'Nothing installed (--no-interaction without --yes).',
         'done' => 'Done.',
         'installed' => ':count packages installed',
+        'stub_planned' => 'create phpstan.neon (level :level)',
         'stub_created' => 'phpstan.neon created (level :level)',
         'gitignore' => ':path/.gitignore created',
         'declined' => 'Declined: :package — :consequence',

@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
+use Illuminate\Support\Collection;
+
 /**
  * A finding as it appears in the report, before validation.
  */
 final class ParsedFinding
 {
-    /** @var array<string, string> lower-cased field name => raw value */
-    public array $fields = [];
+    /** @var Collection<string, string> lower-cased field name => raw value */
+    private Collection $fields;
 
-    /** @var array<string, list<string>> Evidence|Impact|Recommendation => lines */
-    public array $bodies = [];
+    /** @var Collection<string, list<string>> Evidence|Impact|Recommendation => lines */
+    private Collection $bodies;
 
     public bool $hasTable = false;
 
@@ -21,17 +23,38 @@ final class ParsedFinding
         public readonly string $id,
         public readonly string $title,
         public readonly int $line,
-    ) {}
+    ) {
+        $this->fields = new Collection;
+        $this->bodies = new Collection;
+    }
+
+    public function setField(string $name, string $value): void
+    {
+        $this->fields->put(strtolower(trim($name)), trim($value));
+        $this->hasTable = true;
+    }
 
     public function field(string $name): ?string
     {
-        $value = $this->fields[strtolower($name)] ?? null;
+        $value = trim((string) $this->fields->get(strtolower($name), ''));
 
-        return $value === null || trim($value) === '' ? null : trim($value);
+        return $value === '' ? null : $value;
+    }
+
+    public function startBody(string $label): void
+    {
+        if (! $this->bodies->has($label)) {
+            $this->bodies->put($label, []);
+        }
+    }
+
+    public function addBodyLine(string $label, string $line): void
+    {
+        $this->bodies->put($label, [...$this->bodies->get($label, []), $line]);
     }
 
     public function body(string $label): string
     {
-        return trim(implode("\n", $this->bodies[$label] ?? []));
+        return trim(implode("\n", $this->bodies->get($label, [])));
     }
 }

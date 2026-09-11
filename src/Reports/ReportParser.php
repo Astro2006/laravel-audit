@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
+use Astro2006\LaravelAudit\Support\Regex;
+
 /**
  * Reads the report body an agent returns. Only level-2 headings, finding
  * headings and the metadata tables are structure; everything else is free
@@ -15,53 +17,45 @@ final class ReportParser
 
     private const string BODY_LABEL = '/^\*\*(Evidence|Impact|Recommendation)\*\*\s*:?\s*(.*)$/i';
 
+    private const string TABLE_ROW = '/^\|\s*([^|]+?)\s*\|(.*)\|\s*$/';
+
     public function parse(string $markdown): ParsedReport
     {
         $sections = [];
-        $content = [];
         $current = null;
 
-        foreach ($this->lines($markdown) as [$number, $text, $inFence]) {
-            if (! $inFence && preg_match('/^##\s+(?!#)(.+?)\s*#*\s*$/', $text, $match) === 1) {
-                $current = trim($match[1]);
+        foreach ($this->lines($markdown) as $line) {
+            $heading = $line->inFence ? null : Regex::groups('/^##\s+(?!#)(.+?)\s*#*\s*$/', $line->text);
+
+            if ($heading !== null) {
+                [$title] = $heading;
+                $current = new ReportSection(trim($title));
                 $sections[] = $current;
-                $content[$current] = [];
 
                 continue;
             }
 
-            if ($current !== null) {
-                $content[$current][] = [$number, $text, $inFence];
-            }
+            $current?->add($line);
         }
 
-        $findingsTitle = null;
+        $findingsSection = null;
 
         foreach ($sections as $section) {
-            if (strcasecmp($section, 'Findings') === 0) {
-                $findingsTitle = $section;
+            if ($section->is('Findings')) {
+                $findingsSection = $section;
             }
         }
 
-        [$findings, $invalidHeadings, $noFindings] = $findingsTitle === null
+        [$findings, $invalidHeadings, $noFindings] = $findingsSection === null
             ? [[], [], false]
-            : $this->parseFindings($content[$findingsTitle]);
+            : $this->parseFindings($findingsSection->lines);
 
-        return new ParsedReport(
-            sections: $sections,
-            sectionContent: array_map(
-                fn (array $lines): string => implode("\n", array_column($lines, 1)),
-                $content,
-            ),
-            findings: $findings,
-            invalidHeadings: $invalidHeadings,
-            noFindingsMarker: $noFindings,
-        );
+        return new ParsedReport($sections, $findings, $invalidHeadings, $noFindings);
     }
 
     /**
-     * @param  list<array{int, string, bool}>  $lines
-     * @return array{list<ParsedFinding>, list<array{line: int, text: string}>, bool}
+     * @param  list<ReportLine>  $lines
+     * @return array{list<ParsedFinding>, list<InvalidHeading>, bool}
      */
     private function parseFindings(array $lines): array
     {
@@ -71,100 +65,106 @@ final class ReportParser
         $finding = null;
         $label = null;
 
-        foreach ($lines as [$number, $text, $inFence]) {
-            if (! $inFence && preg_match('/^###\s+(?!#)(.*)$/', $text, $match) === 1) {
-                $label = null;
-                $heading = trim($match[1]);
+        foreach ($lines as $line) {
+            $text = $line->text;
 
-                if (preg_match(self::FINDING_HEADING, $heading, $parts) === 1) {
-                    $finding = new ParsedFinding($parts[1], trim($parts[2]), $number);
+            $heading = $line->inFence ? null : Regex::groups('/^###\s+(?!#)(.*)$/', $text);
+
+            if ($heading !== null) {
+                $label = null;
+                $finding = null;
+                [$headingText] = $heading;
+                $parts = Regex::groups(self::FINDING_HEADING, trim($headingText));
+
+                if ($parts !== null) {
+                    [$id, $title] = $parts;
+                    $finding = new ParsedFinding($id, trim($title), $line->number);
                     $findings[] = $finding;
                 } else {
-                    $invalid[] = ['line' => $number, 'text' => $text];
-                    $finding = null;
+                    $invalid[] = new InvalidHeading($line->number, $text);
                 }
 
                 continue;
             }
 
             if ($finding === null) {
-                if (strcasecmp(trim($text), 'No findings.') === 0) {
-                    $noFindings = true;
-                }
+                $noFindings = $noFindings || strcasecmp(trim($text), 'No findings.') === 0;
 
                 continue;
             }
 
-            if (! $inFence && preg_match('/^\s*-{3,}\s*$/', $text) === 1) {
+            if (! $line->inFence && preg_match('/^\s*-{3,}\s*$/', $text) === 1) {
                 $finding = null;
                 $label = null;
 
                 continue;
             }
 
-            if (! $inFence && $label === null && preg_match('/^\|\s*([^|]+?)\s*\|(.*)\|\s*$/', $text, $cells) === 1) {
-                $name = strtolower(trim($cells[1]));
-                $value = trim($cells[2]);
+            $cells = $line->inFence || $label !== null ? null : Regex::groups(self::TABLE_ROW, $text);
+
+            if ($cells !== null) {
+                [$field, $value] = $cells;
+                $name = strtolower(trim($field));
 
                 if ($name === 'field' || preg_match('/^:?-+:?$/', $name) === 1) {
                     $finding->hasTable = true;
-
-                    continue;
+                } else {
+                    $finding->setField($name, $value);
                 }
-
-                $finding->fields[$name] = $value;
-                $finding->hasTable = true;
 
                 continue;
             }
 
-            if (! $inFence && preg_match(self::BODY_LABEL, trim($text), $match) === 1) {
-                $label = ucfirst(strtolower($match[1]));
-                $finding->bodies[$label] ??= [];
+            $body = $line->inFence ? null : Regex::groups(self::BODY_LABEL, trim($text));
 
-                if (trim($match[2]) !== '') {
-                    $finding->bodies[$label][] = trim($match[2]);
+            if ($body !== null) {
+                [$bodyLabel, $rest] = $body;
+                $label = ucfirst(strtolower($bodyLabel));
+                $finding->startBody($label);
+
+                if (trim($rest) !== '') {
+                    $finding->addBodyLine($label, trim($rest));
                 }
 
                 continue;
             }
 
             if ($label !== null) {
-                $finding->bodies[$label][] = $text;
+                $finding->addBodyLine($label, $text);
             }
         }
 
         return [$findings, $invalid, $noFindings];
     }
 
-    /**
-     * @return list<array{int, string, bool}> line number, text, inside a code fence
-     */
+    /** @return list<ReportLine> */
     private function lines(string $markdown): array
     {
         $result = [];
         $fence = null;
 
         foreach (preg_split('/\R/', $markdown) ?: [] as $index => $text) {
-            if (preg_match('/^\s{0,3}(`{3,}|~{3,})/', $text, $match) === 1) {
-                $marker = $match[1];
+            $fenceMatch = Regex::groups('/^\s{0,3}(`{3,}|~{3,})/', $text);
+
+            if ($fenceMatch !== null) {
+                [$marker] = $fenceMatch;
 
                 if ($fence === null) {
                     $fence = $marker;
-                    $result[] = [$index + 1, $text, true];
+                    $result[] = new ReportLine($index + 1, $text, true);
 
                     continue;
                 }
 
-                if ($marker[0] === $fence[0] && strlen($marker) >= strlen($fence) && trim($text) === $marker) {
+                if (str_starts_with($marker, substr($fence, 0, 1)) && strlen($marker) >= strlen($fence) && trim($text) === $marker) {
                     $fence = null;
-                    $result[] = [$index + 1, $text, true];
+                    $result[] = new ReportLine($index + 1, $text, true);
 
                     continue;
                 }
             }
 
-            $result[] = [$index + 1, $text, $fence !== null];
+            $result[] = new ReportLine($index + 1, $text, $fence !== null);
         }
 
         return $result;

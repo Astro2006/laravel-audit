@@ -1,7 +1,7 @@
 <?php
 
+use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
 use Astro2006\LaravelAudit\Run\PreflightReuse;
-use Astro2006\LaravelAudit\Run\RunManifest;
 use Illuminate\Support\Facades\Process;
 
 function auditProject(): string
@@ -51,7 +51,7 @@ it('runs the preflight only', function () {
 
     $run = latestRun($project);
 
-    expect(RunManifest::read($run.'/run.md'))->toMatchArray(['status' => 'preflight-only', 'audits' => 'dependencies', 'preflight' => 'complete'])
+    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('preflight-only')->audits->toBe('dependencies')->preflightComplete->toBeTrue()
         ->and($run.'/preflight/summary.json')->toBeFile()
         ->and($run.'/preflight/composer/dependency-facts.json')->toBeFile()
         ->and($project.'/storage/audit/.gitignore')->toBeFile();
@@ -76,7 +76,7 @@ it('runs an audit end to end with a validated report', function () {
         ->toContain('model: claude-opus-5')
         ->toContain('# Dependencies Audit — ')
         ->toContain('### DEP-001 — guzzlehttp/psr7')
-        ->and(RunManifest::read($run.'/run.md'))->toMatchArray(['status' => 'completed', 'model' => 'claude-opus-5'])
+        ->and(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')->model->toBe('claude-opus-5')
         ->and($manifest)->toContain('## Metrics')
         ->toContain('| Advisories (critical/high/medium/low) | 0/0/1/0 |')
         ->toContain('| dependencies | completed | 3 | 0/0/1/2/0 | no | 12 |')
@@ -99,7 +99,7 @@ it('fails the run when a report misses required findings after the repair pass',
 
     $run = latestRun($project);
 
-    expect(RunManifest::read($run.'/run.md')['status'])->toBe('failed')
+    expect(RunFrontmatter::read($run.'/run.md')?->status)->toBe('failed')
         ->and($run.'/dependencies.md')->not->toBeFile()
         ->and($run.'/logs/dependencies.invalid.md')->toBeFile()
         ->and(file_get_contents($run.'/run.md'))->toContain('Missing required finding: an `abandoned-package` finding with location `package:acme/test-only`.');
@@ -117,7 +117,7 @@ it('reuses an earlier preflight', function () {
         ->expectsOutputToContain('Reusing the preflight of run '.$first)
         ->assertExitCode(0);
 
-    expect(RunManifest::read(latestRun($project).'/run.md')['preflight_from'])->toBe($first);
+    expect(RunFrontmatter::read(latestRun($project).'/run.md')?->preflightFrom)->toBe($first);
     Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'audit --format=json'), 1);
 });
 

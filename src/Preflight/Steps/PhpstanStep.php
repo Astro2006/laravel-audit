@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
@@ -13,7 +15,7 @@ use Astro2006\LaravelAudit\Preflight\Condensers\PhpstanGrouper;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
-use Illuminate\Support\Facades\Process;
+use Astro2006\LaravelAudit\Support\Read;
 
 /**
  * One PHPStan run with the project's own config and level. Baseline
@@ -51,6 +53,7 @@ final class PhpstanStep implements Step
         }
 
         $override = $context->config('preflight.phpstan.level');
+        $override = $override === null || $override === '' ? null : (string) $override;
         $arguments = [
             'analyse',
             '--error-format=json',
@@ -59,51 +62,52 @@ final class PhpstanStep implements Step
             '--memory-limit='.$context->config('preflight.phpstan.memory_limit', '2G'),
         ];
 
-        if ($override !== null && $override !== '') {
+        if ($override !== null) {
             $arguments[] = '--level='.$override;
         }
 
-        $result = Process::path($project->basePath)
+        $result = $context->process()
             ->timeout((int) $context->config('preflight.phpstan.timeout', 1800))
             ->run($context->vendorBinary('phpstan', $arguments));
 
         file_put_contents($context->logPath('phpstan.log'), $result->errorOutput());
 
-        $report = Json::decode($result->output());
+        $json = Json::decode($result->output());
 
-        if (! isset($report['totals'])) {
+        if (data_get($json, 'totals') === null) {
             return StepResult::error($this->step(), 'PHPStan produced no JSON (out of memory?): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8));
         }
 
-        $context->writeJson('phpstan/phpstan.json', $report);
+        $context->writeJson('phpstan/phpstan.json', $json);
 
         $config = new PhpstanConfig($configPath);
-        $level = $override !== null && $override !== ''
-            ? (string) $override
-            : ($this->dumpedLevel($context) ?? $config->level() ?? 'unknown');
+        $level = $override ?? $this->dumpedLevel($context) ?? $config->level() ?? 'unknown';
 
-        $grouped = $this->grouper->group($report, $config->baselineEntries(), $project->basePath);
-        $context->writeJson('phpstan/phpstan-grouped.json', ['level' => $level, ...$grouped]);
+        $report = $this->grouper->group(
+            $level,
+            PhpstanMessage::listFromJson($json, $project->basePath),
+            $config->baselineEntries(),
+            Read::strings($json, 'errors'),
+        );
 
-        return StepResult::ok($this->step(), [
-            'level' => $level,
-            'level_source' => $override !== null && $override !== '' ? 'config/audit.php' : basename($configPath),
-            'errors' => $grouped['errors'],
-            'baselined' => $grouped['baselined'],
-            'identifiers' => count($grouped['identifiers']),
-            'file' => 'phpstan/phpstan-grouped.json',
-        ]);
+        $context->writeJson('phpstan/phpstan-grouped.json', $report);
+
+        return StepResult::ok($this->step(), new PhpstanData(
+            level: $level,
+            levelSource: $override !== null ? 'config/audit.php' : basename($configPath),
+            errors: $report->errors,
+            baselined: $report->baselined,
+            identifiers: count($report->identifiers),
+        ));
     }
 
     /** PHPStan resolves includes and "max" itself; ask it first. */
     private function dumpedLevel(PreflightContext $context): ?string
     {
-        $result = Process::path($context->project->basePath)
+        $result = $context->process()
             ->timeout(120)
             ->run($context->vendorBinary('phpstan', ['dump-parameters', '--json', '--no-interaction']));
 
-        $level = Json::decode($result->output())['level'] ?? null;
-
-        return $level === null || $level === '' ? null : (string) $level;
+        return Read::nullableString(Json::decode($result->output()), 'level');
     }
 }

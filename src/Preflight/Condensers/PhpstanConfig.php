@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Phpstan\BaselineEntry;
+use Astro2006\LaravelAudit\Support\Read;
 use Nette\Neon\Neon;
 
 /**
@@ -14,14 +16,14 @@ final class PhpstanConfig
 {
     public function __construct(private readonly string $configPath) {}
 
-    /** Level from the config and its includes; later files cannot override the main config. */
+    /** Level from the config and its includes; the main config comes first. */
     public function level(): ?string
     {
         foreach ($this->files() as $data) {
-            $level = $data['parameters']['level'] ?? null;
+            $level = Read::nullableString($data, 'parameters.level');
 
-            if ($level !== null && $level !== '') {
-                return (string) $level;
+            if ($level !== null) {
+                return $level;
             }
         }
 
@@ -32,26 +34,19 @@ final class PhpstanConfig
      * Baseline-style ignoreErrors entries (with count and path) from the
      * config and its includes.
      *
-     * @return list<array{identifier: string|null, message: string, count: int, path: string}>
+     * @return list<BaselineEntry>
      */
     public function baselineEntries(): array
     {
         $entries = [];
 
-        foreach ($this->files() as $file => $data) {
-            $dir = dirname($file);
+        foreach ($this->files() as $data) {
+            foreach (Read::arrays($data, 'parameters.ignoreErrors') as $entry) {
+                $baseline = BaselineEntry::fromArray($entry);
 
-            foreach ((array) ($data['parameters']['ignoreErrors'] ?? []) as $entry) {
-                if (! is_array($entry) || ! isset($entry['count']) || ! isset($entry['path'])) {
-                    continue;
+                if ($baseline !== null) {
+                    $entries[] = $baseline;
                 }
-
-                $entries[] = [
-                    'identifier' => isset($entry['identifier']) ? (string) $entry['identifier'] : null,
-                    'message' => (string) ($entry['message'] ?? $entry['rawMessage'] ?? ''),
-                    'count' => (int) $entry['count'],
-                    'path' => $this->relativeTo($dir, (string) $entry['path']),
-                ];
             }
         }
 
@@ -59,30 +54,29 @@ final class PhpstanConfig
     }
 
     /**
-     * The main config first, then its includes (depth first). Files in
+     * The main config first, then its includes (breadth first). Files in
      * vendor/ and paths with PHPStan variables are skipped.
      *
-     * @return array<string, array<mixed>>
+     * @return list<array<mixed>>
      */
     private function files(): array
     {
         $files = [];
+        $seen = [];
         $queue = [$this->configPath];
 
         while ($queue !== []) {
-            $file = array_shift($queue);
-            $real = realpath($file);
+            $real = realpath((string) array_shift($queue));
 
-            if ($real === false || isset($files[$real])) {
+            if ($real === false || in_array($real, $seen, true)) {
                 continue;
             }
 
+            $seen[] = $real;
             $data = $this->load($real);
-            $files[$real] = $data;
+            $files[] = $data;
 
-            foreach ((array) ($data['includes'] ?? []) as $include) {
-                $include = (string) $include;
-
+            foreach (Read::strings($data, 'includes') as $include) {
                 if (str_contains($include, '%') || str_contains($include, '/vendor/') || str_starts_with($include, 'vendor/')) {
                     continue;
                 }
@@ -106,12 +100,5 @@ final class PhpstanConfig
         }
 
         return is_array($data) ? $data : [];
-    }
-
-    private function relativeTo(string $dir, string $path): string
-    {
-        $path = str_replace('\\', '/', $path);
-
-        return str_starts_with($path, '/') ? $path : ltrim((string) preg_replace('#(^|/)\./#', '$1', $path), '/');
     }
 }

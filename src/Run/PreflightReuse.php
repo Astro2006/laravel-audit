@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
+use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 
@@ -13,35 +14,39 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
  */
 final class PreflightReuse
 {
-    /**
-     * @return array{run: string, manifest: array<string, string>}|null
-     */
-    public function find(string $outputRoot, ?string $runId, string $excludeRunId): ?array
+    public function find(string $outputRoot, ?string $runId, string $excludeRunId): ?RunFrontmatter
     {
         if ($runId !== null && $runId !== '') {
-            $manifest = RunManifest::read($outputRoot.'/'.$runId.'/run.md');
+            if (! is_dir($outputRoot.'/'.$runId.'/preflight')) {
+                return null;
+            }
 
-            return is_dir($outputRoot.'/'.$runId.'/preflight') ? ['run' => $runId, 'manifest' => $manifest] : null;
+            return RunFrontmatter::read($outputRoot.'/'.$runId.'/run.md') ?? new RunFrontmatter(runId: $runId);
         }
 
         $candidates = [];
 
         foreach (glob($outputRoot.'/*/run.md') ?: [] as $path) {
-            $manifest = RunManifest::read($path);
-            $id = basename(dirname($path));
+            $manifest = RunFrontmatter::read($path);
 
-            if ($id !== $excludeRunId && ($manifest['preflight'] ?? '') === 'complete') {
-                $candidates[$manifest['started_at'] ?? $id] = ['run' => $id, 'manifest' => $manifest];
+            if ($manifest !== null && $manifest->preflightComplete && basename(dirname($path)) !== $excludeRunId) {
+                $candidates[] = new RunFrontmatter(
+                    runId: basename(dirname($path)),
+                    status: $manifest->status,
+                    startedAt: $manifest->startedAt,
+                    preflightComplete: true,
+                    preflightFrom: $manifest->preflightFrom,
+                    model: $manifest->model,
+                    gitCommit: $manifest->gitCommit,
+                    gitDirty: $manifest->gitDirty,
+                    audits: $manifest->audits,
+                );
             }
         }
 
-        if ($candidates === []) {
-            return null;
-        }
+        usort($candidates, fn (RunFrontmatter $a, RunFrontmatter $b): int => [$b->startedAt, $b->runId] <=> [$a->startedAt, $a->runId]);
 
-        krsort($candidates);
-
-        return reset($candidates);
+        return $candidates === [] ? null : reset($candidates);
     }
 
     /**
@@ -54,7 +59,7 @@ final class PreflightReuse
     {
         return array_values(array_map(
             fn (PreflightStep $step): string => $step->value,
-            array_filter($required, fn (PreflightStep $step): bool => $summary->status($step) === null),
+            array_filter($required, fn (PreflightStep $step): bool => $summary->steps->status($step) === null),
         ));
     }
 

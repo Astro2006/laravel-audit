@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\AboutData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
-use Illuminate\Support\Facades\Process;
+use Astro2006\LaravelAudit\Support\Read;
 
 final class AboutStep implements Step
 {
@@ -20,19 +21,14 @@ final class AboutStep implements Step
 
     public function run(PreflightContext $context): StepResult
     {
-        $result = Process::path($context->project->basePath)
+        $result = $context->process()
             ->timeout(120)
             ->run($context->artisan(['about', '--json']));
 
         $about = Json::decode($result->output());
 
         // The running app knows the basics even if "about" fails.
-        $fallback = [
-            'name' => (string) config('app.name'),
-            'laravel' => app()->version(),
-            'php' => PHP_VERSION,
-            'env' => (string) app()->environment(),
-        ];
+        $fallback = new AboutData((string) config('app.name'), app()->version(), PHP_VERSION, (string) app()->environment());
 
         if ($about === []) {
             return StepResult::error(
@@ -43,15 +39,13 @@ final class AboutStep implements Step
         }
 
         $context->writeJson('about.json', $about);
-        $environment = (array) ($about['environment'] ?? []);
 
-        return StepResult::ok($this->step(), [
-            'name' => $environment['application_name'] ?? $fallback['name'],
-            'laravel' => $environment['laravel_version'] ?? $fallback['laravel'],
-            'php' => $environment['php_version'] ?? $fallback['php'],
-            'env' => $environment['environment'] ?? $fallback['env'],
-            'debug' => $environment['debug_mode'] ?? null,
-            'file' => 'about.json',
-        ]);
+        return StepResult::ok($this->step(), new AboutData(
+            name: Read::nullableString($about, 'environment.application_name') ?? $fallback->name,
+            laravel: Read::nullableString($about, 'environment.laravel_version') ?? $fallback->laravel,
+            php: Read::nullableString($about, 'environment.php_version') ?? $fallback->php,
+            env: Read::nullableString($about, 'environment.environment') ?? $fallback->env,
+            debug: data_get($about, 'environment.debug_mode') === null ? null : Read::bool($about, 'environment.debug_mode'),
+        ));
     }
 }

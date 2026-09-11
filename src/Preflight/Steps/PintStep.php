@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Data\Steps\PintData;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
-use Illuminate\Support\Facades\Process;
+use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Collection;
 
 final class PintStep implements Step
 {
@@ -34,42 +36,44 @@ final class PintStep implements Step
             return StepResult::skipped($this->step(), SkipReason::NotInstalled);
         }
 
-        $result = Process::path($context->project->basePath)
+        $result = $context->process()
             ->timeout(300)
             ->run($context->vendorBinary('pint', ['--test', '--format=json']));
 
         $report = Json::decode($result->output());
 
-        if (! isset($report['files']) && ! isset($report['result'])) {
+        if (data_get($report, 'files') === null && data_get($report, 'result') === null) {
             return StepResult::error($this->step(), 'Pint produced no JSON: '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 5));
         }
 
         $context->writeJson('pint.json', $report);
 
-        $rules = [];
+        // One entry per (rule, file), then grouped by rule.
+        $pairs = new Collection;
 
-        foreach ((array) ($report['files'] ?? []) as $file) {
-            $path = (string) ($file['path'] ?? $file['name'] ?? '');
+        foreach (Read::arrays($report, 'files') as $file) {
+            $path = Read::string($file, 'path', Read::string($file, 'name'));
+            $fixers = Read::strings($file, 'fixers') ?: Read::strings($file, 'appliedFixers');
 
-            foreach ((array) ($file['fixers'] ?? $file['appliedFixers'] ?? []) as $fixer) {
-                $rules[$fixer] ??= ['rule' => $fixer, 'files' => 0, 'examples' => []];
-                $rules[$fixer]['files']++;
-
-                if (count($rules[$fixer]['examples']) < 5) {
-                    $rules[$fixer]['examples'][] = $path;
-                }
+            foreach ($fixers as $fixer) {
+                $pairs->push(['rule' => $fixer, 'file' => $path]);
             }
         }
 
-        usort($rules, fn (array $a, array $b): int => $b['files'] <=> $a['files']);
+        $rules = $pairs
+            ->groupBy('rule')
+            ->map(fn (Collection $group, int|string $rule): array => [
+                'rule' => (string) $rule,
+                'files' => $group->count(),
+                'examples' => $group->pluck('file')->take(5)->values()->all(),
+            ])
+            ->sortByDesc('files')
+            ->values()
+            ->all();
 
-        $grouped = ['files_with_issues' => count((array) ($report['files'] ?? [])), 'rules' => $rules];
-        $context->writeJson('pint-grouped.json', $grouped);
+        $filesWithIssues = count(Read::arrays($report, 'files'));
+        $context->writeJson('pint-grouped.json', ['files_with_issues' => $filesWithIssues, 'rules' => $rules]);
 
-        return StepResult::ok($this->step(), [
-            'files_with_issues' => $grouped['files_with_issues'],
-            'rules' => count($rules),
-            'file' => 'pint-grouped.json',
-        ]);
+        return StepResult::ok($this->step(), new PintData($filesWithIssues, count($rules)));
     }
 }

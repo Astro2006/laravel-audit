@@ -22,14 +22,16 @@ final class RunFinalizer
         private readonly Metrics $metrics = new Metrics,
     ) {}
 
-    /** @param array<string, AuditOutcome> $outcomes */
+    /** @param list<AuditOutcome> $outcomes */
     public function finalize(RunManifest $manifest, PreflightSummary $summary, array $outcomes, string $agent): void
     {
         $run = $manifest->run;
         $findingsByAudit = [];
         $all = [];
 
-        foreach ($outcomes as $audit => $outcome) {
+        foreach ($outcomes as $outcome) {
+            $audit = $outcome->audit->value;
+
             if ($outcome->completed() && $outcome->body !== null) {
                 $this->writer->write($run->reportPath($audit), [
                     'format' => 1,
@@ -41,7 +43,7 @@ final class RunFinalizer
                     'generated_at' => date(DATE_ATOM),
                 ], $outcome->audit->audit()->title().' — '.$run->id, $outcome->body);
 
-                $findingsByAudit[$audit] = $outcome->findings;
+                $findingsByAudit = [...$findingsByAudit, $audit => $outcome->findings];
                 array_push($all, ...$outcome->findings);
             } elseif ($outcome->body !== null) {
                 // Kept for inspection; not a report.

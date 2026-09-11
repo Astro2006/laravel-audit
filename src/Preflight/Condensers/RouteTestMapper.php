@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
+use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Data\Tests\RouteTestLink;
+use Astro2006\LaravelAudit\Data\Tests\RouteTestMap;
+
 /**
  * Heuristic map from routes to the test files that reference them by route
  * name, URI literal or controller class. The tests agent verifies it.
@@ -11,76 +15,76 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 final class RouteTestMapper
 {
     /**
-     * @param  list<array<string, mixed>>  $routes  decoded route:list --json
-     * @param  array<string, string>  $testFiles  relative path => contents
-     * @return array{total: int, untested: int, routes: list<array<string, mixed>>}
+     * @param  list<RouteDefinition>  $routes
+     * @param  iterable<string, string>  $testFiles  relative path => contents
      */
-    public function map(array $routes, array $testFiles): array
+    public function map(array $routes, iterable $testFiles): RouteTestMap
     {
-        $result = [];
-        $untested = 0;
+        $files = [];
+
+        foreach ($testFiles as $path => $contents) {
+            $files[] = [$path, $contents];
+        }
+
+        $links = [];
 
         foreach ($routes as $route) {
-            $uri = trim((string) ($route['uri'] ?? ''), '/');
-            $name = (string) ($route['name'] ?? '');
-            $action = (string) ($route['action'] ?? '');
-            $needles = $this->needles($uri, $name, $action);
-
             $tests = [];
             $matchedBy = [];
 
-            foreach ($testFiles as $file => $contents) {
-                foreach ($needles as $kind => $patterns) {
-                    foreach ($patterns as $pattern) {
-                        if (str_contains($contents, $pattern)) {
-                            $tests[$file] = true;
-                            $matchedBy[$kind] = true;
+            foreach ($files as [$path, $contents]) {
+                foreach ($this->needles($route) as [$kind, $pattern]) {
+                    if (str_contains($contents, $pattern)) {
+                        $tests[] = $path;
+                        $matchedBy[] = $kind;
 
-                            continue 3;
-                        }
+                        break;
                     }
                 }
             }
 
-            if ($tests === []) {
-                $untested++;
-            }
-
-            $result[] = [
-                'method' => (string) ($route['method'] ?? ''),
-                'uri' => '/'.$uri,
-                'name' => $name !== '' ? $name : null,
-                'action' => $action,
-                'tests' => array_slice(array_keys($tests), 0, 10),
-                'matched_by' => array_keys($matchedBy),
-            ];
+            $links[] = new RouteTestLink(
+                method: $route->method,
+                uri: $route->uri,
+                name: $route->name,
+                action: $route->action,
+                tests: array_slice(array_values(array_unique($tests)), 0, 10),
+                matchedBy: array_values(array_unique($matchedBy)),
+            );
         }
 
-        return ['total' => count($routes), 'untested' => $untested, 'routes' => $result];
+        return new RouteTestMap($links);
     }
 
-    /** @return array<string, list<string>> */
-    private function needles(string $uri, string $name, string $action): array
+    /** @return list<array{string, string}> kind and pattern */
+    private function needles(RouteDefinition $route): array
     {
         $needles = [];
+        $uri = trim($route->uri, '/');
 
-        if ($name !== '') {
-            $needles['name'] = ["route('{$name}'", "route(\"{$name}\""];
+        if ($route->name !== null) {
+            $needles[] = ['name', "route('{$route->name}'"];
+            $needles[] = ['name', "route(\"{$route->name}\""];
         }
 
         $static = strstr($uri, '{', true);
         $static = $static === false ? $uri : rtrim($static, '/').'/';
 
-        if ($static !== '' && strlen($static) >= 3) {
-            $needles['uri'] = $static === $uri
+        if (strlen($static) >= 3) {
+            $patterns = $static === $uri
                 ? ["'/{$uri}'", "\"/{$uri}\"", "'/{$uri}?", "\"/{$uri}?"]
                 : ["'/{$static}", "\"/{$static}"];
+
+            foreach ($patterns as $pattern) {
+                $needles[] = ['uri', $pattern];
+            }
         }
 
-        if ($action !== '' && $action !== 'Closure' && str_contains($action, '\\')) {
-            $class = str_contains($action, '@') ? substr($action, 0, (int) strpos($action, '@')) : $action;
-            $short = substr($class, (int) strrpos($class, '\\') + 1);
-            $needles['controller'] = [$short.'::class', $class];
+        if ($route->isControllerAction()) {
+            $class = str_contains($route->action, '@') ? strstr($route->action, '@', true) : $route->action;
+            $short = substr((string) $class, (int) strrpos((string) $class, '\\') + 1);
+            $needles[] = ['controller', $short.'::class'];
+            $needles[] = ['controller', (string) $class];
         }
 
         return $needles;

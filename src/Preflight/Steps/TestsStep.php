@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
+use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
@@ -17,7 +19,6 @@ use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Contracts\Process\ProcessResult;
-use Illuminate\Support\Facades\Process;
 
 final class TestsStep implements AsyncStep
 {
@@ -60,7 +61,7 @@ final class TestsStep implements AsyncStep
         $this->database = $this->guard->check();
 
         if (! $this->database->safe && ! $context->config('preflight.allow_shared_database', false)) {
-            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, ['database' => $this->database->toArray()]);
+            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsData(database: $this->database));
         }
 
         $junit = $context->path('tests/junit.xml');
@@ -90,9 +91,8 @@ final class TestsStep implements AsyncStep
             ? $custom.' '.implode(' ', array_map('escapeshellarg', $flags))
             : $context->artisan(['test', ...($this->parallel ? ['--parallel'] : []), ...$flags]);
 
-        return Process::path($project->basePath)
+        return $context->process($driver === 'xdebug' && $this->coverage ? ['XDEBUG_MODE' => 'coverage'] : [])
             ->timeout((int) $context->config('preflight.tests.timeout', 1800))
-            ->env($driver === 'xdebug' && $this->coverage ? ['XDEBUG_MODE' => 'coverage'] : [])
             ->start($command);
     }
 
@@ -100,17 +100,17 @@ final class TestsStep implements AsyncStep
     {
         file_put_contents($context->logPath('tests.log'), $result->output()."\n".$result->errorOutput());
 
-        $condensed = $this->junit->condense($context->path('tests/junit.xml'), $context->project->basePath);
+        $report = $this->junit->condense($context->path('tests/junit.xml'), $context->project->basePath);
 
-        if ($condensed === null) {
+        if ($report === null) {
             return StepResult::error(
                 $this->step(),
                 'The test run produced no JUnit report (see logs/tests.log): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8),
-                ['database' => $this->database?->toArray()],
+                new TestsData(database: $this->database),
             );
         }
 
-        $context->writeJson('tests/tests-condensed.json', $condensed);
+        $context->writeJson('tests/tests-condensed.json', $report);
 
         $coverage = $this->coverage
             ? $this->coverageCondenser->condense($context->path('tests/coverage.xml'), $context->project->basePath)
@@ -122,25 +122,7 @@ final class TestsStep implements AsyncStep
 
         $this->writeRouteTestMap($context);
 
-        return StepResult::ok($this->step(), [
-            'total' => $condensed['total'],
-            'passed' => $condensed['passed'],
-            'failed' => $condensed['failed'],
-            'errors' => $condensed['errors'],
-            'skipped' => $condensed['skipped'],
-            'duration_s' => $condensed['duration_s'],
-            'environment_error' => $condensed['environment_error'],
-            'top_failure' => isset($condensed['failure_groups'][0])
-                ? $condensed['failure_groups'][0]['exception'].': '.$condensed['failure_groups'][0]['message']
-                : null,
-            'failing' => array_merge(...array_map(fn (array $group): array => $group['tests'], array_slice($condensed['failure_groups'], 0, 5))),
-            'coverage_available' => $coverage !== null,
-            'coverage_pct' => $coverage['lines_pct'] ?? null,
-            'parallel' => $this->parallel,
-            'suites' => $this->suites === [] ? null : $this->suites,
-            'database' => $this->database?->toArray(),
-            'file' => 'tests/tests-condensed.json',
-        ]);
+        return StepResult::ok($this->step(), TestsData::fromReport($report, $coverage?->linesPct, $this->parallel, $this->suites, $this->database));
     }
 
     /**
@@ -163,18 +145,18 @@ final class TestsStep implements AsyncStep
 
     private function writeRouteTestMap(PreflightContext $context): void
     {
-        $routes = $context->readJson('routes.json');
+        $routes = RouteDefinition::listFromJson($context->readJson('routes.json'));
 
         if ($routes === []) {
             return;
         }
 
-        $files = [];
+        $files = (function () use ($context): \Generator {
+            foreach ($context->project->phpFiles('tests') as $file) {
+                yield $file => (string) file_get_contents($context->project->path($file));
+            }
+        })();
 
-        foreach ($context->project->phpFiles('tests') as $file) {
-            $files[$file] = (string) file_get_contents($context->project->path($file));
-        }
-
-        $context->writeJson('tests/route-test-map.json', $this->mapper->map(array_values($routes), $files));
+        $context->writeJson('tests/route-test-map.json', $this->mapper->map($routes, $files));
     }
 }

@@ -106,14 +106,12 @@ final readonly class RunSelection
         $needed = [];
 
         foreach ($this->audits as $audit) {
-            foreach ($audit->audit()->preflightSteps() as $step) {
-                $needed[$step->value] = true;
-            }
+            array_push($needed, ...$audit->audit()->preflightSteps());
         }
 
         return array_values(array_filter(
             PreflightStep::cases(),
-            fn (PreflightStep $step): bool => isset($needed[$step->value]),
+            fn (PreflightStep $step): bool => in_array($step, $needed, true),
         ));
     }
 

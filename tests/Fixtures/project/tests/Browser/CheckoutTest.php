@@ -5,5 +5,5 @@ it('checks out', function () {
 
     $page->assertSee('Pay');
 
-    visit("/cart");
+    visit('/cart');
 });

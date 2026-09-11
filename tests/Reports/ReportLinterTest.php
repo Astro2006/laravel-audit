@@ -21,12 +21,14 @@ function validBackendReport(): string
 it('accepts a valid report and builds findings', function () {
     $result = lintReport(validBackendReport());
 
+    [$first] = $result->findings;
+
     expect($result->errors)->toBe([])
         ->and($result->isValid())->toBeTrue()
         ->and($result->findings)->toHaveCount(2)
-        ->and($result->findings[0]->severity)->toBe(Severity::High)
-        ->and($result->findings[0]->occurrences)->toBe(2)
-        ->and($result->findings[0]->references)->toBe(['CWE-915', 'OWASP A08:2021'])
+        ->and($first->severity)->toBe(Severity::High)
+        ->and($first->occurrences)->toBe(2)
+        ->and($first->references)->toBe(['CWE-915', 'OWASP A08:2021'])
         ->and($result->warnings)->toBe([]);
 });
 
@@ -61,7 +63,7 @@ it('requires evidence, impact and recommendation', function () {
 });
 
 it('enforces the finding limit', function () {
-    expect(lintReport(validBackendReport(), max: 1)->errors[0])->toContain('The report has 2 findings; the maximum is 1.');
+    expect(implode("\n", lintReport(validBackendReport(), max: 1)->errors))->toContain('The report has 2 findings; the maximum is 1.');
 });
 
 it('warns about hallucinated files and lines past the end', function () {
