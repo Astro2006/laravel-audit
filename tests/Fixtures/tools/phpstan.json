@@ -1,0 +1,20 @@
+{
+    "totals": { "errors": 0, "file_errors": 4 },
+    "files": {
+        "/app/app/Services/OrderService.php": {
+            "errors": 3,
+            "messages": [
+                { "message": "Method App\\Services\\OrderService::update() has no return type specified.", "line": 7, "ignorable": true, "identifier": "missingType.return" },
+                { "message": "Cannot call method save() on App\\Models\\Order|null.", "line": 9, "ignorable": true, "identifier": "method.nonObject" },
+                { "message": "Method App\\Services\\OrderService::refund() has no return type specified.", "line": 20, "ignorable": true, "identifier": "missingType.return" }
+            ]
+        },
+        "/app/app/Models/User.php": {
+            "errors": 1,
+            "messages": [
+                { "message": "Something without identifier.", "line": 3, "ignorable": true }
+            ]
+        }
+    },
+    "errors": []
+}

@@ -1,0 +1,10 @@
+[
+    { "domain": null, "method": "GET|HEAD", "uri": "/", "name": null, "action": "Closure", "middleware": ["web"] },
+    { "domain": null, "method": "GET|HEAD", "uri": "orders", "name": "orders.index", "action": "App\\Http\\Controllers\\OrderController@index", "middleware": ["web", "Illuminate\\Auth\\Middleware\\Authenticate"] },
+    { "domain": null, "method": "PUT", "uri": "orders/{order}", "name": "orders.update", "action": "App\\Http\\Controllers\\OrderController@update", "middleware": ["web"] },
+    { "domain": null, "method": "GET|HEAD", "uri": "orders/{order}/delete", "name": "orders.delete", "action": "App\\Http\\Controllers\\OrderController@destroy", "middleware": ["web", "auth"] },
+    { "domain": null, "method": "POST", "uri": "contact", "name": "contact.send", "action": "App\\Http\\Controllers\\ContactController", "middleware": ["web"] },
+    { "domain": null, "method": "POST", "uri": "login", "name": "login", "action": "App\\Http\\Controllers\\AuthController@login", "middleware": ["web", "throttle:login"] },
+    { "domain": null, "method": "GET|HEAD", "uri": "telescope/{view?}", "name": "telescope", "action": "Laravel\\Telescope\\Http\\Controllers\\HomeController@index", "middleware": ["telescope"] },
+    { "domain": null, "method": "GET|HEAD", "uri": "checkout", "name": "checkout", "action": "App\\Http\\Controllers\\CheckoutController@show", "middleware": ["web", "auth"] }
+]

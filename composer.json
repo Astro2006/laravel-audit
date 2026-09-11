@@ -1,0 +1,78 @@
+{
+    "name": "astro2006/laravel-audit",
+    "description": "AI-assisted audits for Laravel apps: a deterministic preflight (tests, browser tests, PHPStan, Composer) feeds Claude Code agents that review tests, frontend, backend and dependencies.",
+    "keywords": [
+        "astro2006",
+        "laravel",
+        "laravel-audit",
+        "audit",
+        "security",
+        "code-review",
+        "phpstan",
+        "pest",
+        "claude"
+    ],
+    "homepage": "https://github.com/astro2006/laravel-audit",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Tobias Brogle",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "illuminate/console": "^12.0||^13.0",
+        "illuminate/contracts": "^12.0||^13.0",
+        "illuminate/process": "^12.0||^13.0",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.14",
+        "laravel/prompts": "^0.3",
+        "nette/neon": "^3.4",
+        "spatie/laravel-package-tools": "^1.16"
+    },
+    "require-dev": {
+        "nunomaduro/collision": "^8.8",
+        "orchestra/testbench": "^11.0||^10.0",
+        "pestphp/pest": "^4.0||^5.0",
+        "pestphp/pest-plugin-arch": "^4.0||^5.0",
+        "pestphp/pest-plugin-laravel": "^4.0||^5.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Astro2006\\LaravelAudit\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Astro2006\\LaravelAudit\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@composer run prepare",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Astro2006\\LaravelAudit\\LaravelAuditServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

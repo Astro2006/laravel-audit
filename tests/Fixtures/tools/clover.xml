@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1789125000">
+  <project timestamp="1789125000">
+    <file name="/app/app/Services/OrderService.php">
+      <class name="App\Services\OrderService" namespace="App\Services">
+        <metrics complexity="3" methods="2" coveredmethods="1" statements="10" coveredstatements="4" elements="12" coveredelements="5"/>
+      </class>
+      <line num="10" type="method" name="update" visibility="public" complexity="1" crap="1" count="3"/>
+      <line num="20" type="method" name="refund" visibility="public" complexity="2" crap="6" count="0"/>
+      <metrics loc="40" ncloc="30" classes="1" methods="2" coveredmethods="1" statements="10" coveredstatements="4" elements="12" coveredelements="5"/>
+    </file>
+    <file name="/app/app/Models/User.php">
+      <class name="User" namespace="App\Models">
+        <metrics statements="5" coveredstatements="5"/>
+      </class>
+      <metrics loc="20" ncloc="15" classes="1" methods="1" coveredmethods="1" statements="5" coveredstatements="5" elements="6" coveredelements="6"/>
+    </file>
+    <file name="/app/vendor/acme/lib/src/Thing.php">
+      <metrics statements="100" coveredstatements="0"/>
+    </file>
+    <metrics files="3" loc="60" ncloc="45" classes="2" methods="3" coveredmethods="2" statements="115" coveredstatements="9" elements="118" coveredelements="11"/>
+  </project>
+</coverage>

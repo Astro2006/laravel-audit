@@ -1,0 +1,11 @@
+{
+    "name": "acme/shop",
+    "version": "dev-main",
+    "license": ["proprietary"],
+    "dependencies": {
+        "acme/used-lib": { "version": "2.1.0", "license": ["MIT"] },
+        "acme/unused-lib": { "version": "1.0.3", "license": ["GPL-3.0-only"] },
+        "acme/dual": { "version": "1.0.0", "license": ["GPL-2.0-only", "MIT"] },
+        "acme/nolicense": { "version": "1.0.0", "license": [] }
+    }
+}

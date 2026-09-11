@@ -1,0 +1,18 @@
+{
+    "packages": [
+        { "name": "acme/used-lib", "type": "library", "autoload": { "psr-4": { "Acme\\UsedLib\\": "src/" } } },
+        { "name": "acme/unused-lib", "type": "library", "autoload": { "psr-4": { "Acme\\UnusedLib\\": "src/" } } },
+        { "name": "acme/test-only", "type": "library", "autoload": { "psr-4": { "Acme\\TestOnly\\": "src/" } } },
+        { "name": "acme/transitive-lib", "type": "library", "autoload": { "psr-4": { "Acme\\Transitive\\": "src/" } } },
+        { "name": "acme/dev-tool", "type": "library", "autoload": { "psr-4": { "Acme\\DevTool\\": "src/" } }, "bin": ["bin/dev-tool"] },
+        { "name": "guzzlehttp/psr7", "type": "library", "autoload": { "psr-4": { "GuzzleHttp\\Psr7\\": "src/" } } },
+        {
+            "name": "laravel/framework",
+            "type": "library",
+            "autoload": { "psr-4": { "Illuminate\\": "src/Illuminate/" } },
+            "extra": { "laravel": { "providers": [] } }
+        },
+        { "name": "pestphp/pest", "type": "library", "autoload": { "psr-4": { "Pest\\": "src/" } } },
+        { "name": "pestphp/pest-plugin-browser", "type": "library", "autoload": { "psr-4": { "Pest\\Browser\\": "src/" } } }
+    ]
+}

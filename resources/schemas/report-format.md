@@ -1,27 +1,42 @@
 # Report Format (v1)
 
-Every audit agent produces exactly **one** report and returns it as its final answer. The harness saves it as `{{output_dir}}/{audit_key}.md`.
-The report is written for humans, but follows a strict structure so the harness (`ReportParser`) can extract every finding reliably for scores, validation, trends and later SARIF/CI export.
+Every audit agent produces exactly **one** report and returns it as its final answer. The harness validates it and saves it as `{output_dir}/{audit_key}.md`.
+The report is written for humans, but follows a strict structure so the harness (`ReportParser`, `ReportLinter`) can extract every finding reliably for validation, keys, metrics and later exports.
 
-Rule of thumb: **everything the harness needs lives in the frontmatter, the finding headings and the finding metadata tables.** Everything else is free markdown.
+Rule of thumb: **everything the harness needs lives in the level-2 headings, the finding headings and the finding metadata tables.** Everything else is free markdown.
 
 ---
 
-## 1. File structure
+## 1. Who writes what
 
-Sections in this exact order. Level-2 headings must match literally.
+| Part | Written by |
+|---|---|
+| Frontmatter, H1 title | harness |
+| Body from `## Summary` to the end | agent |
+
+The agent's answer starts with `## Summary`. Anything before the first level-2 heading (introductions, a frontmatter, an H1) and a surrounding code fence are removed by the harness.
+
+Frontmatter written by the harness:
 
 ```markdown
 ---
 format: 1
 audit: backend
-run_id: 2026-09-11_14-30-05
-agent: claude-opus-5
-generated_at: 2026-09-11T14:42:10+02:00
+run_id: 2026-10-02_09-15-40
+agent: claude
+model: claude-opus-5
+prompt_hash: 3f9a1c02
+generated_at: 2026-10-02T09:21:52+02:00
 ---
 
-# Backend Audit — 2026-09-11_14-30-05
+# Backend Audit — 2026-10-02_09-15-40
+```
 
+## 2. Body structure
+
+Sections in this order. Level-2 headings must match literally (case-insensitive).
+
+```markdown
 ## Summary
 3–5 sentences.
 
@@ -37,21 +52,13 @@ Max 5 bullets.
 
 ## Limitations
 What could not be checked and why.
+
+### Out of scope observations
+Optional: one sentence per observation that belongs to another audit.
 ```
 
-If there are no findings, `## Findings` still exists and contains the single line `No findings.`
-
-## 2. Frontmatter
-
-Plain `key: value` lines between `---` markers. No nesting, no quotes needed.
-
-| Key | Required | Value |
-|---|---|---|
-| `format` | yes | `1` |
-| `audit` | yes | `tests`, `frontend`, `backend`, `dependencies` |
-| `run_id` | yes | Run ID from the prompt |
-| `agent` | no | Agent / model name |
-| `generated_at` | yes | ISO 8601 timestamp |
+- If there are no findings, `## Findings` contains the single line `No findings.`
+- `## Limitations` is always the last level-2 section.
 
 ## 3. Finding
 
@@ -64,23 +71,26 @@ A finding consists of four parts, in this order: heading, metadata table, body, 
 ```
 
 - ID: `TST-`, `FE-`, `BE-`, `DEP-` followed by three digits. Prefix must match the audit. IDs are unique and numbered in order of appearance.
-- Separator between ID and title: ` — ` (em dash). The parser also accepts ` – ` and ` - `.
+- Separator between ID and title: ` — ` (em dash). The normalizer also accepts ` – `, ` - ` and `:` and fixes unpadded IDs (`BE-1` → `BE-001`).
 - Title: max 120 characters, no markdown formatting.
 
 ### 3.2 Metadata table
 
-Directly below the heading. Two columns, header row `| Field | Value |`. Row order is free, field names are case-insensitive, enum values are lowercase.
+Directly below the heading. Two columns, header row `| Field | Value |`. Row order is free, field names are case-insensitive.
 
 | Field | Required | Allowed values |
 |---|---|---|
 | Severity | yes | `critical`, `high`, `medium`, `low`, `info` |
 | Confidence | yes | `confirmed`, `likely`, `suspected` |
 | Category | yes | `security`, `correctness`, `performance`, `maintainability`, `testing`, `ux`, `accessibility`, `consistency`, `dead-code`, `dependency`, `configuration` |
+| Check | yes | one slug from the check list of **this** audit (every check belongs to exactly one audit) |
 | Effort | yes | `S` (< 1 h), `M` (< 1 day), `L` (> 1 day) |
 | Locations | yes | One or more locations, comma-separated, each in backticks (see 3.3) |
 | Occurrences | no | Integer ≥ 1, default `1` |
 | References | no | Comma-separated, e.g. `CWE-89, OWASP A03:2021` |
-| Related | no | Comma-separated finding IDs from any audit, e.g. `FE-004, TST-007` |
+| Related | no | Comma-separated finding IDs from **the same report** |
+
+The check lists live in the audit classes (`src/Audits`) and are rendered into the prompt.
 
 ### 3.3 Location syntax
 
@@ -106,7 +116,7 @@ The body ends at the next `### ` heading, the next `## ` heading, or a `---` lin
 
 ### 3.5 Parser scope
 
-- Findings are only parsed inside `## Findings`. Audit-specific sections may use `###` headings and tables freely.
+- Findings are only parsed inside `## Findings`. Other sections may use `###` headings and tables freely.
 - The parser is fence-aware: `###`, `---` or `|` lines inside code blocks are never treated as structure.
 
 ## 4. Complete example
@@ -119,11 +129,11 @@ The body ends at the next `### ` heading, the next `## ` heading, or a `---` lin
 | Severity | high |
 | Confidence | confirmed |
 | Category | security |
+| Check | mass-assignment |
 | Effort | S |
 | Locations | `app/Services/OrderService.php:42-48`, `app/Http/Controllers/OrderController.php:57` |
 | Occurrences | 2 |
 | References | CWE-915, OWASP A08:2021 |
-| Related | FE-006 |
 
 **Evidence**
 ```php
@@ -142,71 +152,43 @@ Pass `$request->validated()` from a Form Request and replace `$guarded = []` wit
 ---
 ````
 
-## 5. Validation (`ReportLinter`)
+## 5. Normalization
 
-The harness checks every report after the agent finishes.
+Before validation, the harness fixes trivial slips without asking the agent again: heading separators and ID padding, enum casing (`High` → `high`, `small` → `S`), decorated values (`**high**`, `` `high` ``) and body labels (`**Evidence:**` → `**Evidence**`).
 
-**Errors** (trigger one repair pass, then the audit is marked as failed):
+## 6. Validation (`ReportLinter`)
 
-- Frontmatter missing, or `audit` / `run_id` do not match the run
-- Required level-2 sections missing
+**Errors** (trigger one repair pass in the same agent session, then the audit is marked as failed):
+
+- Required level-2 sections missing, or `## Limitations` is not the last one
 - Finding heading does not match the ID pattern, wrong prefix, duplicate ID
 - Metadata table missing or a required field missing
-- Enum value not allowed
-- No parseable location
-- `Evidence`, `Impact` or `Recommendation` missing
+- Enum value not allowed, or the check is not in this audit's check list
+- No parseable location, invalid `Occurrences`
+- `Evidence`, `Impact` or `Recommendation` missing or empty
+- More findings than `max_findings` (default 25)
+- A required finding is missing: facts from the preflight the report must cover (e.g. every security advisory, failing tests, baselined PHPStan errors)
 
-**Warnings** (logged and listed under the report's limitations by the harness):
+**Warnings** (listed in `run.md`):
 
 - Location file does not exist in the project (likely hallucinated path)
 - Line number exceeds the file length
-- `Related` references an ID that does not exist in any report of the run
-- Findings not sorted by severity
-- Summary longer than 5 sentences
+- `Related` references an ID that does not exist in the report
+- Check `other`
+- Title longer than 120 characters, summary longer than 5 sentences
+- No findings and no `No findings.` line
 
-The repair pass sends the agent its own report plus the list of errors and asks for a corrected file. Nothing else is re-audited.
+After all audits are done, the harness also lists **possible duplicates**: findings from different audits whose locations share overlapping lines of the same file, the same route or the same package.
 
-## 6. Parsed representation
+## 7. Parsed representation
 
-Internally the parser produces immutable DTOs. This is what scores, trends and exports work with.
+Internally the parser produces immutable DTOs (`src/Reports/Finding.php`, `src/Reports/Location.php`). Each finding gets a stable key for comparisons across runs:
 
-```php
-final readonly class Finding
-{
-    /**
-     * @param list<Location> $locations
-     * @param list<string>   $references
-     * @param list<string>   $related
-     */
-    public function __construct(
-        public string $id,
-        public string $title,
-        public Severity $severity,
-        public Confidence $confidence,
-        public Category $category,
-        public Effort $effort,
-        public array $locations,
-        public int $occurrences,
-        public array $references,
-        public array $related,
-        public string $evidence,
-        public string $impact,
-        public string $recommendation,
-    ) {}
-}
-
-final readonly class Location
-{
-    public function __construct(
-        public ?string $file = null,
-        public ?int $line = null,
-        public ?int $endLine = null,
-        public ?string $route = null,
-        public ?string $package = null,
-    ) {}
-}
+```
+key = substr(sha1(audit | check | sort(unique(location targets))), 0, 8)
+location target = file path without lines · route:METHOD /uri · package:vendor/name
 ```
 
-## 7. Versioning
+## 8. Versioning
 
 `format` in the frontmatter is the format version. Breaking changes to this spec increase it; the parser supports the current and the previous version.

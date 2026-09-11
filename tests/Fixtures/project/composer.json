@@ -1,0 +1,20 @@
+{
+    "name": "acme/shop",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3",
+        "acme/used-lib": "^2.0",
+        "acme/unused-lib": "^1.0",
+        "acme/test-only": "*",
+        "laravel/framework": "^13.0"
+    },
+    "require-dev": {
+        "acme/dev-tool": "^1.0",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-browser": "^5.0"
+    },
+    "minimum-stability": "dev",
+    "config": {
+        "allow-plugins": true
+    }
+}

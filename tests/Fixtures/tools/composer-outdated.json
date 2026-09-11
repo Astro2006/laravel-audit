@@ -1,0 +1,7 @@
+{
+    "installed": [
+        { "name": "acme/used-lib", "direct-dependency": true, "version": "2.1.0", "latest": "4.0.0", "latest-status": "update-possible", "abandoned": false },
+        { "name": "acme/dev-tool", "direct-dependency": true, "version": "1.4.0", "latest": "1.5.0", "latest-status": "semver-safe-update", "abandoned": false },
+        { "name": "acme/test-only", "direct-dependency": true, "version": "0.3.0", "latest": "0.5.1", "latest-status": "update-possible", "abandoned": true }
+    ]
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Feature" tests="6" assertions="9" errors="1" failures="2" skipped="1" time="5.4">
+    <testcase name="it applies coupon" file="/app/tests/Feature/CheckoutTest.php::it applies coupon" class="Tests\Feature\CheckoutTest" assertions="1" time="0.40">
+      <failure type="ErrorException">Undefined array key "discount"
+/app/app/Services/Coupon.php:12</failure>
+    </testcase>
+    <testcase name="it rejects expired coupon" file="/app/tests/Feature/CheckoutTest.php::it rejects expired coupon" class="Tests\Feature\CheckoutTest" assertions="1" time="0.30">
+      <failure type="ErrorException" message="Undefined array key &quot;discount&quot;">Undefined array key "discount"</failure>
+    </testcase>
+    <testcase name="it lists orders" file="/app/tests/Feature/OrderTest.php" classname="Tests.Feature.OrderTest" assertions="2" time="4.10">
+      <error type="PDOException">SQLSTATE[HY000]: no such table: orders</error>
+    </testcase>
+    <testcase name="it exports csv" file="/app/tests/Feature/ExportTest.php" class="Tests\Feature\ExportTest" assertions="0" time="0.01">
+      <skipped message="TODO after refactor"/>
+    </testcase>
+    <testcase name="it shows home" file="/app/tests/Feature/HomeTest.php" class="Tests\Feature\HomeTest" assertions="3" time="0.20"/>
+    <testcase name="it shows about" file="/app/tests/Feature/HomeTest.php" class="Tests\Feature\HomeTest" assertions="2" time="0.40"/>
+  </testsuite>
+</testsuites>

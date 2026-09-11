@@ -1,0 +1,18 @@
+{
+    "advisories": {
+        "guzzlehttp/psr7": [
+            {
+                "advisoryId": "PKSA-1234",
+                "packageName": "guzzlehttp/psr7",
+                "affectedVersions": ">=2,<2.4.5",
+                "title": "Improper header validation",
+                "cve": "CVE-2023-29197",
+                "link": "https://github.com/advisories/GHSA-wxmh-65f7-jcvw",
+                "severity": "medium"
+            }
+        ]
+    },
+    "abandoned": {
+        "acme/unused-lib": "acme/new-lib"
+    }
+}
