@@ -4,6 +4,24 @@ All notable changes to `laravel-audit` will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Agents run through drivers named like Laravel Boost's agents: `claude_code`, `opencode` and `codex`. `agent.driver = auto` picks the first installed agent from `boost.json`; `--agent` and `--model` override it per run. Models, including self-hosted ones, are configured in the agent CLI.
+- Every audit is split into small tasks (2–7 related checks) that run as separate agent calls in parallel, plus a summary task. Tasks that need another task's output wait for it. The harness assembles one report per audit; a failed task makes the audit `partial` instead of failing it.
+- `max_findings` is now `max_findings_per_task` (default 8), `agent.timeout` is per task (default 900 s).
+- Prompts moved to `_task.md` and `tasks/<audit>/<task>.md`. Published prompts of the old layout are ignored, with a warning.
+- The Boost MCP server no longer needs an `.mcp.json` entry, and `get-config` is never allowed because it returns secret values.
+
+### Fixed
+
+- The routes step crashed on unnamed routes.
+- Report lines were split on the byte 0x85, which broke tables containing ✅.
+- The PHPStan stub analysed `tests/`, which filled the report with Pest noise.
+- PHPStan ignored `--error-format=json` when the audit was started from inside an agent session.
+- `tests/Fixtures/project/composer.lock` was never committed, so five tests failed on CI.
+
+## 0.1.0 (unreleased MVP)
+
 First MVP.
 
 ### Added

@@ -11,14 +11,14 @@ An AI code audit for Laravel apps, started with one Artisan command.
 php artisan audit
 ```
 
-First, a **deterministic preflight** runs the tools you already trust: your test suite, your Pest browser tests, Larastan, Pint, `route:list`, `composer audit` and more. Their results are condensed into small JSON facts. After that, four **read-only Claude Code agents** audit the app in parallel: **tests, frontend, backend and dependencies**. Each writes a Markdown report. The harness validates every report against a fixed format, sends a report back once for repair if needed, and fails the run when a report misses facts the preflight has proven, such as a known security advisory or a failing test.
+First, a **deterministic preflight** runs the tools you already trust: your test suite, your Pest browser tests, Larastan, Pint, `route:list`, `composer audit` and more. Their results are condensed into small JSON facts. After that, **read-only agents** audit the app in four areas: **tests, frontend, backend and dependencies**. Each area is split into small tasks of a few related checks, and every task is one headless run of an agent CLI: **Claude Code, OpenCode or Codex**, with whatever model you configured there, including self-hosted ones. The harness validates every task report against a fixed format, sends it back once for repair if needed, rejects it when it misses facts the preflight has proven (a known security advisory, a failing test), and assembles one Markdown report per area.
 
 ```
- laravel-audit 1.0.0 · Agent: claude
+ laravel-audit 1.0.0 · Agent: Claude Code
 
  Requirements
-  ✔ Claude Code CLI
-  ✔ Boost MCP (9 tools allowed)
+  ✔ Agent: Claude Code · model from the CLI config
+  ✔ Boost MCP (8 tools allowed)
   ✔ Larastan (phpstan.neon)
   ✔ Test database: sqlite :memory: (separate from the app database)
   ✔ Browser tests: tests/Browser (Pest + Playwright)
@@ -36,23 +36,30 @@ First, a **deterministic preflight** runs the tools you already trust: your test
   ✔ PHPStan (level 6) ...................................... 37 errors + 112 baselined
 
  Agents
-  ✔ tests .............. 11 findings · 38 turns · 412k in / 9k out · $1.84 · 6m 12s
-  ✔ frontend ........... 14 findings · 45 turns · 530k in / 12k out · $2.31 · 7m 40s
-  ✔ backend ............ 17 findings · 52 turns · 610k in / 14k out · $2.77 · 8m 05s
-  ✔ dependencies ........ 6 findings · 14 turns · 120k in / 4k out · $0.52 · 2m 10s
+  · dependencies.security · 2 findings · 1m04s
+  · backend.conventions · 1 findings · 1m31s
+  · backend.injection · 0 findings · 2m12s
+  …
+  · backend.summary · 0 findings · 0m21s
+
+  ✔ tests .............. 11 findings · 96 turns · 612k in / 19k out · 9m 12s
+  ✔ frontend ........... 14 findings · 120 turns · 730k in / 22k out · 10m 40s
+  ⚠ backend ............ 17 findings · 140 turns · 810k in / 24k out · 11m 05s · 1 of 11 tasks failed: logic
+  ✔ dependencies ........ 6 findings · 31 turns · 140k in / 6k out · 3m 10s
 
  Findings: Critical 1 · High 7 · Medium 19 · Low 16 · Info 5
  → storage/audit/2026-09-11_14-02-11/run.md
 ```
 
 > [!IMPORTANT]
-> This is an MVP. The reports are a well-structured starting point for a human review, not a certificate. Agents can be wrong, and a run costs real money (see [Costs](#costs)).
+> This is an MVP. The reports are a well-structured starting point for a human review, not a certificate. Agents can be wrong, and a run uses real tokens (see [Costs](#costs)).
 
 ## Contents
 
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Agents](#agents)
 - [The four audits](#the-four-audits)
 - [The preflight](#the-preflight)
 - [Output](#output)
@@ -66,7 +73,7 @@ First, a **deterministic preflight** runs the tools you already trust: your test
 
 - PHP 8.3+
 - Laravel 12 or 13
-- The [Claude Code CLI](https://docs.claude.com/claude-code), installed and logged in (`claude` in your `PATH`)
+- One agent CLI, installed and logged in: [Claude Code](https://docs.claude.com/claude-code) (`claude`), [OpenCode](https://opencode.ai) (`opencode`) or [Codex](https://developers.openai.com/codex) (`codex`). See [Agents](#agents)
 - Composer
 
 Optional, but recommended. `php artisan audit:install` sets these up for you:
@@ -115,7 +122,7 @@ The installer checks what is missing and shows you the plan before it changes an
  I would run:
   composer require --dev laravel/boost pestphp/pest-plugin-browser --with-all-dependencies
   npm install --save-dev playwright@latest
-  php artisan boost:install    (interactive)
+  php artisan boost:install    (interactive, only when Boost is new)
   npx playwright install
   create phpstan.neon (level 5)
 
@@ -128,7 +135,7 @@ The installer checks what is missing and shows you the plan before it changes an
 
 - All Composer packages are installed with **one** `composer require` call, and all npm packages with one npm call. Before that, a dry run shows whether Composer would also change packages you did not ask for, and asks again if so.
 - Upgrades are never implied. Moving from PHPUnit to Pest, or from Pest 3 to Pest 4+, is asked separately. Pest runs your existing PHPUnit tests unchanged. If you decline, only the browser step is left out.
-- An existing `phpstan.neon` is never overwritten. If there is none, a Larastan config at `stub_level` (default 5) is created for `app/` and `tests/`.
+- An existing `phpstan.neon` is never overwritten. If there is none, a Larastan config at `stub_level` (default 5) is created for `app/`.
 - Reports are written below `storage/audit`, which gets its own `.gitignore` (`*` / `!.gitignore`) because reports describe concrete weaknesses.
 
 Options:
@@ -174,6 +181,8 @@ Other options:
 | `--force` | Start the agents even if tests fail, without asking |
 | `--preflight-only` | Run the tools only, no agents, no cost. Useful to check the setup |
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
+| `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
+| `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
 
 ### The test gate
 
@@ -185,11 +194,33 @@ The agents audit code, not a broken environment. If tests fail, you see the firs
 |---|---|
 | `0` | Run completed. Findings do not change the exit code |
 | `2` | Aborted at the test gate |
-| `3` | Harness error: a requirement is missing, an agent failed, or a report stayed invalid after the repair pass |
+| `3` | Harness error: a requirement is missing, or an audit is failed or partial because a task failed or its report stayed invalid after the repair pass |
+
+## Agents
+
+The package never talks to a model itself. It starts an agent CLI headless, once per task, and reads its JSON output. Models and providers are configured in that CLI, so anything the CLI supports works, including self-hosted models (for example Ollama through OpenCode or Codex).
+
+| Driver | CLI | Tools the agent gets | Secret files (`deny_read`) |
+|---|---|---|---|
+| `claude_code` | `claude -p --restricted` | Read, Grep, Glob, allowed Boost tools | blocked for every tool |
+| `opencode` | `opencode run --pure` with a generated config | read, glob, list, allowed Boost tools. No grep: OpenCode's grep returns denied files when given an `include` pattern | blocked |
+| `codex` | `codex exec --sandbox read-only` | a read-only shell, allowed Boost tools | **not blocked**: Codex can read `.env`. The run only starts with `agent.drivers.codex.allow_unrestricted_read = true` |
+
+`agent.driver` is `auto` by default: the first agent from Boost's `boost.json` that is installed, then Claude Code, OpenCode, Codex. Driver names are Boost's agent names. Pick one per run with `--agent`, and a model with `--model`:
+
+```bash
+php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
+```
+
+### Tasks
+
+Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt, run in parallel up to `agent.concurrency`. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. A last summary task per audit sees only the merged findings and writes the summary.
+
+The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
 ## The four audits
 
-Every audit owns a fixed list of checks. A check belongs to exactly one audit, so the same problem is not reported four times.
+Every audit owns a fixed list of checks, and every check belongs to exactly one audit and one task, so the same problem is not reported several times.
 
 | Audit | ID prefix | Covers | Gets from the preflight |
 |---|---|---|---|
@@ -243,14 +274,14 @@ Every run gets its own folder:
 storage/audit/
 ├── .gitignore
 └── 2026-09-11_14-02-11/
-    ├── run.md               # overview: preflight, metrics, findings per audit, possible duplicates
+    ├── run.md               # overview: preflight, metrics, audits, tasks, findings, possible duplicates
     ├── run.json             # the same, machine-readable
     ├── tests.md
     ├── frontend.md
     ├── backend.md
     ├── dependencies.md
     ├── preflight/           # condensed tool results (summary.json, route-facts.json, tests/, phpstan/, composer/ …)
-    └── logs/                # rendered prompts, raw agent output, tool logs, reports that failed validation
+    └── logs/                # per task: rendered prompt, raw agent output, reports that failed validation; tool logs
 ```
 
 ### Report format
@@ -284,7 +315,7 @@ Every report has frontmatter and the same structure. Every finding carries a fix
 - **Severity** `critical` · `high` · `medium` · `low` · `info`. **Confidence** `confirmed` · `likely` · `suspected`. **Effort** `XS` – `XL`.
 - Locations are files with lines, `route:METHOD /uri` or `package:vendor/name`. Locations that do not exist in the project are flagged as possibly hallucinated.
 - Each finding gets a stable key (audit, check and targets, without line numbers). Keys let you compare runs.
-- Findings from different audits that point to the same place are listed in `run.md` as possible duplicates. They are not merged.
+- Findings from different audits, or from different tasks of one audit, that point to the same place are listed in `run.md` as possible duplicates. They are not merged.
 - There is no grade. `run.md` shows metrics (coverage, PHPStan errors, advisories …) and experimental risk points that you can weight in the config.
 
 The full specification is in [`resources/schemas/report-format.md`](resources/schemas/report-format.md).
@@ -295,17 +326,19 @@ Reports and console output use `report_language`, or `app.locale` if it is not s
 
 ## Security model
 
-The agents look at your code. They must not change it or see your secrets.
+The agents look at your code. They must not change it or see your secrets. Each driver maps these rules to its CLI (see [Agents](#agents)):
 
-- **Read-only tools.** Agents get `Read`, `Grep` and `Glob` only. `Edit`, `Write`, `Bash`, web access and all other tools are denied, and Claude Code runs with `--permission-prompts none`, so nothing can be approved by accident.
-- **Restricted mode.** Claude Code runs with `--restricted`: your user and project settings files (for example an allow rule for `Bash` in `.claude/settings.json`) do not apply, and file tools stay inside the project.
-- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/*.key` are denied to `Read` by explicit rules (`agent.deny_read`, `agent.allow_read`). The agent process also starts without the variables loaded from your `.env`.
-- **Read-only Boost.** Only an allowlist of Boost MCP tools is enabled (`agent.boost_tools`). Tinker, database queries and log readers are always denied. No other MCP servers are loaded (`--strict-mcp-config`).
+- **Read-only tools.** No agent gets write tools, web access or code execution.
+  - Claude Code gets `Read`, `Grep` and `Glob` only, runs with `--restricted` (your settings files do not apply) and `--permission-prompts none`, so nothing can be approved by accident.
+  - OpenCode gets a generated config: every tool off except read, glob and list, every other permission denied, never "ask", `--pure` (no plugins).
+  - Codex runs in its read-only sandbox. It works through a shell, so it can run read-only commands.
+- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/*.key` are denied by explicit rules (`agent.deny_read`, `agent.allow_read`). Claude Code and OpenCode enforce this; Codex cannot and only runs when you accept that. Every child process starts without the variables loaded from your `.env`.
+- **Read-only Boost.** Boost's MCP server (`php artisan boost:mcp`) is the only MCP server, and only an allowlist of its tools is enabled (`agent.boost_tools`). Tinker, database queries, log readers and `get-config` (it returns secret values) are always denied.
 - **Never in production.** `php artisan audit` refuses to run when `APP_ENV` is `production`.
 - **Test database guard.** See [above](#the-database-guard).
 - **Reports stay local.** The output folder is git-ignored by its own `.gitignore`.
 
-Everything the agents see goes to Anthropic as part of a normal Claude Code session. Only audit code you are allowed to share with Claude.
+Everything the agents see goes to the model provider of your agent CLI (Anthropic, OpenAI, or your own server for self-hosted models). Only audit code you are allowed to share with that provider.
 
 ## Configuration
 
@@ -317,12 +350,15 @@ return [
     'report_language' => env('AUDIT_LANGUAGE'),              // null = app.locale
 
     'agent' => [
-        'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
-        'model' => env('AUDIT_MODEL'),                      // null = CLI default
-        'effort' => env('AUDIT_EFFORT'),                    // low, medium, high, xhigh, max
-        'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'),    // per agent, null = no limit
-        'concurrency' => 4,                                 // lower to 2 on rate limits
-        'timeout' => 1800,                                  // seconds per agent
+        'driver' => env('AUDIT_AGENT', 'auto'),             // claude_code, opencode, codex or auto
+        'model' => env('AUDIT_MODEL'),                      // overrides the driver model; null = CLI default
+        'concurrency' => 4,                                 // tasks at once; lower to 2 on rate limits
+        'timeout' => 900,                                   // seconds per task
+        'drivers' => [
+            'claude_code' => ['binary' => 'claude', 'model' => null, 'effort' => null, 'max_budget_usd' => null /* per task */],
+            'opencode' => ['binary' => 'opencode', 'model' => null /* provider/model */],
+            'codex' => ['binary' => 'codex', 'model' => null, 'config' => [/* -c overrides */], 'allow_unrestricted_read' => false],
+        ],
         'boost_tools' => [/* read-only allowlist */],
         'deny_read' => ['.env*', 'auth.json', 'storage/*.key'],
         'allow_read' => ['.env.example'],
@@ -340,7 +376,7 @@ return [
         'license_allowlist' => ['MIT', 'BSD-3-Clause', 'Apache-2.0', /* … */],
     ],
 
-    'max_findings' => 25,                   // agents group instead of listing more
+    'max_findings_per_task' => 8,           // agents group instead of listing more
     'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
     'custom_checks' => ['tests' => [], 'frontend' => [], 'backend' => [], 'dependencies' => []],
     'risk_points' => [/* weights, experimental */],
@@ -355,13 +391,13 @@ The prompts are plain Markdown. Publish them to change wording or focus:
 php artisan vendor:publish --tag="audit-prompts"
 ```
 
-They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with.
+They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `_task.md` holds the shared rules and output format, `tasks/<audit>/<task>.md` the instructions of one task, `tasks/_summary.md` the summary. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
 
 To change the console texts, publish the translations with `php artisan vendor:publish --tag="audit-translations"`.
 
 ## Costs
 
-Each audit is one Claude Code session. Depending on app size and model, a full run of four audits typically costs a few dollars and takes 5–15 minutes. Every agent line and `run.md` show tokens, turns, cost and duration. Limit the spend per agent with `AUDIT_MAX_BUDGET_USD`. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
+A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and lower `agent.concurrency` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
 
 ## Evaluating prompt changes
 
@@ -383,7 +419,7 @@ php artisan audit:eval path/to/expected.json --runs=3 --audit=backend
 }
 ```
 
-The command is hidden from `php artisan list` because it is meant for working on the package itself. Every run is billed.
+The command is hidden from `php artisan list` because it is meant for working on the package itself. Every run uses tokens. To compare agents or models, set `AUDIT_AGENT` and `AUDIT_MODEL` for the eval run.
 
 ## Testing
 
@@ -393,7 +429,7 @@ composer analyse    # PHPStan
 composer format     # Pint
 ```
 
-The test suite never starts a real agent. Tools and the Claude CLI are faked with `Process::fake()`.
+The test suite never starts a real agent. Tools and the agent CLIs are faked with `Process::fake()`; fake answers are routed per task through the `AUDIT_TASK` variable the runner sets.
 
 ## Changelog
 

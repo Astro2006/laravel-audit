@@ -3,6 +3,8 @@
 > Status: Entwurf v3 · 11.09.2026 · Basis: `CONCEPT.md` v0.1
 >
 > `CONCEPT.md` bleibt die Zielvision. Dieses Dokument legt fest, was davon in MVP1 gebaut wird und was sich dabei ändert. **Was hier nicht steht, ist nicht Teil von MVP1.**
+>
+> **Nachtrag (nach MVP1):** Der Agent-Teil wurde umgebaut: drei Driver (Claude Code, OpenCode, Codex) und Audits, die in kleine Tasks aufgeteilt sind. Abschnitt 8.0 fasst das zusammen; wo 8.1–8.4 davon abweichen, gilt 8.0.
 
 ## 1. Ziel
 
@@ -17,7 +19,7 @@ Umfang:
 - `php artisan audit:install`: fehlende Pakete sammeln, um Erlaubnis fragen, installieren (siehe 5)
 - Alle 4 Audits: `tests`, `frontend`, `backend`, `dependencies`
 - Preflight mit Lint, Tests + Coverage, Browser-Tests (Playwright über das Pest-Browser-Plugin, Pest 4+; gibt es keine, entfällt der Schritt), PHPStan, Composer. Die Agents bekommen nur die Ergebnisse.
-- 1 Agent-Driver: Claude Code
+- 1 Agent-Driver: Claude Code (inzwischen drei, siehe 8.0)
 - Keine Summary, keine Historie, keine Note
 
 ## 2. Leitprinzipien (geschärft)
@@ -478,6 +480,26 @@ Der Dependencies-Audit ist zum großen Teil deterministisch. Der Harness schreib
 `*_candidates` sind Kandidaten, keine Findings. Der Agent prüft implizite Nutzung (siehe `dependencies.md`, Abschnitt 3) und entscheidet.
 
 ## 8. Agent-Harness
+
+### 8.0 Nachtrag: Driver und Tasks
+
+**Ziel.** Die Audits sollen auch mit kleineren, selbst gehosteten Modellen laufen. Das Paket spricht nie direkt mit einem Modell; es startet eine Agent-CLI headless, die Modelle und Provider (auch Ollama) selbst verwaltet.
+
+**Driver.** Namen wie bei Laravel Boost: `claude_code`, `opencode`, `codex` (`DriverRegistry`). `agent.driver = auto` nimmt den ersten installierten Agent aus `boost.json`, danach Claude Code, OpenCode, Codex. `--agent` und `--model` überschreiben pro Lauf. Jeder Driver bildet die Read-only-Regeln auf seine CLI ab:
+
+| Driver | Werkzeuge | `deny_read` |
+|---|---|---|
+| `claude_code` | Read, Grep, Glob (`--restricted`) | durchgesetzt, auch für Grep (mit Kanarienvogel-Datei geprüft) |
+| `opencode` | read, glob, list über eine generierte Config (`OPENCODE_CONFIG`, `--pure`) | durchgesetzt. Kein grep: OpenCodes grep liefert mit `include` den Inhalt gesperrter Dateien (geprüft) |
+| `codex` | read-only Sandbox mit Shell | nicht durchsetzbar → Start nur mit `agent.drivers.codex.allow_unrestricted_read = true` |
+
+Boost läuft als einziger MCP-Server (`php artisan boost:mcp`, ein `.mcp.json`-Eintrag gewinnt). `get-config` ist immer gesperrt, weil es Secret-Werte liefert.
+
+**Tasks.** Jedes Audit besteht aus Tasks mit 2–7 zusammengehörigen Checks (`Audit::tasks()`, `AuditTask`), insgesamt rund 30, plus einem Summary-Task pro Audit. Jeder Task ist ein eigener Agent-Aufruf mit eigenem Prompt (`_task.md` + `tasks/<audit>/<task>.md`). Tasks laufen parallel; nur wer das Ergebnis eines anderen braucht, wartet darauf und bekommt dessen Abschnitte in den Prompt (Backend-Conventions, Frontend-Map). Der Summary-Task sieht nur die zusammengeführte Findings-Liste.
+
+**Zusammenbau.** `AuditAssembler` setzt den Audit-Report zusammen: Findings in Task-Reihenfolge mit neuen IDs (`Related` wird umgeschrieben), jeder Abschnitt vom Task, dem er gehört, Positive observations und Limitations zusammengeführt, gescheiterte Tasks unter Limitations. Validiert wird zweimal: jeder Task gegen seine `ReportSpec` (eigene Checks, eigene Abschnitte, `max_findings_per_task`), der fertige Report gegen die Audit-Spec. Scheitert ein Task, ist das Audit `partial`: der Report wird trotzdem geschrieben, der Lauf endet mit Exit 3.
+
+**Laufzeit.** `agent.timeout` gilt pro Task (Default 900 s), `max_budget_usd` ebenso. `run.md` zeigt eine Task-Tabelle, Logs liegen pro Task in `logs/<audit>.<task>.*`.
 
 ### 8.1 Aufruf
 
