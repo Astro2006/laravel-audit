@@ -38,15 +38,15 @@ return [
     'agent' => [
         'driver' => env('AUDIT_AGENT', 'auto'),
         'model' => env('AUDIT_MODEL'),                // overrides the driver's model; null = driver/CLI default
-        'concurrency' => 4,                           // lower to 2 if you hit rate limits
-        'timeout' => 1800,                            // seconds per agent
+        'concurrency' => 4,                           // tasks at once; lower to 2 if you hit rate limits
+        'timeout' => 900,                             // seconds per task
 
         'drivers' => [
             'claude_code' => [
                 'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
                 'model' => null,
                 'effort' => env('AUDIT_EFFORT'),              // low, medium, high, xhigh, max
-                'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per agent, null = no limit
+                'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per task, null = no limit
             ],
             'opencode' => [
                 'binary' => env('AUDIT_OPENCODE_BINARY', 'opencode'),
@@ -152,8 +152,9 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    // More findings than this fail validation; agents group instead.
-    'max_findings' => 25,
+    // Per task: more findings than this fail validation; agents group
+    // instead. Raised automatically when a task has more required findings.
+    'max_findings_per_task' => 8,
 
     'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
 

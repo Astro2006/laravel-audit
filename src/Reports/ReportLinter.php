@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Enums\Category;
 use Astro2006\LaravelAudit\Enums\Confidence;
 use Astro2006\LaravelAudit\Enums\Effort;
@@ -20,25 +19,28 @@ final class ReportLinter
 
     private const array BODY_LABELS = ['Evidence', 'Impact', 'Recommendation'];
 
-    public function __construct(
-        private readonly string $basePath,
-        private readonly int $maxFindings = 25,
-    ) {}
+    public function __construct(private readonly string $basePath) {}
 
     /** @param list<RequiredFinding> $required */
-    public function lint(ParsedReport $report, Audit $audit, array $required = []): LintResult
+    public function lint(ParsedReport $report, ReportSpec $spec, array $required = []): LintResult
     {
         $errors = [];
         $warnings = [];
 
-        $this->lintSections($report, $audit, $errors);
+        $this->lintSections($report, $spec, $errors);
+
+        // A report without a Findings section (the summary task) has no
+        // findings to check; anything it lists there is ignored.
+        if (! $spec->hasFindings()) {
+            return new LintResult($errors, $this->summaryWarnings($report), []);
+        }
 
         foreach ($report->invalidHeadings as $heading) {
             $errors[] = sprintf(
                 'Line %d: "%s" is not a valid finding heading. Use `### %s-001 — Title`.',
                 $heading->line,
                 trim($heading->text),
-                $audit->idPrefix(),
+                $spec->idPrefix,
             );
         }
 
@@ -55,18 +57,18 @@ final class ReportLinter
 
             $seen[] = $parsed->id;
 
-            $finding = $this->lintFinding($parsed, $audit, $ids, $errors, $warnings);
+            $finding = $this->lintFinding($parsed, $spec, $ids, $errors, $warnings);
 
             if ($finding !== null) {
                 $findings[] = $finding;
             }
         }
 
-        if (count($report->findings) > $this->maxFindings) {
+        if ($spec->maxFindings !== null && count($report->findings) > $spec->maxFindings) {
             $errors[] = sprintf(
                 'The report has %d findings; the maximum is %d. Group similar findings into one finding with several locations and an Occurrences count.',
                 count($report->findings),
-                $this->maxFindings,
+                $spec->maxFindings,
             );
         }
 
@@ -80,21 +82,21 @@ final class ReportLinter
             }
         }
 
+        return new LintResult($errors, [...$warnings, ...$this->summaryWarnings($report)], $findings);
+    }
+
+    /** @return list<string> */
+    private function summaryWarnings(ParsedReport $report): array
+    {
         $sentences = preg_split('/(?<=[.!?])\s+/u', $report->summary(), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
-        if (count($sentences) > 5) {
-            $warnings[] = sprintf('Summary has %d sentences; the limit is 5.', count($sentences));
-        }
-
-        return new LintResult($errors, $warnings, $findings);
+        return count($sentences) > 5 ? [sprintf('Summary has %d sentences; the limit is 5.', count($sentences))] : [];
     }
 
     /** @param list<string> $errors */
-    private function lintSections(ParsedReport $report, Audit $audit, array &$errors): void
+    private function lintSections(ParsedReport $report, ReportSpec $spec, array &$errors): void
     {
-        $required = ['Summary', 'Findings', ...$audit->sections(), 'Positive observations', 'Limitations'];
-
-        foreach ($required as $section) {
+        foreach ($spec->sections as $section) {
             if (! $report->hasSection($section)) {
                 $errors[] = sprintf('Missing section `## %s`.', $section);
             }
@@ -102,7 +104,7 @@ final class ReportLinter
 
         $last = $report->lastSection();
 
-        if ($report->hasSection('Limitations') && ($last === null || ! $last->is('Limitations'))) {
+        if (in_array('Limitations', $spec->sections, true) && $report->hasSection('Limitations') && ($last === null || ! $last->is('Limitations'))) {
             $errors[] = '`## Limitations` must be the last level-2 section.';
         }
     }
@@ -112,13 +114,13 @@ final class ReportLinter
      * @param  list<string>  $errors
      * @param  list<string>  $warnings
      */
-    private function lintFinding(ParsedFinding $parsed, Audit $audit, array $ids, array &$errors, array &$warnings): ?Finding
+    private function lintFinding(ParsedFinding $parsed, ReportSpec $spec, array $ids, array &$errors, array &$warnings): ?Finding
     {
         $id = $parsed->id;
         $before = count($errors);
 
-        if (! str_starts_with($id, $audit->idPrefix().'-')) {
-            $errors[] = sprintf('%s: wrong ID prefix, expected %s-NNN.', $id, $audit->idPrefix());
+        if (! str_starts_with($id, $spec->idPrefix.'-')) {
+            $errors[] = sprintf('%s: wrong ID prefix, expected %s-NNN.', $id, $spec->idPrefix);
         }
 
         if (! $parsed->hasTable) {
@@ -144,12 +146,13 @@ final class ReportLinter
         $this->requireEnum($id, 'Category', $parsed->field('category'), $category, Category::values(), $errors);
         $this->requireEnum($id, 'Effort', $parsed->field('effort'), $effort, Effort::values(), $errors);
 
-        if ($check !== '' && ! array_key_exists($check, $audit->checks())) {
+        if ($check !== '' && ! array_key_exists($check, $spec->checks)) {
             $errors[] = sprintf(
-                '%s: check "%s" is not in the check list of the %s audit. Use one of your own checks; observations for other audits go under `## Limitations`.',
+                '%s: check "%s" is not in your check list (%s). Use one of: %s. Other tasks cover the rest; note observations for other audits under `## Limitations`.',
                 $id,
                 $check,
-                $audit->type()->value,
+                $spec->label,
+                implode(', ', array_keys($spec->checks)),
             );
         }
 

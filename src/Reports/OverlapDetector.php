@@ -12,16 +12,37 @@ namespace Astro2006\LaravelAudit\Reports;
 final class OverlapDetector
 {
     /**
+     * Findings of different audits, or of different tasks of one audit,
+     * that point to the same place.
+     *
      * @param  array<string, list<Finding>>  $findingsByAudit
+     * @param  array<string, array<string, string>>  $findingTasks  audit => finding ID => task key
      * @return list<Overlap>
      */
-    public function detect(array $findingsByAudit): array
+    public function detect(array $findingsByAudit, array $findingTasks = []): array
     {
         $overlaps = [];
         $audits = [];
 
         foreach ($findingsByAudit as $audit => $findings) {
             $audits[] = [$audit, $findings];
+
+            foreach ($findings as $i => $findingA) {
+                foreach (array_slice($findings, $i + 1) as $findingB) {
+                    $taskA = $findingTasks[$audit][$findingA->id] ?? null;
+                    $taskB = $findingTasks[$audit][$findingB->id] ?? null;
+
+                    if ($taskA === null || $taskB === null || $taskA === $taskB) {
+                        continue;
+                    }
+
+                    $shared = $this->sharedLocation($findingA, $findingB);
+
+                    if ($shared !== null) {
+                        $overlaps[] = new Overlap($audit, $findingA, $audit, $findingB, $shared);
+                    }
+                }
+            }
         }
 
         foreach ($audits as $i => [$auditA, $findingsA]) {

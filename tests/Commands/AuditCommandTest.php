@@ -33,6 +33,31 @@ function fakeTools(array $extra = []): void
     ]);
 }
 
+/** @return array<string, string> task key => answer */
+function dependencyAnswers(): array
+{
+    $answers = [];
+
+    foreach (['security', 'necessity', 'freshness', 'hygiene', 'summary'] as $task) {
+        $answers['dependencies.'.$task] = file_get_contents(fixture('reports/tasks/dependencies-'.$task.'.md'));
+    }
+
+    return $answers;
+}
+
+/**
+ * Fakes the agent CLI (pint stands in for it) and answers per task, told
+ * apart by the AUDIT_TASK variable the runner sets.
+ *
+ * @param  array<string, string>  $answers
+ */
+function fakeAgent(array $answers, string $pattern = '*pint*-p*', ?Closure $wrap = null): void
+{
+    $wrap ??= fn (string $answer): string => claudeJson(['result' => $answer]);
+
+    fakeTools([$pattern => fn ($process) => Process::result($wrap($answers[$process->environment['AUDIT_TASK'] ?? ''] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n"))]);
+}
+
 function latestRun(string $project): string
 {
     $runs = glob($project.'/storage/audit/*', GLOB_ONLYDIR);
@@ -62,10 +87,11 @@ it('runs the preflight only', function () {
 
 it('runs an audit end to end with a validated report', function () {
     $project = auditProject();
-    fakeTools(['*pint*-p*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/dependencies-valid.md'))]))]);
+    fakeAgent(dependencyAnswers());
 
     $this->artisan('audit', ['--dependencies' => true])
-        ->expectsOutputToContain('3 findings')
+        ->expectsOutputToContain('dependencies.security · 3 findings')
+        ->expectsOutputToContain('3 findings · 60 turns')
         ->expectsOutputToContain('Findings: Critical 0 · High 0 · Medium 1 · Low 2 · Info 0')
         ->assertExitCode(0);
 
@@ -77,13 +103,21 @@ it('runs an audit end to end with a validated report', function () {
         ->toContain('model: claude-opus-5')
         ->toContain('# Dependencies Audit — ')
         ->toContain('### DEP-001 — guzzlehttp/psr7')
+        ->toContain("## Summary\n\nOne medium advisory in a transitive package (DEP-001)")
+        ->toContain("## Dependency inventory\n\n| Package | prod/dev | Verdict |")
+        ->toContain("## Upgrade plan\n\n1. Update guzzlehttp/psr7 (✅ safe patch).")
+        ->toContain("## Positive observations\n\n- Lock file committed.")
+        ->toContain("### Out of scope observations\n\n- The checkout controller has no rate limit.")
         ->and(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')->model->toBe('claude-opus-5')
         ->and($manifest)->toContain('## Metrics')
         ->toContain('| Advisories (critical/high/medium/low) | 0/0/1/0 |')
-        ->toContain('| dependencies | completed | 3 | 0/0/1/2/0 | no | 12 |')
+        ->toContain('| dependencies | completed | 3 | 0/0/1/2/0 | no | 60 |')
+        ->toContain('## Tasks')
+        ->toContain('| dependencies.security | completed | 3 | no | 12 |')
         ->toContain('| vulnerable-dependency | medium | confirmed | `package:guzzlehttp/psr7` |')
-        ->and($run.'/logs/dependencies.prompt.md')->toBeFile()
-        ->and(file_get_contents($run.'/logs/dependencies.prompt.md'))->toContain('Report language: **English (en)**');
+        ->and($run.'/logs/dependencies.security.prompt.md')->toBeFile()
+        ->and(file_get_contents($run.'/logs/dependencies.security.prompt.md'))->toContain('Report language: **English (en)**')
+        ->and(file_get_contents($run.'/logs/dependencies.summary.prompt.md'))->toContain('- DEP-003 · low · confirmed · `abandoned-package` — acme/test-only is abandoned (package:acme/test-only)');
 
     Process::assertRan(fn ($process) => in_array('--restricted', (array) $process->command, true)
         && str_contains(implode(' ', (array) $process->command), 'Read(./.env)'));
@@ -91,19 +125,22 @@ it('runs an audit end to end with a validated report', function () {
 
 it('fails the run when a report misses required findings after the repair pass', function () {
     $project = auditProject();
-    $partial = preg_replace('/### DEP-003.*?\n---\n/s', '', file_get_contents(fixture('reports/dependencies-valid.md')));
-    fakeTools(['*pint*-p*' => Process::result(claudeJson(['result' => $partial]))]);
+    $answers = dependencyAnswers();
+    $answers['dependencies.security'] = preg_replace('/### DEP-003.*?\n---\n/s', '', $answers['dependencies.security']);
+    fakeAgent($answers);
 
     $this->artisan('audit', ['--dependencies' => true])
-        ->expectsOutputToContain('Failed audits: dependencies')
+        ->expectsOutputToContain('Failed audits: dependencies (partial)')
         ->assertExitCode(3);
 
     $run = latestRun($project);
 
     expect(RunFrontmatter::read($run.'/run.md')?->status)->toBe('failed')
-        ->and($run.'/dependencies.md')->not->toBeFile()
-        ->and($run.'/logs/dependencies.invalid.md')->toBeFile()
-        ->and(file_get_contents($run.'/run.md'))->toContain('Missing required finding: an `abandoned-package` finding with location `package:acme/test-only`.');
+        ->and(file_get_contents($run.'/dependencies.md'))->toContain('- The task `dependencies.security` (Advisories and abandoned packages) failed: Report failed validation after the repair pass. These checks were not audited: `vulnerable-dependency`, `abandoned-package`.')
+        ->toContain('## Dependency inventory')
+        ->and($run.'/logs/dependencies.security.invalid.md')->toBeFile()
+        ->and(file_get_contents($run.'/run.md'))->toContain('- dependencies.security: Missing required finding: an `abandoned-package` finding with location `package:acme/test-only`.')
+        ->toContain('| dependencies | partial: 1 of 5 tasks failed: security |');
 });
 
 it('reuses an earlier preflight', function () {
@@ -158,8 +195,7 @@ it('refuses codex unless the config accepts that it can read secrets', function 
         ->assertExitCode(3);
 
     config()->set('audit.agent.drivers.codex.allow_unrestricted_read', true);
-    $answer = json_encode(['type' => 'item.completed', 'item' => ['type' => 'agent_message', 'text' => file_get_contents(fixture('reports/dependencies-valid.md'))]]);
-    fakeTools(['*pint*exec*' => Process::result('{"type":"thread.started","thread_id":"t1"}'."\n".$answer)]);
+    fakeAgent(dependencyAnswers(), '*pint*exec*', fn (string $answer): string => '{"type":"thread.started","thread_id":"t1"}'."\n".json_encode(['type' => 'item.completed', 'item' => ['type' => 'agent_message', 'text' => $answer]]));
 
     $this->artisan('audit', ['--dependencies' => true, '--agent' => 'codex'])
         ->expectsOutputToContain('Codex can read .env and other secret files')

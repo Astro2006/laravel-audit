@@ -11,6 +11,7 @@ return [
     ],
 
     'requirements' => [
+        'prompts_outdated' => 'Published prompts from the single-agent layout are ignored now (:files in resources/prompts/vendor/laravel-audit) → republish with --tag=audit-prompts',
         'production' => 'APP_ENV is production — laravel-audit never runs in production.',
         'agent' => 'Agent: :agent · model :model',
         'agent_default_model' => 'from the CLI config',
@@ -93,6 +94,7 @@ return [
     ],
 
     'agents' => [
+        'task_finished' => ':findings findings · :duration',
         'running' => 'running …',
         'finished' => ':findings findings · :turns turns · :input in / :output out · :duration',
         'repaired' => '1 repair',

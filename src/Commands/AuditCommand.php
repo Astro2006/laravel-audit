@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
-use Astro2006\LaravelAudit\Agents\AgentJob;
-use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Console\StepFormatter;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\GateDecision;
@@ -30,6 +30,7 @@ use Astro2006\LaravelAudit\Prompts\PromptContextBuilder;
 use Astro2006\LaravelAudit\Requirements\Check;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Run\AuditRun;
+use Astro2006\LaravelAudit\Run\AuditTasks;
 use Astro2006\LaravelAudit\Run\GitInfo;
 use Astro2006\LaravelAudit\Run\PreflightReuse;
 use Astro2006\LaravelAudit\Run\RiskPoints;
@@ -97,6 +98,11 @@ class AuditCommand extends Command
 
         $checks = (new RequirementChecker($project, $factory->allConfig(), $guard, $driver, $this->messages))
             ->check($selection, ! $preflightOnly, app()->environment('production'));
+        $outdated = $factory->promptRenderer()->outdatedOverrides();
+
+        if ($outdated !== [] && ! $preflightOnly) {
+            $checks[] = Check::warning($this->messages->get('requirements.prompts_outdated', ['files' => implode(', ', $outdated)]));
+        }
 
         $this->header($driver, $selection);
         $this->printChecks($checks);
@@ -266,39 +272,45 @@ class AuditCommand extends Command
         $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
         $config = $driver->writeConfig($run->logsDir(), $extra);
         $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote());
-        $renderer = $this->factory->promptRenderer();
+        $validator = $this->factory->validator($project);
 
-        $jobs = [];
-
-        foreach ($selection->audits as $type) {
-            $audit = $type->audit();
-            $prompt = $renderer->render($audit, $context);
-            file_put_contents($run->logsDir().'/'.$type->value.'.prompt.md', $prompt->text);
-
-            $jobs[] = new AgentJob(
-                $audit,
-                new AgentRequest($type->value, $prompt->text, $project->basePath, $config, $extra),
-                $prompt->hash,
-                $audit->requiredFindings($summary),
-            );
-        }
+        $tasks = new AuditTasks(
+            $selection->audits,
+            $summary,
+            $context,
+            $this->factory->promptRenderer(),
+            $validator,
+            $run,
+            $project->basePath,
+            $config,
+            $extra,
+            max(1, (int) $this->factory->config('max_findings_per_task', 8)),
+        );
 
         $this->section('agents');
 
         $runner = new AgentRunner(
             $driver,
-            $this->factory->validator($project),
+            $validator,
             $run->logsDir(),
             (int) $this->factory->config('agent.concurrency', 4),
-            (int) $this->factory->config('agent.timeout', 1800),
+            (int) $this->factory->config('agent.timeout', 900),
             environment: $this->factory->childEnvironment($project),
         );
 
-        return $runner->run(
-            $jobs,
-            fn (AgentJob $job) => $this->line(sprintf('  <fg=gray>…</> %s <fg=gray>%s</>', $job->audit->type()->value, $this->messages->get('agents.running'))),
-            fn (AuditOutcome $outcome) => $this->printOutcome($outcome),
-        );
+        $outcomes = $tasks->outcomes($runner->run(
+            $tasks->jobs(),
+            null,
+            fn (TaskOutcome $outcome) => $this->printTask($outcome),
+        ));
+
+        $this->newLine();
+
+        foreach ($outcomes as $outcome) {
+            $this->printOutcome($outcome);
+        }
+
+        return $outcomes;
     }
 
     /** @param list<AuditOutcome> $outcomes */
@@ -311,7 +323,7 @@ class AuditCommand extends Command
             array_push($findings, ...$outcome->findings);
 
             if (! $outcome->completed()) {
-                $failed[] = $outcome->audit->value;
+                $failed[] = $outcome->audit->value.($outcome->status === AuditStatus::Partial ? ' ('.$outcome->status->value.')' : '');
             }
         }
 
@@ -372,11 +384,21 @@ class AuditCommand extends Command
         }
     }
 
+    private function printTask(TaskOutcome $outcome): void
+    {
+        $seconds = (int) round($outcome->finishedAt - $outcome->startedAt);
+        $detail = $outcome->completed()
+            ? $this->messages->get('agents.task_finished', ['findings' => count($outcome->findings), 'duration' => sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60)])
+            : $this->messages->get('agents.failed', ['reason' => mb_strimwidth((string) $outcome->reason, 0, 70, '…')]);
+
+        $this->line(sprintf('  <fg=%s>%s</> <fg=gray>%s · %s</>', $outcome->completed() ? 'green' : 'red', $outcome->completed() ? '·' : '✘', $outcome->key, $detail));
+    }
+
     private function printOutcome(AuditOutcome $outcome): void
     {
         $name = $outcome->audit->value;
 
-        if (! $outcome->completed()) {
+        if ($outcome->status === AuditStatus::Failed) {
             $this->components->twoColumnDetail('<fg=red>✘</> '.$name, $this->messages->get('agents.failed', ['reason' => mb_strimwidth((string) $outcome->reason, 0, 90, '…')]));
 
             return;
@@ -391,6 +413,12 @@ class AuditCommand extends Command
             'output' => $this->tokens($t->outputTokens),
             'duration' => sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60),
         ]).($outcome->repaired ? ' · '.$this->messages->get('agents.repaired') : '');
+
+        if ($outcome->status === AuditStatus::Partial) {
+            $this->components->twoColumnDetail('<fg=yellow>⚠</> '.$name, $detail.' · '.mb_strimwidth((string) $outcome->reason, 0, 60, '…'));
+
+            return;
+        }
 
         $this->components->twoColumnDetail('<fg=green>✔</> '.$name, $detail);
     }

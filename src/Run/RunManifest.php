@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\RunStatus;
 use Astro2006\LaravelAudit\Preflight\StepResult;
@@ -100,6 +101,17 @@ final class RunManifest
                 ], $outcome->findings),
                 'errors' => $outcome->errors,
                 'warnings' => $outcome->warnings,
+                'tasks' => array_map(fn (TaskOutcome $task): array => [
+                    'key' => $task->key,
+                    'status' => $task->status->value,
+                    'reason' => $task->reason,
+                    'repaired' => $task->repaired,
+                    'prompt_hash' => $task->promptHash,
+                    'model' => $task->model,
+                    'findings' => count($task->findings),
+                    'telemetry' => $task->telemetry->toArray(),
+                    'errors' => $task->errors,
+                ], $outcome->tasks),
             ], $this->outcomes),
             'overlaps' => count($this->overlaps),
         ];
@@ -140,6 +152,7 @@ final class RunManifest
             ...$this->preflightSection(),
             ...$this->metricsSection(),
             ...$this->auditsSection(),
+            ...$this->tasksSection(),
             ...$this->findingsSection(),
             ...$this->duplicatesSection(),
             ...$this->warningsSection(),
@@ -241,6 +254,41 @@ final class RunManifest
     }
 
     /** @return list<string> */
+    private function tasksSection(): array
+    {
+        $rows = [];
+
+        foreach ($this->outcomes as $outcome) {
+            foreach ($outcome->tasks as $task) {
+                $t = $task->telemetry;
+                $rows[] = sprintf(
+                    '| %s | %s | %d | %s | %d | %d | %d | %d | %s | %ss | %s |',
+                    $task->key,
+                    $task->status->value.($task->reason === null ? '' : ': '.$this->cell($task->reason)),
+                    count($task->findings),
+                    $task->repaired ? 'yes' : 'no',
+                    $t->turns,
+                    $t->inputTokens,
+                    $t->outputTokens,
+                    $t->cacheReadTokens,
+                    $t->costUsd === null ? '–' : number_format($t->costUsd, 2),
+                    round($t->durationMs / 1000, 1),
+                    $task->promptHash,
+                );
+            }
+        }
+
+        return $rows === [] ? [] : [
+            '## Tasks',
+            '',
+            '| Task | Status | Findings | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Prompt |',
+            '|---|---|---|---|---|---|---|---|---|---|---|',
+            ...$rows,
+            '',
+        ];
+    }
+
+    /** @return list<string> */
     private function findingsSection(): array
     {
         $rows = [];
@@ -302,6 +350,13 @@ final class RunManifest
         foreach ($this->outcomes as $outcome) {
             foreach ([...$outcome->warnings, ...$outcome->errors] as $message) {
                 $warnings[] = '- '.$outcome->audit->value.': '.$message;
+            }
+
+            // Errors of failed tasks; completed tasks are covered by the audit's own lint.
+            foreach ($outcome->tasks as $task) {
+                foreach ($task->completed() ? [] : $task->errors as $message) {
+                    $warnings[] = '- '.$task->key.': '.$message;
+                }
             }
         }
 

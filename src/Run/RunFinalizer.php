@@ -27,12 +27,20 @@ final class RunFinalizer
     {
         $run = $manifest->run;
         $findingsByAudit = [];
+        $findingTasks = [];
         $all = [];
 
         foreach ($outcomes as $outcome) {
             $audit = $outcome->audit->value;
 
-            if ($outcome->completed() && $outcome->body !== null) {
+            foreach ($outcome->tasks as $task) {
+                if (! $task->completed() && $task->body !== null) {
+                    // Kept for inspection; not part of the report.
+                    file_put_contents($run->logsDir().'/'.$task->key.'.invalid.md', $task->body);
+                }
+            }
+
+            if ($outcome->body !== null) {
                 $this->writer->write($run->reportPath($audit), [
                     'format' => 1,
                     'audit' => $audit,
@@ -44,17 +52,15 @@ final class RunFinalizer
                 ], $outcome->audit->audit()->title().' — '.$run->id, $outcome->body);
 
                 $findingsByAudit = [...$findingsByAudit, $audit => $outcome->findings];
+                $findingTasks = [...$findingTasks, $audit => $outcome->findingTasks];
                 array_push($all, ...$outcome->findings);
-            } elseif ($outcome->body !== null) {
-                // Kept for inspection; not a report.
-                file_put_contents($run->logsDir().'/'.$audit.'.invalid.md', $outcome->body);
             }
 
             $manifest->model ??= $outcome->model;
         }
 
         $manifest->outcomes = $outcomes;
-        $manifest->overlaps = $this->overlaps->detect($findingsByAudit);
+        $manifest->overlaps = $this->overlaps->detect($findingsByAudit, $findingTasks);
         $manifest->metrics = $this->metrics->rows($summary, $this->riskPoints->total($all));
 
         $failed = array_filter($outcomes, fn (AuditOutcome $outcome): bool => ! $outcome->completed());

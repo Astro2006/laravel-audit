@@ -57,6 +57,20 @@ it('detects possible duplicates across audits', function () {
         ->and($overlap->findingB->id)->toBe('FE-001');
 });
 
+it('detects duplicates between tasks of one audit, but not inside one task', function () {
+    $findings = [
+        makeFinding('BE-001', 'sql-injection', ['app/Http/Controllers/OrderController.php:10']),
+        makeFinding('BE-002', 'command-injection', ['app/Http/Controllers/OrderController.php:12']),
+        makeFinding('BE-003', 'authorization-gap', ['app/Http/Controllers/OrderController.php']),
+    ];
+    $tasks = ['backend' => ['BE-001' => 'backend.injection', 'BE-002' => 'backend.injection', 'BE-003' => 'backend.auth']];
+
+    $overlaps = (new OverlapDetector)->detect(['backend' => $findings], $tasks);
+
+    expect(array_map(fn ($overlap) => $overlap->findingA->id.'+'.$overlap->findingB->id, $overlaps))->toBe(['BE-001+BE-003', 'BE-002+BE-003'])
+        ->and((new OverlapDetector)->detect(['backend' => $findings]))->toBe([]);
+});
+
 it('writes frontmatter and title before the body', function () {
     $path = tempDir('writer').'/backend.md';
 

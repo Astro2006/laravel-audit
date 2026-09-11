@@ -56,6 +56,16 @@ final class DependenciesAudit extends BaseAudit
         return ['Dependency inventory', 'Upgrade plan'];
     }
 
+    protected function taskList(): array
+    {
+        return [
+            $this->task('security', 'Advisories and abandoned packages', ['vulnerable-dependency', 'abandoned-package']),
+            $this->task('necessity', 'Necessity and placement', ['unused-package', 'misplaced-package', 'shadow-dependency', 'redundant-package'], sections: ['Dependency inventory']),
+            $this->task('freshness', 'Freshness and support', ['outdated-major', 'unsupported-runtime', 'stale-package'], sections: ['Upgrade plan']),
+            $this->task('hygiene', 'Constraints, Composer config and licenses', ['loose-constraint', 'lock-out-of-sync', 'composer-config', 'autoload-bloat', 'license-risk']),
+        ];
+    }
+
     public function preflightSteps(): array
     {
         return [

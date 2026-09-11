@@ -64,6 +64,22 @@ final class FrontendAudit extends BaseAudit
         return ['Frontend map', 'Route risk table', 'UI consistency matrix'];
     }
 
+    protected function taskList(): array
+    {
+        return [
+            $this->task('map', 'Frontend map', [], sections: ['Frontend map']),
+            $this->task('access', 'Route access control', ['route-authorization', 'idor', 'signed-url', 'webhook-signature'], sections: ['Route risk table']),
+            $this->task('routes', 'Route hygiene', ['state-changing-get', 'missing-throttle', 'csrf-exclusion', 'debug-route', 'broken-route']),
+            $this->task('injection', 'Rendering and client-side security', ['xss', 'livewire-security', 'inertia-props-leak', 'open-redirect', 'file-upload', 'client-secret']),
+            $this->task('config', 'Headers, session and CORS', ['security-headers', 'session-cookie-config', 'cors-config']),
+            $this->task('errors', 'Error and state handling', ['error-handling-ui', 'error-pages']),
+            $this->task('ui', 'UI consistency', ['ui-inconsistency', 'design-tokens', 'i18n', 'responsiveness'], sections: ['UI consistency matrix'], dependsOn: ['map']),
+            $this->task('a11y', 'Accessibility', ['accessibility'], dependsOn: ['map']),
+            $this->task('performance', 'Frontend performance', ['asset-performance', 'view-query']),
+            $this->task('dead-code', 'Dead frontend code', ['dead-frontend-code']),
+        ];
+    }
+
     public function preflightSteps(): array
     {
         return [

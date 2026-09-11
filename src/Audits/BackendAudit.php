@@ -67,6 +67,22 @@ final class BackendAudit extends BaseAudit
         return ['Conventions baseline', 'Convention scorecard', 'Dead code candidates'];
     }
 
+    protected function taskList(): array
+    {
+        return [
+            $this->task('conventions', 'Conventions baseline', ['naming-structure', 'code-style'], sections: ['Conventions baseline', 'Convention scorecard']),
+            $this->task('laravel', 'Laravel conventions', ['env-outside-config', 'inline-validation', 'fat-controller', 'magic-values'], dependsOn: ['conventions']),
+            $this->task('data', 'Models and data exposure', ['eloquent-hygiene', 'mass-assignment', 'data-exposure'], dependsOn: ['conventions']),
+            $this->task('jobs', 'Queues and scheduler', ['queue-robustness', 'scheduler-overlap']),
+            $this->task('errors', 'Error handling and logging', ['swallowed-exception', 'exception-leak', 'sensitive-logging']),
+            $this->task('injection', 'Injection', ['sql-injection', 'command-injection', 'unsafe-deserialization', 'ssrf', 'path-traversal']),
+            $this->task('auth', 'Authorization, auth and secrets', ['authorization-gap', 'auth-config', 'tenant-isolation', 'weak-crypto', 'hardcoded-secret']),
+            $this->task('logic', 'Logic and transactions', ['logic-bug', 'transaction-safety']),
+            $this->task('performance', 'Performance', ['n-plus-one', 'inefficient-query', 'missing-index', 'missing-cache']),
+            $this->task('dead-code', 'Dead code', ['dead-code'], sections: ['Dead code candidates']),
+        ];
+    }
+
     public function preflightSteps(): array
     {
         return [

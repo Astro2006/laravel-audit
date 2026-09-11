@@ -5,12 +5,21 @@ use Astro2006\LaravelAudit\Audits\FrontendAudit;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportParser;
+use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 
-function lintReport(string $markdown, $audit = null, array $required = [], int $max = 25)
+function lintReport(string $markdown, $audit = null, array $required = [], ?int $max = 25)
 {
-    return (new ReportLinter(fixture('project'), $max))
-        ->lint((new ReportParser)->parse($markdown), $audit ?? new BackendAudit, $required);
+    return (new ReportLinter(fixture('project')))
+        ->lint((new ReportParser)->parse($markdown), ReportSpec::forAudit($audit ?? new BackendAudit, $max), $required);
+}
+
+function lintTask(string $markdown, string $task, array $required = [])
+{
+    $audit = new BackendAudit;
+    $task = collect($audit->tasks())->firstWhere('name', $task);
+
+    return (new ReportLinter(fixture('project')))->lint((new ReportParser)->parse($markdown), ReportSpec::forTask($audit, $task, 8), $required);
 }
 
 function validBackendReport(): string
@@ -52,7 +61,7 @@ it('rejects wrong prefixes, unknown enums and foreign checks', function () {
 
     expect(implode("\n", $result->errors))
         ->toContain('BE-001: Severity "huge" is not allowed.')
-        ->toContain('BE-001: check "xss" is not in the check list of the backend audit.')
+        ->toContain('BE-001: check "xss" is not in your check list (backend).')
         ->toContain('FE-002: wrong ID prefix, expected BE-NNN.');
 });
 
@@ -92,4 +101,31 @@ it('validates checks against the audit it belongs to', function () {
     $report = "## Summary\nx\n\n## Findings\n\n### FE-001 — XSS\n\n| Field | Value |\n|---|---|\n| Severity | high |\n| Confidence | likely |\n| Category | security |\n| Check | xss |\n| Effort | S |\n| Locations | `route:GET /` |\n\n**Evidence**\nx\n\n**Impact**\ny\n\n**Recommendation**\nz\n\n---\n\n## Frontend map\nx\n\n## Route risk table\nx\n\n## UI consistency matrix\nx\n\n## Positive observations\n- a\n\n## Limitations\nNone.\n";
 
     expect(lintReport($report, new FrontendAudit)->errors)->toBe([]);
+});
+
+function taskFinding(string $check): string
+{
+    return "### BE-001 — Raw SQL with input\n\n| Field | Value |\n|---|---|\n| Severity | high |\n| Confidence | confirmed |\n| Category | security |\n| Check | {$check} |\n| Effort | S |\n| Locations | `app/Services/OrderService.php:7` |\n\n**Evidence**\nx\n\n**Impact**\ny\n\n**Recommendation**\nz\n\n---\n";
+}
+
+it('accepts a task report without summary and audit sections', function () {
+    $result = lintTask("## Findings\n\n".taskFinding('sql-injection')."\n## Limitations\nNone.\n", 'injection');
+
+    expect($result->errors)->toBe([])
+        ->and($result->findings)->toHaveCount(1);
+});
+
+it('keeps a task to its own checks and sections', function () {
+    $foreign = lintTask("## Findings\n\n".taskFinding('mass-assignment')."\n## Limitations\nNone.\n", 'injection');
+    $sections = lintTask("## Findings\nNo findings.\n\n## Limitations\nNone.\n", 'dead-code');
+
+    expect(implode("\n", $foreign->errors))->toContain('BE-001: check "mass-assignment" is not in your check list (backend.injection). Use one of: sql-injection, command-injection, unsafe-deserialization, ssrf, path-traversal, other.')
+        ->and($sections->errors)->toBe(['Missing section `## Dead code candidates`.']);
+});
+
+it('ignores findings in the summary task and only requires its sections', function () {
+    $result = lintTask("## Summary\nAll good.\n\n## Findings\n\n".taskFinding('xss'), 'summary');
+
+    expect($result->errors)->toBe([])
+        ->and($result->findings)->toBe([]);
 });

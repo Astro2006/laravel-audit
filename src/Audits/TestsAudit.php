@@ -59,6 +59,23 @@ final class TestsAudit extends BaseAudit
         return ['Test results', 'Coverage map', 'Top 10 missing tests', 'PHPStan overview'];
     }
 
+    protected function taskList(): array
+    {
+        return [
+            $this->task('results', 'Test results', ['test-failure', 'skipped-test', 'slow-test'], sections: ['Test results']),
+            $this->task('coverage', 'Coverage map', ['untested-critical-path', 'browser-coverage'], sections: ['Coverage map']),
+            $this->task('gaps', 'Missing security and edge-case tests', ['missing-authz-test', 'missing-validation-test', 'missing-security-test', 'missing-edge-case']),
+            $this->task('quality', 'Test quality', ['weak-assertion', 'implementation-coupling', 'missing-fake', 'flaky-test', 'factory-quality', 'duplicate-test', 'test-structure']),
+            $this->task('phpstan', 'PHPStan', ['phpstan-bug', 'phpstan-debt', 'phpstan-baseline', 'phpstan-config'], sections: ['PHPStan overview']),
+            $this->task('tooling', 'Tooling and CI', ['ci-quality-gate']),
+        ];
+    }
+
+    protected function summarySections(): array
+    {
+        return ['Top 10 missing tests'];
+    }
+
     public function preflightSteps(): array
     {
         return [

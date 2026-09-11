@@ -31,6 +31,56 @@ it('gives every check to exactly one audit', function () {
     expect(count($owners))->toBeGreaterThan(80);
 });
 
+it('splits every audit into tasks that own each check and section exactly once', function (AuditType $type) {
+    $audit = $type->audit();
+    $tasks = $audit->tasks(withCustom: true);
+    $keys = array_map(fn ($task) => $task->key(), $tasks);
+    $owned = [];
+    $sections = [];
+
+    foreach ($tasks as $task) {
+        foreach ($task->checks as $check) {
+            expect($owned)->not->toHaveKey($check)
+                ->and($audit->checks())->toHaveKey($check);
+            $owned[$check] = $task->key();
+        }
+
+        foreach ($task->sections as $section) {
+            expect($sections)->not->toHaveKey($section);
+            $sections[$section] = $task->key();
+        }
+
+        foreach ($task->dependencyKeys() as $dependency) {
+            expect($keys)->toContain($dependency)
+                ->and(array_search($dependency, $keys, true))->toBeLessThan(array_search($task->key(), $keys, true));
+        }
+
+        expect(dirname(__DIR__, 2).'/resources/prompts/'.$task->promptFile())->toBeFile();
+    }
+
+    expect(array_keys($owned))->toEqualCanonicalizing(array_values(array_diff(array_keys($audit->checks()), ['other'])))
+        ->and(array_keys($sections))->toEqualCanonicalizing($audit->sections())
+        ->and($keys)->toBe(array_unique($keys))
+        ->and(end($tasks)->isSummary())->toBeTrue()
+        ->and(count($audit->tasks()))->toBe(count($tasks) - 1);
+})->with(AuditType::cases());
+
+it('gives every required finding a task that owns its check', function () {
+    $summary = new PreflightSummary('run', GateDecision::Continued, new StepResults([
+        StepResult::ok(PreflightStep::Tests, new TestsData(failed: 2)),
+        StepResult::ok(PreflightStep::Phpstan, new PhpstanData(baselined: 12)),
+    ]));
+    $owned = array_merge(...array_map(fn ($task) => $task->checks, (new TestsAudit)->tasks()));
+
+    foreach ((new TestsAudit)->requiredFindings($summary) as $required) {
+        expect($owned)->toContain($required->check);
+    }
+
+    foreach (['vulnerable-dependency', 'abandoned-package', 'lock-out-of-sync'] as $check) {
+        expect(array_merge(...array_map(fn ($task) => $task->checks, (new DependenciesAudit)->tasks())))->toContain($check);
+    }
+});
+
 it('uses unique id prefixes', function () {
     $prefixes = array_map(fn (AuditType $type) => $type->audit()->idPrefix(), AuditType::cases());
 

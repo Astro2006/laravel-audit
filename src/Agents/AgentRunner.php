@@ -15,13 +15,15 @@ use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Runs the audit agents in parallel (up to the concurrency limit), validates
- * every answer and gives each audit one repair pass in the same session.
+ * Runs the agent jobs in parallel (up to the concurrency limit). A job
+ * starts once the jobs it depends on have finished, whatever their status.
+ * Every answer is validated, and each job gets one repair pass in the same
+ * session.
  */
 final class AgentRunner
 {
     private const string REPAIR_MESSAGE = <<<'TEXT'
-        Your report did not pass validation. Fix exactly these errors and return the complete corrected report as your final answer, starting with the `## Summary` line. Do not audit again and do not change findings that are not affected.
+        Your report did not pass validation. Fix exactly these errors and return the complete corrected report as your final answer, starting with the `## %s` line. Do not audit again and do not change findings that are not affected.
 
         Errors:
         TEXT;
@@ -37,22 +39,46 @@ final class AgentRunner
     ) {}
 
     /**
-     * @param  list<AgentJob>  $jobs
+     * @param  list<AgentJob>  $jobs  in the order they should start
      * @param  (Closure(AgentJob): void)|null  $onStarted
-     * @param  (Closure(AuditOutcome): void)|null  $onFinished
-     * @return list<AuditOutcome> in the order the audits finished
+     * @param  (Closure(TaskOutcome): void)|null  $onFinished
+     * @return list<TaskOutcome> in the order the jobs finished
      */
     public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null): array
     {
-        $queue = $jobs;
+        $keys = array_map(fn (AgentJob $job): string => $job->key, $jobs);
+        $pending = $jobs;
         $running = [];
+        $finished = [];
         $outcomes = [];
 
-        while ($queue !== [] || $running !== []) {
-            while (count($running) < max(1, $this->concurrency) && $queue !== []) {
-                $job = array_shift($queue);
+        while ($pending !== [] || $running !== []) {
+            foreach ($pending as $index => $job) {
+                if (count($running) >= max(1, $this->concurrency)) {
+                    break;
+                }
+
+                if (! $this->ready($job, $finished, $keys)) {
+                    continue;
+                }
+
+                unset($pending[$index]);
                 $onStarted?->__invoke($job);
-                $running[] = $this->start($job, $job->request->prompt, $this->driver->command($job->request), false);
+                $request = $job->request($finished);
+                $now = microtime(true);
+                $running[] = $this->start($job, $request, $request->prompt, $this->driver->command($request), false, $now);
+            }
+
+            if ($running === [] && $pending !== []) {
+                // Nothing runs and nothing can start: a dependency cycle.
+                foreach ($pending as $job) {
+                    $outcome = $this->failedBeforeStart($job, 'Waiting for tasks that never finished: '.implode(', ', $job->dependsOn).'.');
+                    $finished[$job->key] = $outcome;
+                    $outcomes[] = $outcome;
+                    $onFinished?->__invoke($outcome);
+                }
+
+                break;
             }
 
             $stillRunning = [];
@@ -74,6 +100,7 @@ final class AgentRunner
                     continue;
                 }
 
+                $finished[$next->key] = $next;
                 $outcomes[] = $next;
                 $onFinished?->__invoke($next);
             }
@@ -88,16 +115,31 @@ final class AgentRunner
         return $outcomes;
     }
 
-    /** @param list<string> $command */
-    private function start(AgentJob $job, string $input, array $command, bool $repair, ?Telemetry $previous = null): Attempt
+    /**
+     * @param  array<string, TaskOutcome>  $finished
+     * @param  list<string>  $keys  all job keys; dependencies outside this run are ignored
+     */
+    private function ready(AgentJob $job, array $finished, array $keys): bool
     {
-        $process = Process::path($job->request->workingDirectory)
+        foreach ($job->dependsOn as $dependency) {
+            if (in_array($dependency, $keys, true) && ! isset($finished[$dependency])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param list<string> $command */
+    private function start(AgentJob $job, AgentRequest $request, string $input, array $command, bool $repair, float $jobStartedAt, ?Telemetry $previous = null): Attempt
+    {
+        $process = Process::path($request->workingDirectory)
             ->timeout($this->timeout + 60)
-            ->env([...$this->environment->overrides(), ...$this->driver->environment($job->request)])
+            ->env([...$this->environment->overrides(), ...$this->driver->environment($request), 'AUDIT_TASK' => $job->key])
             ->input($input)
             ->start($command);
 
-        return new Attempt($job, $process, microtime(true), $repair, $previous ?? new Telemetry);
+        return new Attempt($job, $request, $process, microtime(true), $repair, $previous ?? new Telemetry, $jobStartedAt);
     }
 
     /** Returns the finished result, or null while the agent is still running. */
@@ -126,7 +168,7 @@ final class AgentRunner
             : $parsed;
     }
 
-    private function handle(Attempt $attempt, AgentResult $result): Attempt|AuditOutcome
+    private function handle(Attempt $attempt, AgentResult $result): Attempt|TaskOutcome
     {
         $job = $attempt->job;
         $telemetry = $attempt->telemetry->plus($result->telemetry);
@@ -134,28 +176,31 @@ final class AgentRunner
         if (! $result->succeeded()) {
             $reason = $result->truncated ? 'Answer truncated (output token limit).' : ($result->error ?? $result->exit->value);
 
-            return $this->outcome($job, AuditStatus::Failed, $reason, null, $telemetry, $attempt->repair, $result);
+            return $this->outcome($attempt, AuditStatus::Failed, $reason, null, $telemetry, $result);
         }
 
-        $validated = $this->validator->validate($result->answer, $job->audit, $job->required);
+        $validated = $this->validator->validate($result->answer, $job->spec, $job->required);
 
         if ($validated->lint->isValid()) {
-            return $this->outcome($job, AuditStatus::Completed, null, $validated, $telemetry, $attempt->repair, $result);
+            return $this->outcome($attempt, AuditStatus::Completed, null, $validated, $telemetry, $result);
         }
 
         if ($attempt->repair || $result->sessionId === null) {
-            return $this->outcome($job, AuditStatus::Failed, 'Report failed validation after the repair pass.', $validated, $telemetry, $attempt->repair, $result);
+            return $this->outcome($attempt, AuditStatus::Failed, 'Report failed validation'.($attempt->repair ? ' after the repair pass.' : '.'), $validated, $telemetry, $result);
         }
 
-        $message = self::REPAIR_MESSAGE."\n".implode("\n", array_map(fn (string $error): string => '- '.$error, $validated->lint->errors));
+        $message = sprintf(self::REPAIR_MESSAGE, $job->spec->firstSection())."\n".implode("\n", array_map(fn (string $error): string => '- '.$error, $validated->lint->errors));
 
-        return $this->start($job, $message, $this->driver->resumeCommand($result, $job->request), true, $telemetry);
+        return $this->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
     }
 
-    private function outcome(AgentJob $job, AuditStatus $status, ?string $reason, ?ValidatedReport $report, Telemetry $telemetry, bool $repaired, AgentResult $result): AuditOutcome
+    private function outcome(Attempt $attempt, AuditStatus $status, ?string $reason, ?ValidatedReport $report, Telemetry $telemetry, AgentResult $result): TaskOutcome
     {
-        return new AuditOutcome(
-            audit: $job->audit->type(),
+        $job = $attempt->job;
+
+        return new TaskOutcome(
+            key: $job->key,
+            audit: $job->audit,
             status: $status,
             reason: $reason,
             body: $report?->body,
@@ -163,10 +208,19 @@ final class AgentRunner
             errors: $report === null ? [] : $report->lint->errors,
             warnings: $report === null ? [] : $report->lint->warnings,
             telemetry: $telemetry,
-            repaired: $repaired,
+            repaired: $attempt->repair,
             promptHash: $job->promptHash,
             model: $result->model,
+            startedAt: $attempt->jobStartedAt,
+            finishedAt: microtime(true),
         );
+    }
+
+    private function failedBeforeStart(AgentJob $job, string $reason): TaskOutcome
+    {
+        $now = microtime(true);
+
+        return new TaskOutcome($job->key, $job->audit, AuditStatus::Failed, $reason, null, [], [], [], new Telemetry, false, $job->promptHash, null, $now, $now);
     }
 
     private function stop(InvokedProcess $process): void
@@ -184,7 +238,7 @@ final class AgentRunner
             mkdir($this->logsDir, 0777, true);
         }
 
-        $name = $attempt->job->audit->type()->value.($attempt->repair ? '.repair' : '');
+        $name = $attempt->job->key.($attempt->repair ? '.repair' : '');
 
         file_put_contents($this->logsDir.'/'.$name.'.json', $output);
 

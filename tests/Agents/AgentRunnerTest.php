@@ -4,22 +4,31 @@ use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\BackendAudit;
-use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
+use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
+use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Illuminate\Support\Facades\Process;
 
-function runner(string $logs): AgentRunner
+function runner(string $logs, int $concurrency = 2): AgentRunner
 {
-    return new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, concurrency: 2, pollMicroseconds: 1000);
+    return new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, concurrency: $concurrency, pollMicroseconds: 1000);
 }
 
 function backendJob(array $required = []): AgentJob
 {
-    return new AgentJob(new BackendAudit, new AgentRequest('backend', 'Audit the backend.', fixture('project')), 'abc12345', $required);
+    return new AgentJob('backend', AuditType::Backend, ReportSpec::forAudit(new BackendAudit), new AgentRequest('backend', 'Audit the backend.', fixture('project')), 'abc12345', $required);
+}
+
+function taskJob(string $key, array $dependsOn = [], ?Closure $request = null): AgentJob
+{
+    $spec = new ReportSpec($key, 'BE', ['other' => 'x'], ['Findings', 'Limitations']);
+
+    return new AgentJob($key, AuditType::Backend, $spec, $request ?? new AgentRequest($key, 'Task '.$key, fixture('project')), 'h-'.$key, dependsOn: $dependsOn);
 }
 
 it('validates a good answer without a repair pass', function () {
@@ -33,9 +42,10 @@ it('validates a good answer without a repair pass', function () {
         ->and($outcome->findings)->toHaveCount(2)
         ->and($outcome->model)->toBe('claude-opus-5')
         ->and($outcome->promptHash)->toBe('abc12345')
+        ->and($outcome->finishedAt)->toBeGreaterThanOrEqual($outcome->startedAt)
         ->and($logs.'/backend.json')->toBeFile();
 
-    Process::assertRanTimes(fn ($process) => $process->input === 'Audit the backend.', 1);
+    Process::assertRanTimes(fn ($process) => $process->input === 'Audit the backend.' && $process->environment['AUDIT_TASK'] === 'backend', 1);
 });
 
 it('repairs an invalid answer in the same session', function () {
@@ -55,7 +65,8 @@ it('repairs an invalid answer in the same session', function () {
         ->and($logs.'/backend.repair.json')->toBeFile();
 
     Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
-        && str_contains($process->input, 'Missing section `## Limitations`.'));
+        && str_contains($process->input, 'Missing section `## Limitations`.')
+        && str_contains($process->input, 'starting with the `## Summary` line'));
 });
 
 it('fails after an unsuccessful repair pass', function () {
@@ -89,15 +100,44 @@ it('asks for missing required findings in the repair pass', function () {
     Process::assertRan(fn ($process) => str_contains((string) $process->input, 'Missing required finding: the SQL injection from the facts.'));
 });
 
-it('runs several audits and reports each when it finishes', function () {
-    Process::fake(['*' => Process::result(claudeJson(['result' => "## Summary\nx"]))]);
-    $finished = [];
+it('starts a task only after the tasks it depends on and hands their outcomes over', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+    $started = [];
+    $seen = null;
 
-    $jobs = [backendJob(), new AgentJob(new DependenciesAudit, new AgentRequest('dependencies', 'Deps', fixture('project')), 'h')];
-    $outcomes = runner(tempDir('logs'))->run($jobs, onFinished: function ($outcome) use (&$finished) {
-        $finished[] = $outcome->audit->value;
+    $jobs = [
+        taskJob('backend.summary', ['backend.conventions', 'backend.injection'], function (array $finished) use (&$seen): AgentRequest {
+            $seen = array_keys($finished);
+
+            return new AgentRequest('backend.summary', 'Summarize', fixture('project'));
+        }),
+        taskJob('backend.conventions'),
+        taskJob('backend.injection'),
+    ];
+
+    $outcomes = runner(tempDir('logs'), concurrency: 4)->run($jobs, function (AgentJob $job) use (&$started) {
+        $started[] = $job->key;
     });
 
-    expect(array_map(fn ($outcome) => $outcome->audit->value, $outcomes))->toEqualCanonicalizing(['backend', 'dependencies'])
-        ->and($finished)->toEqualCanonicalizing(['backend', 'dependencies']);
+    expect($started[2])->toBe('backend.summary')
+        ->and($seen)->toEqualCanonicalizing(['backend.conventions', 'backend.injection'])
+        ->and(array_map(fn (TaskOutcome $outcome) => $outcome->key, $outcomes))->toHaveCount(3)
+        ->and($outcomes[2]->key)->toBe('backend.summary');
+});
+
+it('ignores dependencies outside the run and fails tasks stuck in a cycle', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+
+    $outcomes = runner(tempDir('logs'))->run([
+        taskJob('backend.laravel', ['backend.not-selected']),
+        taskJob('backend.a', ['backend.b']),
+        taskJob('backend.b', ['backend.a']),
+    ]);
+    $byKey = collect($outcomes)->keyBy('key');
+
+    expect($byKey['backend.laravel']->status)->toBe(AuditStatus::Completed)
+        ->and($byKey['backend.a']->status)->toBe(AuditStatus::Failed)
+        ->and($byKey['backend.a']->reason)->toBe('Waiting for tasks that never finished: backend.b.');
+
+    Process::assertRanTimes(fn () => true, 1);
 });

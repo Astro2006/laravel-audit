@@ -98,6 +98,6 @@ class HarnessFactory
 
     public function validator(ProjectInspector $project): ReportValidator
     {
-        return new ReportValidator(new ReportLinter($project->basePath, (int) $this->config('max_findings', 25)));
+        return new ReportValidator(new ReportLinter($project->basePath));
     }
 }

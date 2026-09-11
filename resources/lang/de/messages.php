@@ -11,6 +11,7 @@ return [
     ],
 
     'requirements' => [
+        'prompts_outdated' => 'Veröffentlichte Prompts aus dem Ein-Agent-Layout werden jetzt ignoriert (:files in resources/prompts/vendor/laravel-audit) → neu veröffentlichen mit --tag=audit-prompts',
         'production' => 'APP_ENV ist production — laravel-audit läuft nie in Production.',
         'agent' => 'Agent: :agent · Modell :model',
         'agent_default_model' => 'aus der CLI-Konfiguration',
@@ -93,6 +94,7 @@ return [
     ],
 
     'agents' => [
+        'task_finished' => ':findings Findings · :duration',
         'running' => 'läuft …',
         'finished' => ':findings Findings · :turns Turns · :input in / :output out · :duration',
         'repaired' => '1 Repair',
