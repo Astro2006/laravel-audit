@@ -6,15 +6,37 @@ namespace Astro2006\LaravelAudit\Contracts;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
+use Astro2006\LaravelAudit\Enums\ReadProtection;
 
 /**
- * Starts an agent CLI headless. The prompt always goes through STDIN.
+ * Starts an agent CLI headless. The prompt always goes through STDIN. Names
+ * follow Laravel Boost's agent names (claude_code, opencode, codex).
  */
 interface AgentDriver
 {
     public function name(): string;
 
+    public function displayName(): string;
+
+    public function binary(): string;
+
+    /** The model from the config, or null for the CLI default. */
+    public function model(): ?string;
+
     public function isAvailable(): bool;
+
+    public function readProtection(): ReadProtection;
+
+    /** One sentence for the prompt: which tools the agent has and what is blocked. */
+    public function toolsNote(): string;
+
+    /**
+     * Writes the per-run CLI config (MCP server, permissions) into $directory.
+     * Returns its path, or null when the driver needs no file.
+     *
+     * @param  list<string>  $extraDirectories  directories outside the project the agent may read
+     */
+    public function writeConfig(string $directory, array $extraDirectories = []): ?string;
 
     /** @return list<string> argv */
     public function command(AgentRequest $request): array;
@@ -33,5 +55,5 @@ interface AgentDriver
      *
      * @return array<string, string|false>
      */
-    public function environment(): array;
+    public function environment(AgentRequest $request): array;
 }

@@ -8,6 +8,7 @@ use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
+use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\Messages;
@@ -41,9 +42,7 @@ final class RequirementChecker
         $browserRelevant = ($tests || $selection->includes(AuditType::Frontend)) && ! $selection->skips(OptionalStep::Browser);
 
         if ($agents) {
-            $checks[] = $this->driver->isAvailable()
-                ? Check::ok($this->messages->get('requirements.claude'))
-                : Check::failed($this->messages->get('requirements.claude_missing', ['binary' => (string) $this->config('agent.binary', 'claude')]));
+            array_push($checks, ...$this->agent());
         }
 
         if ($selection->includes(AuditType::Dependencies)
@@ -104,6 +103,26 @@ final class RequirementChecker
         }
 
         return false;
+    }
+
+    /** @return list<Check> */
+    private function agent(): array
+    {
+        $driver = $this->driver;
+        $replace = ['agent' => $driver->displayName(), 'binary' => $driver->binary(), 'model' => $driver->model() ?? $this->messages->get('requirements.agent_default_model')];
+
+        if (! $driver->isAvailable()) {
+            return [Check::failed($this->messages->get('requirements.agent_missing', $replace))];
+        }
+
+        return [
+            Check::ok($this->messages->get('requirements.agent', $replace)),
+            ...match ($driver->readProtection()) {
+                ReadProtection::Enforced => [],
+                ReadProtection::Waived => [Check::warning($this->messages->get('requirements.agent_unprotected_waived', $replace))],
+                ReadProtection::Missing => [Check::failed($this->messages->get('requirements.agent_unprotected', [...$replace, 'key' => 'agent.drivers.'.$driver->name().'.allow_unrestricted_read']))],
+            },
+        ];
     }
 
     private function outputDirectory(): Check

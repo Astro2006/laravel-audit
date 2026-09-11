@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
+use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Install\ComposerPreview;
 use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\InstallPlanner;
@@ -34,6 +35,8 @@ class InstallCommand extends Command
     /** @var list<string> setup commands the user has to run */
     private array $manualSteps = [];
 
+    private ?AgentDriver $driver = null;
+
     public function handle(HarnessFactory $factory): int
     {
         $this->messages = Messages::fromConfig();
@@ -47,7 +50,8 @@ class InstallCommand extends Command
             $this->callSilently('vendor:publish', ['--tag' => 'audit-config']);
         }
 
-        $plan = (new InstallPlanner($project, $config, $factory->databaseGuard($project), (string) $factory->config('agent.binary', 'claude')))->plan();
+        $this->driver = $factory->driver($project);
+        $plan = (new InstallPlanner($project, $config, $factory->databaseGuard($project), $this->driver))->plan();
         $executor = new PlanExecutor($project);
         $stubLevel = (int) $factory->config('preflight.phpstan.stub_level', 5);
 
@@ -315,7 +319,8 @@ class InstallCommand extends Command
 
         foreach ($plan->manual as $key) {
             $this->line('  <fg=yellow>⚠</> '.$this->messages->get($key === 'node' ? 'install.node_hint' : ($key === 'requirements.coverage_missing' ? 'install.coverage_hint' : $key), [
-                'binary' => Read::string($config, 'agent.binary', 'claude'),
+                'agent' => $this->driver?->displayName() ?? 'Agent',
+                'binary' => $this->driver?->binary() ?? '',
             ]));
         }
 

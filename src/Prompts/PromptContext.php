@@ -31,6 +31,7 @@ final readonly class PromptContext
         public array $customChecks,
         public int $maxFindings,
         public bool $boostAvailable,
+        public string $toolsNote = '',
     ) {}
 
     /** @return list<string> */

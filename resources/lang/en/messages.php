@@ -12,8 +12,11 @@ return [
 
     'requirements' => [
         'production' => 'APP_ENV is production — laravel-audit never runs in production.',
-        'claude' => 'Claude Code CLI',
-        'claude_missing' => 'Claude Code CLI `:binary` not found in PATH → see https://docs.claude.com/claude-code',
+        'agent' => 'Agent: :agent · model :model',
+        'agent_default_model' => 'from the CLI config',
+        'agent_missing' => ':agent CLI `:binary` not found in PATH → install it, or pick another agent with --agent (claude_code, opencode, codex)',
+        'agent_unprotected' => ':agent cannot keep agents away from .env and other secret files (it works through a shell). Set :key to true to accept that, or use another agent.',
+        'agent_unprotected_waived' => ':agent can read .env and other secret files — accepted in the config.',
         'composer' => 'Composer',
         'composer_missing' => 'Composer not found — the dependencies audit needs it.',
         'output' => 'Output folder :path',

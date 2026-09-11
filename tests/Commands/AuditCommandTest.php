@@ -11,7 +11,8 @@ function auditProject(): string
 
     config()->set('audit.base_path', $dir);
     config()->set('audit.output_path', $dir.'/storage/audit');
-    config()->set('audit.agent.binary', $dir.'/vendor/bin/pint'); // any existing file counts as the CLI
+    config()->set('audit.agent.driver', 'claude_code');
+    config()->set('audit.agent.drivers.claude_code.binary', $dir.'/vendor/bin/pint'); // any existing file counts as the CLI
     config()->set('audit.report_language', 'en');
 
     return $dir;
@@ -146,4 +147,32 @@ it('speaks german when the report language is german', function () {
     $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true])
         ->expectsOutputToContain('Preflight fertig, keine Agents gestartet.')
         ->assertExitCode(0);
+});
+
+it('refuses codex unless the config accepts that it can read secrets', function () {
+    $project = auditProject();
+    config()->set('audit.agent.drivers.codex.binary', $project.'/vendor/bin/pint');
+
+    $this->artisan('audit', ['--dependencies' => true, '--agent' => 'codex'])
+        ->expectsOutputToContain('Codex cannot keep agents away from .env and other secret files (it works through a shell). Set agent.drivers.codex.allow_unrestricted_read to true')
+        ->assertExitCode(3);
+
+    config()->set('audit.agent.drivers.codex.allow_unrestricted_read', true);
+    $answer = json_encode(['type' => 'item.completed', 'item' => ['type' => 'agent_message', 'text' => file_get_contents(fixture('reports/dependencies-valid.md'))]]);
+    fakeTools(['*pint*exec*' => Process::result('{"type":"thread.started","thread_id":"t1"}'."\n".$answer)]);
+
+    $this->artisan('audit', ['--dependencies' => true, '--agent' => 'codex'])
+        ->expectsOutputToContain('Codex can read .env and other secret files')
+        ->assertExitCode(0);
+
+    expect(file_get_contents(latestRun($project).'/run.md'))->toContain("\nagent: codex\n");
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'exec --json --skip-git-repo-check'));
+});
+
+it('rejects unknown agents', function () {
+    auditProject();
+
+    $this->artisan('audit', ['--agent' => 'cursor'])
+        ->expectsOutputToContain('Unknown agent driver "cursor"')
+        ->assertExitCode(3);
 });

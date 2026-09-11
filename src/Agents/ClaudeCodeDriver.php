@@ -6,7 +6,9 @@ namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
+use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 use Symfony\Component\Process\ExecutableFinder;
 
@@ -16,18 +18,16 @@ use Symfony\Component\Process\ExecutableFinder;
  * Read-only is enforced by the CLI, not by the prompt: restricted mode (no
  * code-running tools, project and user settings ignored), only Read, Grep
  * and Glob, only the Boost MCP server with an allowlist, deny rules for
- * secret files, and every permission prompt answered with "no".
+ * secret files (Grep honours them too), and every permission prompt
+ * answered with "no".
  */
 final class ClaudeCodeDriver implements AgentDriver
 {
-    public const string MCP_SERVER = 'laravel-boost';
+    public const string NAME = 'claude_code';
 
     private const array TOOLS = ['Read', 'Grep', 'Glob'];
 
     private const array ALWAYS_DENIED = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch'];
-
-    /** Boost tools that execute code, query data or read logs. */
-    private const array DENIED_BOOST_TOOLS = ['tinker', 'database-query', 'read-log-entries', 'last-error', 'browser-logs', 'list-available-env-vars'];
 
     /** Variables that tie a child process to a parent Claude Code session. */
     private const array SESSION_VARIABLES = [
@@ -45,18 +45,62 @@ final class ClaudeCodeDriver implements AgentDriver
         private readonly ?string $model = null,
         private readonly ?string $effort = null,
         private readonly ?float $maxBudgetUsd = null,
+        private readonly ?McpServer $boost = null,
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
     ) {}
 
     public function name(): string
     {
-        return 'claude';
+        return self::NAME;
+    }
+
+    public function displayName(): string
+    {
+        return 'Claude Code';
+    }
+
+    public function binary(): string
+    {
+        return $this->binary;
+    }
+
+    public function model(): ?string
+    {
+        return $this->model;
     }
 
     public function isAvailable(): bool
     {
         return is_file($this->binary) || (new ExecutableFinder)->find($this->binary) !== null;
+    }
+
+    public function readProtection(): ReadProtection
+    {
+        return ReadProtection::Enforced;
+    }
+
+    public function toolsNote(): string
+    {
+        return 'You can read and search files (Read, Grep, Glob). There is no shell, no web access and no write access. `.env` files are blocked on purpose.';
+    }
+
+    /**
+     * An MCP config with only the Boost server, so the user's other MCP
+     * servers never load into an audit.
+     */
+    public function writeConfig(string $directory, array $extraDirectories = []): ?string
+    {
+        if ($this->boost === null) {
+            return null;
+        }
+
+        // Relative commands like "php artisan boost:mcp" work because the
+        // agent runs with the project root as working directory.
+        $path = $directory.'/mcp.json';
+        Json::writeFile($path, ['mcpServers' => [McpServer::NAME => $this->boost->config]]);
+
+        return $path;
     }
 
     public function command(AgentRequest $request): array
@@ -70,17 +114,17 @@ final class ClaudeCodeDriver implements AgentDriver
             '--strict-mcp-config',
         ];
 
-        if ($request->mcpConfig !== null) {
+        if ($request->configFile !== null) {
             $command[] = '--mcp-config';
-            $command[] = $request->mcpConfig;
+            $command[] = $request->configFile;
         }
 
         $command[] = '--tools';
         $command[] = implode(',', self::TOOLS);
 
-        $allowed = $request->mcpConfig === null ? [] : array_map(
-            fn (string $tool): string => 'mcp__'.self::MCP_SERVER.'__'.$tool,
-            array_values(array_diff($this->boostTools, self::DENIED_BOOST_TOOLS)),
+        $allowed = $request->configFile === null ? [] : array_map(
+            fn (string $tool): string => 'mcp__'.McpServer::NAME.'__'.$tool,
+            McpServer::allowedTools($this->boostTools),
         );
 
         if ($allowed !== []) {
@@ -143,7 +187,7 @@ final class ClaudeCodeDriver implements AgentDriver
         );
     }
 
-    public function environment(): array
+    public function environment(AgentRequest $request): array
     {
         return array_fill_keys(self::SESSION_VARIABLES, false);
     }
@@ -153,8 +197,8 @@ final class ClaudeCodeDriver implements AgentDriver
     {
         $denied = self::ALWAYS_DENIED;
 
-        foreach (self::DENIED_BOOST_TOOLS as $tool) {
-            $denied[] = 'mcp__'.self::MCP_SERVER.'__'.$tool;
+        foreach (McpServer::DENIED_TOOLS as $tool) {
+            $denied[] = 'mcp__'.McpServer::NAME.'__'.$tool;
         }
 
         foreach ($this->deniedFiles as $file) {

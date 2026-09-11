@@ -19,7 +19,7 @@ Four agents run in parallel; each one owns exactly one audit area and a fixed li
 
 ## Tools
 
-You can read and search files (Read, Grep, Glob). There is no shell, no web access and no write access. `.env` files are blocked on purpose.
+{{tools_note}}
 
 ## Hard rules
 

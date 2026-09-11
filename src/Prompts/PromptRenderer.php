@@ -77,8 +77,9 @@ final class PromptRenderer
             '{{custom_checks}}' => $customChecks === []
                 ? 'None.'
                 : implode("\n", array_map(fn (string $rule): string => '- '.$rule.' (use check `custom`)', $customChecks)),
+            '{{tools_note}}' => $context->toolsNote !== '' ? $context->toolsNote : 'You can read and search files. There is no shell, no web access and no write access. `.env` files are blocked on purpose.',
             '{{boost_note}}' => $context->boostAvailable
-                ? 'Laravel Boost MCP tools are available (application info, database schema, routes, config, docs search). Use them before making assumptions, and search the Laravel docs via Boost when you are unsure whether something is idiomatic for this Laravel version.'
+                ? 'Laravel Boost MCP tools are available (application info, database schema, routes, config keys, docs search). Use them before making assumptions, and search the Laravel docs via Boost when you are unsure whether something is idiomatic for this Laravel version.'
                 : 'Laravel Boost is not available in this run. Work from the files.',
         ];
     }

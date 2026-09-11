@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Install;
 
+use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
@@ -21,7 +22,7 @@ final class InstallPlanner
         private readonly ProjectInspector $project,
         private readonly array $config,
         private readonly ?DatabaseGuard $guard = null,
-        private readonly ?string $claudeBinary = null,
+        private readonly ?AgentDriver $driver = null,
     ) {}
 
     public function plan(): InstallPlan
@@ -39,11 +40,10 @@ final class InstallPlanner
             $plan->present[] = 'playwright';
         }
 
+        // The audit starts Boost's MCP server itself (php artisan boost:mcp),
+        // so an installed Boost needs no further setup.
         if (! $project->isInstalled('laravel/boost')) {
             $plan->packages[] = new PlannedPackage('laravel/boost', 'composer');
-        }
-
-        if (! $project->isInstalled('laravel/boost') || $project->boostMcpServer() === null) {
             $plan->setup[] = 'boost';
         }
 
@@ -109,8 +109,8 @@ final class InstallPlanner
             $plan->manual[] = 'requirements.coverage_missing';
         }
 
-        if ($this->claudeBinary !== null && ! is_file($this->claudeBinary) && $project->findExecutable($this->claudeBinary) === null) {
-            $plan->manual[] = 'requirements.claude_missing';
+        if ($this->driver !== null && ! $this->driver->isAvailable()) {
+            $plan->manual[] = 'requirements.agent_missing';
         }
 
         if ($plan->npm() !== [] && $project->findExecutable('npm') === null && $project->findExecutable($project->packageManager()->value) === null) {

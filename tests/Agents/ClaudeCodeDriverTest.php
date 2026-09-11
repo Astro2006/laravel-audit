@@ -3,8 +3,9 @@
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Agents\DeniedFiles;
-use Astro2006\LaravelAudit\Agents\McpConfigWriter;
 use Astro2006\LaravelAudit\Enums\AgentExit;
+use Astro2006\LaravelAudit\Enums\ReadProtection;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 it('builds a read-only headless command', function () {
@@ -12,7 +13,8 @@ it('builds a read-only headless command', function () {
         binary: 'claude',
         model: 'opus',
         maxBudgetUsd: 3.0,
-        boostTools: ['application-info', 'tinker', 'database-schema'],
+        boost: McpServer::default(),
+        boostTools: ['application-info', 'tinker', 'get-config', 'database-schema'],
         deniedFiles: ['.env', '.env.testing'],
     );
 
@@ -23,11 +25,13 @@ it('builds a read-only headless command', function () {
         '--mcp-config', '/app/storage/audit/run/logs/mcp.json',
         '--tools', 'Read,Grep,Glob',
         '--allowedTools=mcp__laravel-boost__application-info,mcp__laravel-boost__database-schema',
-        '--disallowedTools=Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch,mcp__laravel-boost__tinker,mcp__laravel-boost__database-query,mcp__laravel-boost__read-log-entries,mcp__laravel-boost__last-error,mcp__laravel-boost__browser-logs,mcp__laravel-boost__list-available-env-vars,Read(./.env),Read(./.env.testing)',
+        '--disallowedTools=Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch,mcp__laravel-boost__tinker,mcp__laravel-boost__database-query,mcp__laravel-boost__read-log-entries,mcp__laravel-boost__last-error,mcp__laravel-boost__browser-logs,mcp__laravel-boost__list-available-env-vars,mcp__laravel-boost__get-config,Read(./.env),Read(./.env.testing)',
         '--model', 'opus',
         '--max-budget-usd', '3',
         '--add-dir', '/elsewhere',
-    ]);
+    ])
+        ->and($driver->name())->toBe('claude_code')
+        ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
 });
 
 it('allows no mcp tools without an mcp config', function () {
@@ -69,7 +73,7 @@ it('maps budget, errors, truncation and garbage', function () {
 });
 
 it('detaches the agent from a parent Claude Code session', function () {
-    expect((new ClaudeCodeDriver)->environment())->toMatchArray(['CLAUDECODE' => false, 'CLAUDE_CODE_SESSION_ID' => false])
+    expect((new ClaudeCodeDriver)->environment(new AgentRequest('tests', 'p', '/app')))->toMatchArray(['CLAUDECODE' => false, 'CLAUDE_CODE_SESSION_ID' => false])
         ->not->toHaveKey('ANTHROPIC_API_KEY');
 });
 
@@ -93,8 +97,16 @@ it('writes an mcp config with only the boost server', function () {
         'github' => ['command' => 'gh-mcp'],
     ]]));
 
-    $path = (new McpConfigWriter)->write(new ProjectInspector($dir), $dir.'/logs/mcp.json');
+    $path = (new ClaudeCodeDriver(boost: (new ProjectInspector($dir))->boostMcpServer()))->writeConfig($dir);
 
     expect(json_decode(file_get_contents($path), true))->toBe(['mcpServers' => ['laravel-boost' => ['command' => 'php', 'args' => ['artisan', 'boost:mcp']]]])
-        ->and((new McpConfigWriter)->write(new ProjectInspector(tempDir('noboost')), $dir.'/x.json'))->toBeNull();
+        ->and((new ClaudeCodeDriver)->writeConfig($dir))->toBeNull();
+});
+
+it('falls back to the default boost command without an .mcp.json entry', function () {
+    $dir = tempDir('boost');
+    file_put_contents($dir.'/composer.lock', json_encode(['packages-dev' => [['name' => 'laravel/boost', 'version' => '2.8.0']]]));
+
+    expect((new ProjectInspector($dir))->boostMcpServer())->toEqual(McpServer::default())
+        ->and((new ProjectInspector(tempDir('noboost')))->boostMcpServer())->toBeNull();
 });

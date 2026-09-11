@@ -14,7 +14,7 @@ use Astro2006\LaravelAudit\Support\Read;
 final class PromptContextBuilder
 {
     /** @param array<mixed> $config */
-    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable): PromptContext
+    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable, string $toolsNote = ''): PromptContext
     {
         $steps = $summary->steps;
         $about = $steps->about();
@@ -43,6 +43,7 @@ final class PromptContextBuilder
             customChecks: $customChecks,
             maxFindings: Read::int($config, 'max_findings', 25),
             boostAvailable: $boostAvailable,
+            toolsNote: $toolsNote,
         );
     }
 

@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
-use Astro2006\LaravelAudit\Agents\McpConfigWriter;
 use Astro2006\LaravelAudit\Console\StepFormatter;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Data\Steps\TestsData;
@@ -60,9 +59,11 @@ class AuditCommand extends Command
         {--without=* : Leave out audits or steps for this run: tests, frontend, backend, dependencies, browser, phpstan, pint, coverage}
         {--force : Continue even if tests fail}
         {--preflight-only : Run the tools only, without agents}
-        {--reuse-preflight= : Reuse the preflight of the latest run, or of the given run ID}';
+        {--reuse-preflight= : Reuse the preflight of the latest run, or of the given run ID}
+        {--agent= : Agent CLI for this run: claude_code, opencode, codex or auto}
+        {--model= : Model for this run, in the format the agent CLI expects}';
 
-    protected $description = 'Audit this app: a deterministic preflight, then Claude Code agents for tests, frontend, backend and dependencies';
+    protected $description = 'Audit this app: a deterministic preflight, then headless agents (Claude Code, OpenCode or Codex) for tests, frontend, backend and dependencies';
 
     private Messages $messages;
 
@@ -76,21 +77,22 @@ class AuditCommand extends Command
         $this->messages = Messages::fromConfig();
         $this->formatter = new StepFormatter($this->messages);
 
+        $project = $factory->project();
+
         try {
             $selection = RunSelection::resolve(
                 array_map('boolval', Read::array($factory->allConfig(), 'audits')),
                 $this->explicitAudits(),
                 array_values(array_map('strval', (array) $this->option('without'))),
             );
+            $driver = $factory->driver($project, $this->stringOption('agent'), $this->stringOption('model'));
         } catch (InvalidSelection $exception) {
             $this->components->error($exception->getMessage());
 
             return self::HARNESS_ERROR;
         }
 
-        $project = $factory->project();
         $guard = $factory->databaseGuard($project);
-        $driver = $factory->driver($project);
         $preflightOnly = (bool) $this->option('preflight-only');
 
         $checks = (new RequirementChecker($project, $factory->allConfig(), $guard, $driver, $this->messages))
@@ -261,10 +263,10 @@ class AuditCommand extends Command
     /** @return list<AuditOutcome> */
     private function runAgents(AgentDriver $driver, AuditRun $run, RunSelection $selection, ProjectInspector $project, PreflightSummary $summary): array
     {
-        $mcp = (new McpConfigWriter)->write($project, $run->logsDir().'/mcp.json');
-        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $mcp !== null);
-        $renderer = $this->factory->promptRenderer();
         $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
+        $config = $driver->writeConfig($run->logsDir(), $extra);
+        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote());
+        $renderer = $this->factory->promptRenderer();
 
         $jobs = [];
 
@@ -275,7 +277,7 @@ class AuditCommand extends Command
 
             $jobs[] = new AgentJob(
                 $audit,
-                new AgentRequest($type->value, $prompt->text, $project->basePath, $mcp, $extra),
+                new AgentRequest($type->value, $prompt->text, $project->basePath, $config, $extra),
                 $prompt->hash,
                 $audit->requiredFindings($summary),
             );
@@ -329,12 +331,12 @@ class AuditCommand extends Command
 
     private function header(AgentDriver $driver, RunSelection $selection): void
     {
-        $model = $this->factory->config('agent.model');
+        $model = $driver->model();
 
         $this->newLine();
         $this->line(' <options=bold>'.$this->messages->get('header', [
             'version' => $this->packageVersion(),
-            'agent' => $driver->name().(is_string($model) && $model !== '' ? ' ('.$model.')' : ''),
+            'agent' => $driver->displayName().($model !== null ? ' ('.$model.')' : ''),
         ]).'</>');
 
         if ($selection->without !== [] || count($selection->audits) < count(AuditType::cases())) {
@@ -418,6 +420,13 @@ class AuditCommand extends Command
             $tokens >= 1_000 => number_format($tokens / 1_000).' k',
             default => (string) $tokens,
         };
+    }
+
+    private function stringOption(string $name): ?string
+    {
+        $value = $this->option($name);
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     private function packageVersion(): string

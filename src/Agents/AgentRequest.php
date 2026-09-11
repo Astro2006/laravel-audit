@@ -7,15 +7,16 @@ namespace Astro2006\LaravelAudit\Agents;
 final readonly class AgentRequest
 {
     /**
+     * @param  string  $key  task key, e.g. backend.injection
      * @param  string  $workingDirectory  project root; the agent can only read below it
-     * @param  string|null  $mcpConfig  MCP config file for this run, or null for no MCP servers
+     * @param  string|null  $configFile  the driver's per-run config (see AgentDriver::writeConfig())
      * @param  list<string>  $extraDirectories  directories outside the project the agent may read
      */
     public function __construct(
         public string $key,
         public string $prompt,
         public string $workingDirectory,
-        public ?string $mcpConfig = null,
+        public ?string $configFile = null,
         public array $extraDirectories = [],
     ) {}
 }

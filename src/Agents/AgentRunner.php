@@ -93,7 +93,7 @@ final class AgentRunner
     {
         $process = Process::path($job->request->workingDirectory)
             ->timeout($this->timeout + 60)
-            ->env([...$this->environment->overrides(), ...$this->driver->environment()])
+            ->env([...$this->environment->overrides(), ...$this->driver->environment($job->request)])
             ->input($input)
             ->start($command);
 

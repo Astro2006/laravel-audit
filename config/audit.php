@@ -23,28 +23,51 @@ return [
     | Agent
     |--------------------------------------------------------------------------
     |
-    | MVP1 ships one driver: Claude Code, started headless. Agents run without
-    | write tools, without a shell and without access to .env files.
+    | The agent CLI that runs the audit tasks headless. Names follow Laravel
+    | Boost: claude_code, opencode, codex. `auto` takes the first agent from
+    | boost.json that is installed, then Claude Code, OpenCode, Codex.
+    | Models and providers (also self-hosted ones such as Ollama) are set up
+    | in the CLI itself; `model` only picks one of them.
+    |
+    | Agents never get write tools and must not read secret files. Claude Code
+    | and OpenCode enforce deny_read. Codex works through a shell and cannot,
+    | so it only runs when allow_unrestricted_read is true.
     |
     */
 
     'agent' => [
-        'driver' => 'claude',
-        'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
-        'model' => env('AUDIT_MODEL'),                // null = CLI default
-        'effort' => env('AUDIT_EFFORT'),              // null = CLI default (low, medium, high, xhigh, max)
-        'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per agent, null = no limit
+        'driver' => env('AUDIT_AGENT', 'auto'),
+        'model' => env('AUDIT_MODEL'),                // overrides the driver's model; null = driver/CLI default
         'concurrency' => 4,                           // lower to 2 if you hit rate limits
         'timeout' => 1800,                            // seconds per agent
 
+        'drivers' => [
+            'claude_code' => [
+                'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
+                'model' => null,
+                'effort' => env('AUDIT_EFFORT'),              // low, medium, high, xhigh, max
+                'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per agent, null = no limit
+            ],
+            'opencode' => [
+                'binary' => env('AUDIT_OPENCODE_BINARY', 'opencode'),
+                'model' => null,                              // provider/model, e.g. ollama/qwen3-coder:30b
+            ],
+            'codex' => [
+                'binary' => env('AUDIT_CODEX_BINARY', 'codex'),
+                'model' => null,
+                'config' => [],                               // extra -c overrides, e.g. 'model_provider="ollama"'
+                'allow_unrestricted_read' => false,           // Codex can read .env; set true to accept that
+            ],
+        ],
+
         // Read-only Boost MCP tools the agents may use. Tinker, database
-        // queries and log readers are never allowed.
+        // queries, log readers and get-config (returns secret values) are
+        // never allowed.
         'boost_tools' => [
             'application-info',
             'database-connections',
             'database-schema',
             'get-absolute-url',
-            'get-config',
             'list-artisan-commands',
             'list-available-config-keys',
             'list-routes',

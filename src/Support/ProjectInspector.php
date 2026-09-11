@@ -249,7 +249,11 @@ class ProjectInspector
         return is_dir($this->path('node_modules/'.$name));
     }
 
-    /** The Laravel Boost MCP server from .mcp.json, if Boost is installed. */
+    /**
+     * The Laravel Boost MCP server, if Boost is installed: the entry from
+     * .mcp.json when there is one (it may use Sail or an absolute PHP), else
+     * the default `php artisan boost:mcp`. Independent of the agent CLI.
+     */
     public function boostMcpServer(): ?McpServer
     {
         if (! $this->isInstalled('laravel/boost')) {
@@ -261,12 +265,12 @@ class ProjectInspector
                 continue;
             }
 
-            if ($name === 'laravel-boost' || str_contains(implode(' ', Read::strings($config, 'args')), 'boost:mcp')) {
+            if ($name === McpServer::NAME || str_contains(implode(' ', Read::strings($config, 'args')), 'boost:mcp')) {
                 return new McpServer((string) $name, $config);
             }
         }
 
-        return null;
+        return McpServer::default();
     }
 
     /** Where the Pest browser tests live: a test suite or a directory with tests. */

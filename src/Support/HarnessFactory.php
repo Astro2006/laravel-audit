@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
-use Astro2006\LaravelAudit\Agents\DeniedFiles;
+use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
@@ -80,22 +79,13 @@ class HarnessFactory
         ];
     }
 
-    public function driver(ProjectInspector $project): AgentDriver
+    /**
+     * @param  string|null  $name  driver name or `auto`; null = agent.driver
+     * @param  string|null  $model  overrides the configured model
+     */
+    public function driver(ProjectInspector $project, ?string $name = null, ?string $model = null): AgentDriver
     {
-        $budget = $this->config('agent.max_budget_usd');
-
-        return new ClaudeCodeDriver(
-            binary: (string) $this->config('agent.binary', 'claude'),
-            model: $this->config('agent.model') ?: null,
-            effort: $this->config('agent.effort') ?: null,
-            maxBudgetUsd: $budget === null || $budget === '' ? null : (float) $budget,
-            boostTools: array_values((array) $this->config('agent.boost_tools', [])),
-            deniedFiles: DeniedFiles::resolve(
-                $project->basePath,
-                array_values((array) $this->config('agent.deny_read', [])),
-                array_values((array) $this->config('agent.allow_read', [])),
-            ),
-        );
+        return (new DriverRegistry($this->config, $project))->resolve($name, $model);
     }
 
     public function promptRenderer(): PromptRenderer
