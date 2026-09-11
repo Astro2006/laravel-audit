@@ -93,9 +93,9 @@ it('removes everything from .env for child processes but keeps exported variable
 
     putenv('AUDIT_EXPORTED=1');
 
-    expect($environment->overrides())->toBe(['APP_ENV' => false, 'DB_DATABASE' => false])
+    expect($environment->overrides())->toBe(['APP_ENV' => false, 'DB_DATABASE' => false, ...array_fill_keys(ChildEnvironment::AGENT_VARIABLES, false)])
         ->and($environment->inherited())->toHaveKey('AUDIT_EXPORTED')
-        ->and(ChildEnvironment::for(guardProject([]))->overrides())->toBe([]);
+        ->and(ChildEnvironment::for(guardProject([]))->overrides())->toBe(array_fill_keys(ChildEnvironment::AGENT_VARIABLES, false));
 
     putenv('AUDIT_EXPORTED');
 });

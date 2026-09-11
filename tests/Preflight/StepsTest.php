@@ -181,7 +181,8 @@ it('starts the test run without the variables the audit process loaded from .env
 
     (new TestsStep(safeGuard($context->project)))->start($context)->wait();
 
-    Process::assertRan(fn ($process) => $process->environment === ['APP_ENV' => false, 'DB_DATABASE' => false]);
+    Process::assertRan(fn ($process) => $process->environment === (new ChildEnvironment(['APP_ENV', 'DB_DATABASE']))->overrides()
+        && $process->environment['APP_ENV'] === false && $process->environment['CLAUDECODE'] === false);
 });
 
 it('refuses to run tests against the app database', function () {

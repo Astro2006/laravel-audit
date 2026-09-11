@@ -16,6 +16,16 @@ use Dotenv\Dotenv;
  */
 final readonly class ChildEnvironment
 {
+    /**
+     * Variables coding agents set. Tools such as PHPStan switch to an
+     * "agent" output format when they see one, ignoring --error-format, so
+     * an audit started from inside an agent session would lose their JSON.
+     */
+    public const array AGENT_VARIABLES = [
+        'AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'OPENCODE', 'OPENCODE_CLIENT', 'CODEX_SANDBOX', 'CODEX_THREAD_ID',
+        'CURSOR_AGENT', 'CURSOR_TRACE_ID', 'GEMINI_CLI', 'AUGMENT_AGENT', 'AMP_CURRENT_THREAD_ID', 'REPL_ID',
+    ];
+
     /** @param list<string> $dotenvNames */
     public function __construct(
         public array $dotenvNames = [],
@@ -37,13 +47,14 @@ final readonly class ChildEnvironment
     }
 
     /**
-     * Environment for child processes: every .env variable is removed.
+     * Environment for child processes: every .env variable and every
+     * agent marker is removed.
      *
      * @return array<string, false>
      */
     public function overrides(): array
     {
-        return array_fill_keys($this->dotenvNames, false);
+        return array_fill_keys([...$this->dotenvNames, ...self::AGENT_VARIABLES], false);
     }
 
     /**
