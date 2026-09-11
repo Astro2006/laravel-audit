@@ -8,6 +8,7 @@ use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Arr;
@@ -112,7 +113,7 @@ final class PreflightContext
     /** Last lines of a tool's output, for error messages. */
     public static function tail(string $output, int $lines = 15): string
     {
-        $all = preg_split('/\R/', trim($output)) ?: [];
+        $all = Regex::lines(trim($output));
 
         return implode("\n", array_slice($all, -$lines));
     }

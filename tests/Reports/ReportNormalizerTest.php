@@ -43,3 +43,10 @@ it('leaves code fences untouched', function () {
 
     expect((new ReportNormalizer)->normalize($markdown))->toBe($markdown);
 });
+
+it('keeps multi-byte characters such as ✅ intact', function () {
+    $table = "## Convention scorecard\n\n| Convention | Status |\n|---|---|\n| Pint | ✅ |\n| Strict mode | ❌ |";
+
+    expect((new ReportNormalizer)->normalize($table))->toContain('| Pint | ✅ |')
+        ->and((new ReportParser)->parse($table)->section('Convention scorecard'))->toContain('| Pint | ✅ |');
+});

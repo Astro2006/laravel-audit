@@ -17,7 +17,7 @@ final class ReportNormalizer
         $fence = null;
         $output = [];
 
-        foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
+        foreach (Regex::lines($markdown) as $line) {
             $fenceMatch = Regex::groups('/^\s{0,3}(`{3,}|~{3,})/', $line);
 
             if ($fenceMatch !== null) {

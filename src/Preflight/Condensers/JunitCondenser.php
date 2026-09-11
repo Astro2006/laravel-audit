@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Data\Tests\JunitReport;
 use Astro2006\LaravelAudit\Data\Tests\SkippedTest;
 use Astro2006\LaravelAudit\Data\Tests\SlowTest;
 use Astro2006\LaravelAudit\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Support\Regex;
 use Astro2006\LaravelAudit\Support\Xml;
 use Illuminate\Support\Collection;
 use SimpleXMLElement;
@@ -149,7 +150,7 @@ final class JunitCondenser
 
     private function firstLine(string $text, ?string $skipPrefix = null): string
     {
-        foreach (preg_split('/\R/', trim($text)) ?: [] as $line) {
+        foreach (Regex::lines(trim($text)) as $line) {
             $line = trim($line);
 
             if ($skipPrefix !== null && str_starts_with($line, $skipPrefix)) {

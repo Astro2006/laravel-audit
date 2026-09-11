@@ -21,7 +21,7 @@ final class ComposerPreview
         $requested = array_map('strtolower', $requested);
         $effects = [];
 
-        foreach (preg_split('/\R/', $output) ?: [] as $line) {
+        foreach (Regex::lines($output) as $line) {
             $change = Regex::groups('/-\s+(?:Upgrading|Downgrading)\s+(\S+)\s+\((\S+)\s+=>\s+(\S+)\)/', $line);
 
             if ($change !== null) {

@@ -62,7 +62,7 @@ final class RouteFacts
                 continue;
             }
 
-            if ($writes && ! $authed && preg_match(self::PUBLIC_WRITES, $route->uri) !== 1 && preg_match(self::FRAMEWORK_SIGNED_ROUTES, $route->name) !== 1) {
+            if ($writes && ! $authed && preg_match(self::PUBLIC_WRITES, $route->uri) !== 1 && preg_match(self::FRAMEWORK_SIGNED_ROUTES, $route->name ?? '') !== 1) {
                 $unauthenticatedWrite[] = $route;
             }
 

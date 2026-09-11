@@ -23,6 +23,18 @@ final class Regex
     }
 
     /**
+     * Splits text into lines at \r\n, \r or \n. Byte-safe on purpose: \R
+     * without /u also matches the byte 0x85, which is part of UTF-8
+     * characters such as ✅, and /u fails on invalid UTF-8 in tool output.
+     *
+     * @return list<string>
+     */
+    public static function lines(string $text): array
+    {
+        return preg_split('/\r\n|\r|\n/', $text) ?: [];
+    }
+
+    /**
      * The first captured group of every match.
      *
      * @return list<string>

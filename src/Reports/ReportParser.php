@@ -143,7 +143,7 @@ final class ReportParser
         $result = [];
         $fence = null;
 
-        foreach (preg_split('/\R/', $markdown) ?: [] as $index => $text) {
+        foreach (Regex::lines($markdown) as $index => $text) {
             $fenceMatch = Regex::groups('/^\s{0,3}(`{3,}|~{3,})/', $text);
 
             if ($fenceMatch !== null) {

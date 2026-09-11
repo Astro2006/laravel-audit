@@ -89,6 +89,14 @@ it('does not flag the signed local storage routes of the framework', function ()
         ->and($flagged->name)->toBe('files.upload');
 });
 
+it('handles unauthenticated write routes without a name', function () {
+    $routes = RouteDefinition::listFromJson([
+        ['method' => 'POST', 'uri' => 'webhook', 'name' => null, 'action' => 'Closure', 'middleware' => []],
+    ]);
+
+    expect(uris((new RouteFacts)->facts($routes)->unauthenticatedWrite))->toBe(['/webhook']);
+});
+
 it('condenses clover coverage for app classes only, lowest first', function () {
     $report = (new CoverageCondenser)->condense(fixture('tools/clover.xml'), '/app');
     [$lowest, $highest] = $report->classes;

@@ -14,6 +14,7 @@ use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\Pool;
 use Illuminate\Support\Collection;
@@ -150,7 +151,7 @@ final class ComposerStep implements Step
         $commands = (new Collection($packages))->mapWithKeys(fn (string $package): array => [$package => [...$composer, 'why', $package, '--no-interaction']]);
 
         return $this->pool($context, $commands)
-            ->map(fn (ProcessResult $result): array => array_values(array_filter(array_map('trim', preg_split('/\R/', $result->output()) ?: []))))
+            ->map(fn (ProcessResult $result): array => array_values(array_filter(array_map('trim', Regex::lines($result->output())))))
             ->all();
     }
 }
