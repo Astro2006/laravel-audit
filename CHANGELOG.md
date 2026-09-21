@@ -12,6 +12,21 @@ All notable changes to `laravel-audit` will be documented in this file.
 - Prompts moved to `_task.md` and `tasks/<audit>/<task>.md`. Published prompts of the old layout are ignored, with a warning.
 - The Boost MCP server no longer needs an `.mcp.json` entry, and `get-config` is never allowed because it returns secret values.
 
+### Added
+
+- The harness drops findings it can disprove, without a repair pass: nonexistent files, quoted code that is not in the file, `missing:` files that exist, and dependency findings composer contradicts. `run.md` lists them under "Rejected findings".
+- A verify pass per task (`agent.verify`, on by default) checks findings of medium severity and above with the same agent and keeps, downgrades or drops them.
+- `missing:path` locations for findings about a file that should exist.
+- Tasks with nothing to audit (no advisories, no PHPStan errors, all tests green) are skipped without an agent call.
+- `run.md` shows the wall-clock time per task.
+
+### Changed
+
+- The harness writes each audit's summary itself (`summary => 'generated'`); `'agent'` restores the summary task. The tests audit keeps its summary task for "Top 10 missing tests".
+- `max_findings_per_task` defaults to 5; `max_files_per_task` (25) limits how many files an agent opens.
+- The output template no longer contains real-looking example paths that weak models copied as findings.
+- Findings that shared a key within one report get distinct keys.
+
 ### Fixed
 
 - The routes step crashed on unnamed routes.

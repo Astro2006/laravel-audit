@@ -38,8 +38,19 @@ return [
     'agent' => [
         'driver' => env('AUDIT_AGENT', 'auto'),
         'model' => env('AUDIT_MODEL'),                // overrides the driver's model; null = driver/CLI default
-        'concurrency' => 4,                           // tasks at once; lower to 2 if you hit rate limits
+        // Tasks at once; lower to 2 if you hit rate limits. A local Ollama only
+        // serves OLLAMA_NUM_PARALLEL requests at once: more slots do not make a
+        // run faster, they only queue and cost memory.
+        'concurrency' => 4,
         'timeout' => 900,                             // seconds per task
+
+        // After each task, a second call with the same agent and model checks
+        // its findings (keep, downgrade or drop). Costs one call per task with
+        // findings at or above min_severity; turn off for faster runs.
+        'verify' => [
+            'enabled' => true,
+            'min_severity' => 'medium',
+        ],
 
         'drivers' => [
             'claude_code' => [
@@ -154,7 +165,16 @@ return [
 
     // Per task: more findings than this fail validation; agents group
     // instead. Raised automatically when a task has more required findings.
-    'max_findings_per_task' => 8,
+    'max_findings_per_task' => 5,
+
+    // Per task: how many files the agent should open at most. Keeps the
+    // context small, which matters most for local models.
+    'max_files_per_task' => 25,
+
+    // generated: the harness writes each audit's summary from the findings
+    // (no agent call). agent: a summary task per audit writes it. The tests
+    // audit always runs its summary task for "Top 10 missing tests".
+    'summary' => 'generated',
 
     'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
 

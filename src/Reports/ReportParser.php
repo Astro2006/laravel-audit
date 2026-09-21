@@ -93,6 +93,8 @@ final class ReportParser
                 continue;
             }
 
+            $finding->endLine = $line->number;
+
             if (! $line->inFence && preg_match('/^\s*-{3,}\s*$/', $text) === 1) {
                 $finding = null;
                 $label = null;

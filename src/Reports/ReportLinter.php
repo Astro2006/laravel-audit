@@ -19,7 +19,10 @@ final class ReportLinter
 
     private const array BODY_LABELS = ['Evidence', 'Impact', 'Recommendation'];
 
-    public function __construct(private readonly string $basePath) {}
+    public function __construct(
+        private readonly string $basePath,
+        private readonly EvidenceChecker $evidence = new EvidenceChecker,
+    ) {}
 
     /** @param list<RequiredFinding> $required */
     public function lint(ParsedReport $report, ReportSpec $spec, array $required = []): LintResult
@@ -47,6 +50,7 @@ final class ReportLinter
         $ids = array_map(fn (ParsedFinding $finding): string => $finding->id, $report->findings);
         $seen = [];
         $findings = [];
+        $rejected = [];
 
         foreach ($report->findings as $parsed) {
             if (in_array($parsed->id, $seen, true)) {
@@ -59,8 +63,17 @@ final class ReportLinter
 
             $finding = $this->lintFinding($parsed, $spec, $ids, $errors, $warnings);
 
-            if ($finding !== null) {
+            if ($finding === null) {
+                continue;
+            }
+
+            $reason = $this->rejectionReason($finding, $spec);
+
+            if ($reason === null) {
                 $findings[] = $finding;
+            } else {
+                $rejected[] = new Rejection($finding->id, $finding->title, $reason);
+                $warnings[] = sprintf('%s: rejected — %s', $finding->id, $reason);
             }
         }
 
@@ -82,7 +95,48 @@ final class ReportLinter
             }
         }
 
-        return new LintResult($errors, [...$warnings, ...$this->summaryWarnings($report)], $findings);
+        return new LintResult($errors, [...$warnings, ...$this->summaryWarnings($report)], Finding::withUniqueKeys($findings), $rejected);
+    }
+
+    /**
+     * Findings the harness drops without a repair pass: a file that does not
+     * exist, a `missing:` file that does exist, a code quote that is not in
+     * the files, or a contradiction with the preflight facts.
+     */
+    private function rejectionReason(Finding $finding, ReportSpec $spec): ?string
+    {
+        $contents = [];
+
+        foreach ($finding->locations as $location) {
+            if ($location->isMissing()) {
+                if (file_exists($this->basePath.'/'.$location->missing)) {
+                    return sprintf('`%s` is reported as missing, but it exists.', $location->missing);
+                }
+
+                continue;
+            }
+
+            if (! $location->isFile()) {
+                continue;
+            }
+
+            $path = $this->basePath.'/'.$location->file;
+
+            if (! is_file($path)) {
+                return sprintf('location `%s` does not exist in the project (possibly hallucinated).', $location->file);
+            }
+
+            $contents[] = (string) file_get_contents($path);
+        }
+
+        if ($this->evidence->matches($finding->evidence, $contents) === false) {
+            return 'the code in Evidence does not appear in '.implode(', ', array_map(
+                fn (Location $location): string => '`'.$location->file.'`',
+                array_values(array_filter($finding->locations, fn (Location $location): bool => $location->isFile())),
+            )).'.';
+        }
+
+        return $spec->guard?->reject($finding);
     }
 
     /** @return list<string> */
@@ -163,7 +217,7 @@ final class ReportLinter
         $locations = Location::parseList((string) $parsed->field('locations'));
 
         if ($parsed->field('locations') !== null && $locations === []) {
-            $errors[] = sprintf('%s: no parseable location. Use `path/file.php:42`, `route:GET /uri` or `package:vendor/name`.', $id);
+            $errors[] = sprintf('%s: no parseable location. Use `<path>:<line>`, `route:<METHOD> <uri>`, `package:<vendor>/<name>` or `missing:<path>`.', $id);
         }
 
         $occurrences = 1;
@@ -242,9 +296,7 @@ final class ReportLinter
         $path = $this->basePath.'/'.$location->file;
 
         if (! is_file($path)) {
-            $warnings[] = sprintf('%s: location `%s` does not exist in the project (possibly hallucinated).', $id, $location->file);
-
-            return;
+            return; // rejected in rejectionReason()
         }
 
         if ($location->lastLine() !== null) {

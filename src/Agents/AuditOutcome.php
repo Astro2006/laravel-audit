@@ -40,14 +40,15 @@ final readonly class AuditOutcome
 
     /**
      * Completed when every task completed, failed when no task that audits
-     * checks completed, partial otherwise. The assembled report's lint is the
+     * checks completed, partial otherwise (verify jobs do not count). The assembled report's lint is the
      * only source of findings and warnings.
      *
      * @param  list<TaskOutcome>  $tasks
      */
     public static function fromTasks(AuditType $audit, array $tasks, AssembledReport $report, string $body, LintResult $lint, string $promptHash): self
     {
-        $failed = array_values(array_filter($tasks, fn (TaskOutcome $task): bool => ! $task->completed()));
+        // A failed verify job leaves its task's findings unchanged; the audit is not partial because of it.
+        $failed = array_values(array_filter($tasks, fn (TaskOutcome $task): bool => ! $task->completed() && ! $task->isVerify()));
         $status = match (true) {
             $failed === [] => AuditStatus::Completed,
             $report->completedTasks === [] => AuditStatus::Failed,
@@ -72,7 +73,7 @@ final readonly class AuditOutcome
         return new self(
             audit: $audit,
             status: $status,
-            reason: $failed === [] ? null : sprintf('%d of %d tasks failed: %s', count($failed), count($tasks), implode(', ', array_map(fn (TaskOutcome $task): string => $task->name(), $failed))),
+            reason: $failed === [] ? null : sprintf('%d of %d tasks failed: %s', count($failed), count(array_filter($tasks, fn (TaskOutcome $task): bool => ! $task->isVerify())), implode(', ', array_map(fn (TaskOutcome $task): string => $task->name(), $failed))),
             body: $status === AuditStatus::Failed ? null : $body,
             findings: $lint->findings,
             errors: $lint->errors,

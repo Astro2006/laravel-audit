@@ -6,13 +6,20 @@ use Astro2006\LaravelAudit\Data\Steps\BrowserData;
 use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
 use Astro2006\LaravelAudit\Data\Steps\TestsData;
 use Astro2006\LaravelAudit\Enums\AuditType;
+use Astro2006\LaravelAudit\Enums\Category;
+use Astro2006\LaravelAudit\Enums\Confidence;
+use Astro2006\LaravelAudit\Enums\Effort;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\StepResults;
+use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 it('gives every check to exactly one audit', function () {
     $owners = [];
@@ -132,4 +139,54 @@ it('requires one finding per vulnerable and abandoned package', function () {
         ['abandoned-package', 'package:fzaninotto/faker'],
         ['lock-out-of-sync', null],
     ]);
+});
+
+it('skips tasks that have nothing to audit', function () {
+    $clean = new PreflightSummary('run', GateDecision::Continued, new StepResults([
+        StepResult::ok(PreflightStep::Tests, new TestsData(total: 10, passed: 10)),
+        StepResult::ok(PreflightStep::Phpstan, new PhpstanData(errors: 0)),
+    ]));
+    $broken = new PreflightSummary('run', GateDecision::Continued, new StepResults([
+        StepResult::ok(PreflightStep::Tests, new TestsData(failed: 1)),
+        StepResult::ok(PreflightStep::Phpstan, new PhpstanData(errors: 3)),
+    ]));
+    $task = fn (string $name) => collect((new TestsAudit)->tasks())->firstWhere('name', $name);
+
+    expect((new TestsAudit)->skipReason($task('phpstan'), $clean))->toBe('PHPStan reports no errors and no baseline.')
+        ->and((new TestsAudit)->skipReason($task('results'), $clean))->toBe('all tests passed and none were skipped.')
+        ->and((new TestsAudit)->skipReason($task('coverage'), $clean))->toBeNull()
+        ->and((new TestsAudit)->skipReason($task('phpstan'), $broken))->toBeNull()
+        ->and((new TestsAudit)->skipReason($task('results'), $broken))->toBeNull();
+});
+
+function dependencyPreflight(array $facts): PreflightSummary
+{
+    $dir = tempDir('preflight');
+    mkdir($dir.'/composer');
+    Json::writeFile($dir.'/summary.json', ['run_id' => 'run', 'steps' => ['composer' => ['status' => 'ok']]]);
+    file_put_contents($dir.'/composer/dependency-facts.json', json_encode($facts));
+
+    return PreflightSummary::fromDirectory($dir);
+}
+
+it('skips the security task without advisories and abandoned packages', function () {
+    $security = collect((new DependenciesAudit)->tasks())->firstWhere('name', 'security');
+
+    expect((new DependenciesAudit)->skipReason($security, dependencyPreflight(['advisories' => [], 'abandoned' => []])))->toBe('composer audit reports no advisories and no abandoned packages.')
+        ->and((new DependenciesAudit)->skipReason($security, dependencyPreflight(['advisories' => [['package' => 'guzzlehttp/psr7']]])))->toBeNull();
+});
+
+it('rejects dependency findings the preflight does not back', function () {
+    $guard = (new DependenciesAudit)->findingGuard(
+        dependencyPreflight(['advisories' => [['package' => 'guzzlehttp/psr7']], 'abandoned' => [['package' => 'acme/unused-lib']]]),
+        new ProjectInspector(fixture('project')),
+    );
+    $finding = fn (string $check, string $location) => new Finding('DEP-001', 't', Severity::High, Confidence::Confirmed, Category::Security, $check, Effort::S, [Location::parse($location)], 1, [], [], 'e', 'i', 'r');
+
+    expect($guard->reject($finding('vulnerable-dependency', 'package:guzzlehttp/psr7')))->toBeNull()
+        ->and($guard->reject($finding('vulnerable-dependency', 'package:acme/used-lib')))->toBe('composer audit reports no advisory for `acme/used-lib`.')
+        ->and($guard->reject($finding('abandoned-package', 'package:acme/unused-lib')))->toBeNull()
+        ->and($guard->reject($finding('abandoned-package', 'package:acme/test-only')))->toBe('Composer reports no abandoned package `acme/test-only`.')
+        ->and($guard->reject($finding('outdated-major', 'package:acme/made-up')))->toBe('`package:acme/made-up` is not in composer.lock.')
+        ->and($guard->reject($finding('unsupported-runtime', 'package:php')))->toBeNull();
 });

@@ -99,6 +99,8 @@ return [
         'finished' => ':findings Findings · :turns Turns · :input in / :output out · :duration',
         'repaired' => '1 Repair',
         'failed' => 'gescheitert: :reason',
+        'skipped' => 'übersprungen: :reason',
+        'rejected' => ':count verworfen',
     ],
 
     'summary' => [

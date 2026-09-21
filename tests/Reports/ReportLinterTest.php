@@ -3,6 +3,8 @@
 use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Audits\FrontendAudit;
 use Astro2006\LaravelAudit\Enums\Severity;
+use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportParser;
 use Astro2006\LaravelAudit\Reports\ReportSpec;
@@ -75,12 +77,49 @@ it('enforces the finding limit', function () {
     expect(implode("\n", lintReport(validBackendReport(), max: 1)->errors))->toContain('The report has 2 findings; the maximum is 1.');
 });
 
-it('warns about hallucinated files and lines past the end', function () {
-    $report = str_replace('`app/Services/OrderService.php:7-12`', '`app/Services/Missing.php:3`, `app/Services/OrderService.php:40`', validBackendReport());
+it('rejects findings in files that do not exist and warns about lines past the end', function () {
+    $missing = lintReport(str_replace('`app/Services/OrderService.php:7-12`', '`app/Services/Missing.php:3`', validBackendReport()));
+    $long = lintReport(str_replace('`app/Services/OrderService.php:7-12`', '`app/Services/OrderService.php:40`', validBackendReport()));
 
-    expect(lintReport($report)->warnings)
-        ->toContain('BE-001: location `app/Services/Missing.php` does not exist in the project (possibly hallucinated).')
-        ->toContain('BE-001: `app/Services/OrderService.php` has 13 lines, but the location points to line 40.');
+    expect($missing->warnings)->toContain('BE-001: rejected — location `app/Services/Missing.php` does not exist in the project (possibly hallucinated).')
+        ->and($missing->errors)->toBe([])
+        ->and(array_map(fn ($finding) => $finding->id, $missing->findings))->toBe(['BE-002'])
+        ->and($missing->rejected[0]->id)->toBe('BE-001')
+        ->and($long->warnings)->toContain('BE-001: `app/Services/OrderService.php` has 13 lines, but the location points to line 40.');
+});
+
+it('rejects a finding whose quoted code is not in its file', function () {
+    $report = str_replace('$order->fill($data)->save();', '$order->update($request->all());', validBackendReport());
+    $result = lintReport($report);
+
+    expect($result->rejected)->toHaveCount(1)
+        ->and($result->rejected[0]->reason)->toBe('the code in Evidence does not appear in `app/Services/OrderService.php`.')
+        ->and($result->findings)->toHaveCount(1);
+});
+
+it('accepts missing: locations only when the file is really missing', function () {
+    $absent = lintReport(str_replace('`app/Services/OrderService.php`', '`missing:config/cors.php`', validBackendReport()));
+    $present = lintReport(str_replace('`app/Services/OrderService.php`', '`missing:composer.json`', validBackendReport()));
+
+    expect($absent->findings)->toHaveCount(2)
+        ->and($absent->warnings)->toBe([])
+        ->and($present->rejected[0]->reason)->toBe('`composer.json` is reported as missing, but it exists.');
+});
+
+it('rejects what the audit guard rejects', function () {
+    $guard = new class implements FindingGuard
+    {
+        public function reject(Finding $finding): ?string
+        {
+            return $finding->check === 'dead-code' ? 'contradicts the preflight.' : null;
+        }
+    };
+
+    $result = (new ReportLinter(fixture('project')))
+        ->lint((new ReportParser)->parse(validBackendReport()), ReportSpec::forAudit(new BackendAudit, 25, $guard));
+
+    expect($result->rejected[0]->id)->toBe('BE-002')
+        ->and($result->rejected[0]->reason)->toBe('contradicts the preflight.');
 });
 
 it('warns about related ids that are not in the report', function () {

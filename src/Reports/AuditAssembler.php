@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Reports;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
+use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Run\RunManifest;
 use Astro2006\LaravelAudit\Support\Regex;
 
@@ -30,8 +31,9 @@ final class AuditAssembler
      * @param  array<string, TaskOutcome>  $outcomes  by task key
      * @param  string|null  $summary  the summary task's `## Summary` text; null = generated
      * @param  array<string, string>  $summarySections  sections written by the summary task
+     * @param  array<string, string>  $skipped  task key => why it was skipped
      */
-    public function assemble(Audit $audit, array $tasks, array $outcomes, ?string $summary = null, array $summarySections = []): AssembledReport
+    public function assemble(Audit $audit, array $tasks, array $outcomes, ?string $summary = null, array $summarySections = [], array $skipped = []): AssembledReport
     {
         $blocks = [];
         $findingTasks = [];
@@ -42,6 +44,8 @@ final class AuditAssembler
         $completed = [];
         $failed = [];
         $findings = [];
+        $rejected = 0;
+        $skippedTasks = [];
         $number = 0;
 
         foreach ($tasks as $task) {
@@ -50,6 +54,17 @@ final class AuditAssembler
             }
 
             $outcome = $outcomes[$task->key()] ?? null;
+
+            if (isset($skipped[$task->key()])) {
+                $skippedTasks[] = $task->key();
+                $limitations[] = sprintf('- The task `%s` (%s) was skipped: %s', $task->key(), $task->title, $skipped[$task->key()]);
+
+                foreach ($task->sections as $title) {
+                    $sections[$title] = 'Skipped: '.$skipped[$task->key()];
+                }
+
+                continue;
+            }
 
             if ($outcome === null || ! $outcome->completed() || $outcome->body === null) {
                 $failed[] = $task->key();
@@ -66,6 +81,7 @@ final class AuditAssembler
 
             $completed[] = $task->key();
             array_push($findings, ...$outcome->findings);
+            $rejected += count($outcome->rejected);
             $report = $this->parser->parse($outcome->body);
 
             $ids = [];
@@ -114,10 +130,14 @@ final class AuditAssembler
             }
         }
 
+        if ($rejected > 0) {
+            $limitations[] = sprintf('- %d findings were dropped because their evidence was not in the project, contradicted the preflight, or failed the verify pass. run.md lists them.', $rejected);
+        }
+
         $body = implode("\n", [
             '## Summary',
             '',
-            trim($summary ?? $this->generatedSummary($findings, $completed, $failed)),
+            trim($summary ?? $this->generatedSummary($findings, $completed, $failed, $skippedTasks)),
             '',
             '## Findings',
             '',
@@ -217,13 +237,15 @@ final class AuditAssembler
     }
 
     /**
-     * Used when the summary task failed or has not run yet.
+     * Used when the summary task is off, failed or has not run yet: counts,
+     * the most severe findings, and what did not run.
      *
      * @param  list<Finding>  $findings
      * @param  list<string>  $completed
      * @param  list<string>  $failed
+     * @param  list<string>  $skipped
      */
-    private function generatedSummary(array $findings, array $completed, array $failed): string
+    private function generatedSummary(array $findings, array $completed, array $failed, array $skipped = []): string
     {
         $counts = RunManifest::severityCounts($findings);
         $parts = [];
@@ -234,13 +256,28 @@ final class AuditAssembler
             }
         }
 
-        $text = sprintf(
+        $sentences = [sprintf(
             '%d findings from %d tasks%s.',
             count($findings),
             count($completed),
             $parts === [] ? '' : ' ('.implode(', ', $parts).')',
-        );
+        )];
 
-        return $failed === [] ? $text : $text.sprintf(' %d tasks failed (%s); see Limitations.', count($failed), implode(', ', $failed));
+        $top = array_filter($findings, fn (Finding $finding): bool => $finding->severity->rank() >= Severity::High->rank());
+        usort($top, fn (Finding $a, Finding $b): int => $b->severity->rank() <=> $a->severity->rank());
+
+        if ($top !== []) {
+            $sentences[] = 'Most severe: '.implode('; ', array_map(fn (Finding $finding): string => $finding->title, array_slice($top, 0, 3))).'.';
+        }
+
+        if ($failed !== []) {
+            $sentences[] = sprintf('%d tasks failed (%s); see Limitations.', count($failed), implode(', ', $failed));
+        }
+
+        if ($skipped !== []) {
+            $sentences[] = sprintf('%d tasks had nothing to audit and were skipped (%s).', count($skipped), implode(', ', $skipped));
+        }
+
+        return implode(' ', $sentences);
     }
 }

@@ -24,6 +24,17 @@ enum Severity: string
         };
     }
 
+    /** One step less severe; info stays info. */
+    public function lower(): self
+    {
+        return match ($this) {
+            self::Critical => self::High,
+            self::High => self::Medium,
+            self::Medium => self::Low,
+            self::Low, self::Info => self::Info,
+        };
+    }
+
     /** @return list<string> */
     public static function values(): array
     {

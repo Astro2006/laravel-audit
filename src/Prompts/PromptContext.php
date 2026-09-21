@@ -32,6 +32,7 @@ final readonly class PromptContext
         public int $maxFindings,
         public bool $boostAvailable,
         public string $toolsNote = '',
+        public int $maxFiles = 25,
     ) {}
 
     /** @return list<string> */

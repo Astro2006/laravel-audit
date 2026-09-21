@@ -16,7 +16,7 @@ use Closure;
 final readonly class AgentJob
 {
     /**
-     * @param  AgentRequest|Closure(array<string, TaskOutcome>): AgentRequest  $request
+     * @param  AgentRequest|Closure(array<string, TaskOutcome>): ?AgentRequest  $request  null = nothing to do
      * @param  list<RequiredFinding>  $required
      * @param  list<string>  $dependsOn  keys of jobs that must finish first (any status)
      */
@@ -31,7 +31,7 @@ final readonly class AgentJob
     ) {}
 
     /** @param array<string, TaskOutcome> $finished */
-    public function request(array $finished): AgentRequest
+    public function request(array $finished): ?AgentRequest
     {
         return $this->request instanceof AgentRequest ? $this->request : ($this->request)($finished);
     }
