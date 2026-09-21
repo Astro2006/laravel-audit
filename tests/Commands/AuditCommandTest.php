@@ -207,6 +207,32 @@ it('refuses codex unless the config accepts that it can read secrets', function 
     Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'exec --json --skip-git-repo-check'));
 });
 
+it('runs one task at a time by default and shows every task as it starts', function () {
+    auditProject();
+    fakeAgent(dependencyAnswers());
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('Mode: single, one task at a time')
+        ->expectsOutputToContain('dependencies · 5 tasks: security, necessity, freshness, hygiene, summary')
+        ->expectsOutputToContain('dependencies.security started')
+        ->expectsOutputToContain('dependencies.summary started')
+        ->assertExitCode(0);
+});
+
+it('runs tasks in parallel with --mode=parallel and rejects unknown modes', function () {
+    auditProject();
+    config()->set('audit.agent.concurrency', 3);
+    fakeTools();
+
+    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true, '--mode' => 'parallel'])
+        ->expectsOutputToContain('Mode: parallel, 3 tasks at once')
+        ->assertExitCode(0);
+
+    $this->artisan('audit', ['--mode' => 'turbo'])
+        ->expectsOutputToContain('Unknown agent mode "turbo". Allowed: single, parallel.')
+        ->assertExitCode(3);
+});
+
 it('rejects unknown agents', function () {
     auditProject();
 

@@ -183,6 +183,7 @@ Other options:
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
 | `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
 | `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
+| `--mode=MODE` | `single` (one task at a time, the default) or `parallel` (up to `agent.concurrency` tasks at once) |
 
 ### The test gate
 
@@ -214,7 +215,7 @@ php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
 
 ### Tasks
 
-Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt, run in parallel up to `agent.concurrency`. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings of medium severity and above (`keep`, `downgrade` or `drop`); findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
+Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings of medium severity and above (`keep`, `downgrade` or `drop`); findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
@@ -353,7 +354,8 @@ return [
     'agent' => [
         'driver' => env('AUDIT_AGENT', 'auto'),             // claude_code, opencode, codex or auto
         'model' => env('AUDIT_MODEL'),                      // overrides the driver model; null = CLI default
-        'concurrency' => 4,                                 // tasks at once; lower to 2 on rate limits
+        'mode' => env('AUDIT_MODE', 'single'),              // single: one task at a time; parallel: up to concurrency
+        'concurrency' => env('AUDIT_CONCURRENCY', 4),       // tasks at once in parallel mode
         'timeout' => 900,                                   // seconds per task
         'verify' => ['enabled' => true, 'min_severity' => 'medium'], // second call per task that checks its findings
         'drivers' => [
@@ -401,7 +403,7 @@ To change the console texts, publish the translations with `php artisan vendor:p
 
 ## Costs
 
-A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and lower `agent.concurrency` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
+A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and stay in `single` mode or lower `agent.concurrency` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
 
 ## Evaluating prompt changes
 

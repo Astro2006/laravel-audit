@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'header' => 'laravel-audit :version · Agent: :agent',
+    'header' => 'laravel-audit :version · Agent: :agent · Mode: :mode',
     'without' => 'Without: :items',
 
     'sections' => [
@@ -101,6 +101,19 @@ return [
         'failed' => 'failed: :reason',
         'skipped' => 'skipped: :reason',
         'rejected' => ':count dropped',
+    ],
+
+    'board' => [
+        'plan' => ':audit · :count tasks: :tasks',
+        'status' => ':running running · :waiting waiting · :done done · :failed failed (of :total) · :elapsed',
+        'waiting' => 'waiting: :tasks',
+        'started' => ':task started',
+        'repair' => 'repair pass',
+    ],
+
+    'modes' => [
+        'single' => 'single, one task at a time',
+        'parallel' => 'parallel, :count tasks at once',
     ],
 
     'summary' => [

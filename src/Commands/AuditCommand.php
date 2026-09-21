@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
+use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Console\Columns;
+use Astro2006\LaravelAudit\Console\LiveOutput;
 use Astro2006\LaravelAudit\Console\StepFormatter;
+use Astro2006\LaravelAudit\Console\TaskBoard;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Enums\AgentMode;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
@@ -44,6 +49,7 @@ use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
+use Symfony\Component\Console\Terminal;
 
 class AuditCommand extends Command
 {
@@ -63,7 +69,8 @@ class AuditCommand extends Command
         {--preflight-only : Run the tools only, without agents}
         {--reuse-preflight= : Reuse the preflight of the latest run, or of the given run ID}
         {--agent= : Agent CLI for this run: claude_code, opencode, codex or auto}
-        {--model= : Model for this run, in the format the agent CLI expects}';
+        {--model= : Model for this run, in the format the agent CLI expects}
+        {--mode= : single (one task at a time) or parallel (up to agent.concurrency tasks at once); default agent.mode}';
 
     protected $description = 'Audit this app: a deterministic preflight, then headless agents (Claude Code, OpenCode or Codex) for tests, frontend, backend and dependencies';
 
@@ -73,11 +80,19 @@ class AuditCommand extends Command
 
     private HarnessFactory $factory;
 
+    private LiveOutput $live;
+
+    private AgentMode $mode;
+
+    /** @var array<string, true> preflight steps that started and have no result yet */
+    private array $runningSteps = [];
+
     public function handle(HarnessFactory $factory): int
     {
         $this->factory = $factory;
         $this->messages = Messages::fromConfig();
         $this->formatter = new StepFormatter($this->messages);
+        $this->live = new LiveOutput($this->output->getOutput());
 
         $project = $factory->project();
 
@@ -88,6 +103,7 @@ class AuditCommand extends Command
                 array_values(array_map('strval', (array) $this->option('without'))),
             );
             $driver = $factory->driver($project, $this->stringOption('agent'), $this->stringOption('model'));
+            $this->mode = AgentMode::resolve($this->stringOption('mode') ?? (string) $factory->config('agent.mode', AgentMode::Single->value));
         } catch (InvalidSelection $exception) {
             $this->components->error($exception->getMessage());
 
@@ -121,6 +137,8 @@ class AuditCommand extends Command
         $summary = $this->input->hasParameterOption('--reuse-preflight')
             ? $this->reusePreflight($run, $manifest, $selection, $project)
             : $this->runPreflight($run, $manifest, $selection, $project, $guard);
+
+        $this->live->release();
 
         if ($summary === null) {
             $manifest->finish(RunStatus::Failed);
@@ -180,6 +198,7 @@ class AuditCommand extends Command
             $context,
             fn (StepResult $result) => $this->printStep($result),
             fn (StepResult $tests) => $this->gate($tests),
+            fn (PreflightStep $step) => $this->startStep($step),
         );
 
         $summary = (new SummaryBuilder)->write($context, $run->id, $gate);
@@ -237,6 +256,7 @@ class AuditCommand extends Command
 
     private function gate(StepResult $tests): GateDecision
     {
+        $this->live->release();
         $data = TestGate::data($tests);
 
         if ($data !== null && $data->failures() > 0) {
@@ -302,17 +322,53 @@ class AuditCommand extends Command
             $driver,
             $validator,
             $run->logsDir(),
-            (int) $this->factory->config('agent.concurrency', 4),
+            $this->concurrency(),
             (int) $this->factory->config('agent.timeout', 900),
             environment: $this->factory->childEnvironment($project),
         );
 
+        $board = new TaskBoard($jobs, $this->messages, microtime(true));
+        $width = (new Terminal)->getWidth();
+        $lastDrawn = 0.0;
+        $draw = function (bool $force = false) use ($board, $width, &$lastDrawn): void {
+            $now = microtime(true);
+
+            if ($force || $now - $lastDrawn >= 1.0) {
+                $lastDrawn = $now;
+                $this->live->show($board->live($now, $width));
+            }
+        };
+
+        foreach ($board->plan() as $line) {
+            $this->live->log($line);
+        }
+
+        $draw(true);
+
         $outcomes = $tasks->outcomes($runner->run(
             $jobs,
-            null,
-            fn (TaskOutcome $outcome) => $this->printTask($outcome),
+            function (AgentJob $job) use ($board, $draw): void {
+                $board->started($job, microtime(true));
+
+                if (! $this->live->enabled()) {
+                    $this->live->log('  <fg=gray>▶ '.$this->messages->get('board.started', ['task' => $job->key]).'</>');
+                }
+
+                $draw(true);
+            },
+            function (TaskOutcome $outcome) use ($board, $draw): void {
+                $board->finished($outcome);
+                $this->printTask($outcome);
+                $draw(true);
+            },
+            fn () => $draw(),
+            function (AgentJob $job) use ($board, $draw): void {
+                $board->repairing($job);
+                $draw(true);
+            },
         ));
 
+        $this->live->release();
         $this->newLine();
 
         foreach ($outcomes as $outcome) {
@@ -358,6 +414,7 @@ class AuditCommand extends Command
         $this->line(' <options=bold>'.$this->messages->get('header', [
             'version' => $this->packageVersion(),
             'agent' => $driver->displayName().($model !== null ? ' ('.$model.')' : ''),
+            'mode' => $this->messages->get('modes.'.$this->mode->value, ['count' => $this->concurrency()]),
         ]).'</>');
 
         if ($selection->without !== [] || count($selection->audits) < count(AuditType::cases())) {
@@ -383,25 +440,49 @@ class AuditCommand extends Command
         }
     }
 
+    private function concurrency(): int
+    {
+        return $this->mode->concurrency((int) $this->factory->config('agent.concurrency', 4));
+    }
+
+    /** Shows the step as running until its result arrives. */
+    private function startStep(PreflightStep $step): void
+    {
+        $this->runningSteps[$step->value] = true;
+        $this->showRunningSteps();
+    }
+
+    private function showRunningSteps(): void
+    {
+        $width = (new Terminal)->getWidth();
+
+        $this->live->show(array_map(
+            fn (string $step): string => Columns::detail('<fg=yellow>●</> '.$this->formatter->label(PreflightStep::from($step)), '<fg=yellow>'.$this->messages->get('agents.running').'</>', $width),
+            array_keys($this->runningSteps),
+        ));
+    }
+
     private function printStep(StepResult $result): void
     {
+        unset($this->runningSteps[$result->step->value]);
+        $this->showRunningSteps();
+
         $line = $this->formatter->format($result);
-        $this->components->twoColumnDetail(sprintf('<fg=%s>%s</> %s', $line->color, $line->symbol, $line->label), $line->detail);
+        $this->live->log(Columns::detail(sprintf('<fg=%s>%s</> %s', $line->color, $line->symbol, $line->label), $line->detail, (new Terminal)->getWidth()));
 
         foreach ($this->formatter->warnings($result) as $warning) {
-            $this->line('    <fg=yellow>⚠</> '.$warning);
+            $this->live->log('    <fg=yellow>⚠</> '.$warning);
         }
     }
 
     private function printTask(TaskOutcome $outcome): void
     {
-        $seconds = (int) round($outcome->finishedAt - $outcome->startedAt);
         $detail = $outcome->completed()
-            ? $this->messages->get('agents.task_finished', ['findings' => count($outcome->findings), 'duration' => sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60)])
+            ? $this->messages->get('agents.task_finished', ['findings' => count($outcome->findings), 'duration' => TaskBoard::duration($outcome->finishedAt - $outcome->startedAt)])
                 .($outcome->rejected === [] ? '' : ' · '.$this->messages->get('agents.rejected', ['count' => count($outcome->rejected)]))
             : $this->messages->get('agents.failed', ['reason' => mb_strimwidth((string) $outcome->reason, 0, 70, '…')]);
 
-        $this->line(sprintf('  <fg=%s>%s</> <fg=gray>%s · %s</>', $outcome->completed() ? 'green' : 'red', $outcome->completed() ? '·' : '✘', $outcome->key, $detail));
+        $this->live->log(sprintf('  <fg=%s>%s</> <fg=gray>%s · %s</>', $outcome->completed() ? 'green' : 'red', $outcome->completed() ? '✔' : '✘', $outcome->key, $detail));
     }
 
     private function printOutcome(AuditOutcome $outcome): void
@@ -435,6 +516,7 @@ class AuditCommand extends Command
 
     private function section(string $key): void
     {
+        $this->live->release();
         $this->newLine();
         $this->line(' <options=bold>'.$this->messages->get('sections.'.$key).'</>');
     }
