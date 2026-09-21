@@ -67,7 +67,23 @@ it('fills context, the task checks and the output template', function () {
         ->toContain('### BE-001 — <Title')
         ->toContain('You can read files (read, glob, list).')
         ->toContain('At most 8 findings.')
+        ->toContain('Open at most 25 files')
+        ->toContain('`missing:<path>`')
+        // No real-looking example a weak model could copy as a finding.
+        ->not->toContain('OrderController')
+        ->not->toContain('CWE-639')
         ->not->toContain('## Context from other tasks');
+});
+
+it('renders the verify prompt with the findings to check', function () {
+    $prompt = renderer()->renderVerify(new BackendAudit, backendTask('injection'), promptContext(), '### BE-001 — Raw SQL');
+
+    expect($prompt->text)->toContain('Verify `backend.injection`')
+        ->toContain('### BE-001 — Raw SQL')
+        ->toContain('Blade `{{ }}` already escapes')
+        ->toContain('**German (de)**')
+        ->not->toMatch('/\{\{[a-z_]+\}\}/')
+        ->and($prompt->hash)->toBe(renderer()->verifyHash());
 });
 
 it('injects the sections of the tasks it depends on', function () {

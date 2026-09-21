@@ -41,9 +41,10 @@ final class PromptContextBuilder
             reportLanguage: $locale,
             excludePaths: Read::strings($config, 'exclude_paths'),
             customChecks: $customChecks,
-            maxFindings: max(1, Read::int($config, 'max_findings_per_task', 8)),
+            maxFindings: max(1, Read::int($config, 'max_findings_per_task', 5)),
             boostAvailable: $boostAvailable,
             toolsNote: $toolsNote,
+            maxFiles: max(1, Read::int($config, 'max_files_per_task', 25)),
         );
     }
 

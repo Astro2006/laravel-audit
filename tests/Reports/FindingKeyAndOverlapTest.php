@@ -40,6 +40,27 @@ it('builds keys that ignore ids, line numbers and location order', function () {
         ->and($a->key('backend'))->toHaveLength(8);
 });
 
+it('keeps single keys and separates findings that would share one', function () {
+    $single = makeFinding('BE-003', 'sql-injection', ['app/A.php:10']);
+    $first = makeFinding('BE-001', 'mass-assignment', ['app/A.php:10']);
+    $second = makeFinding('BE-002', 'mass-assignment', ['app/A.php:200']);
+
+    [$a, $b, $c] = Finding::withUniqueKeys([$first, $second, $single]);
+
+    expect($a->key('backend'))->not->toBe($b->key('backend'))
+        ->and($c->key('backend'))->toBe($single->key('backend'))
+        ->and($a->key('backend'))->toBe(Finding::withUniqueKeys([$first, $second])[0]->key('backend'));
+});
+
+it('separates findings on the same line by title', function () {
+    $first = makeFinding('BE-001', 'mass-assignment', ['app/A.php:10']);
+    $second = new Finding('BE-002', 'Another issue', $first->severity, $first->confidence, $first->category, $first->check, $first->effort, $first->locations, 1, [], [], 'e', 'i', 'r');
+
+    [$a, $b] = Finding::withUniqueKeys([$first, $second]);
+
+    expect($a->key('backend'))->not->toBe($b->key('backend'));
+});
+
 it('detects possible duplicates across audits', function () {
     $overlaps = (new OverlapDetector)->detect([
         'backend' => [makeFinding('BE-001', 'mass-assignment', ['app/Http/Controllers/OrderController.php:50-60'])],

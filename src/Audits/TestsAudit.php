@@ -89,6 +89,21 @@ final class TestsAudit extends BaseAudit
         ];
     }
 
+    public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string
+    {
+        $tests = $preflight->steps->tests();
+        $browser = $preflight->steps->browser();
+        $phpstan = $preflight->steps->phpstan();
+
+        return match ($task->name) {
+            'phpstan' => $phpstan !== null && $phpstan->errors === 0 && $phpstan->baselined === 0 ? 'PHPStan reports no errors and no baseline.' : null,
+            'results' => $tests !== null && $tests->failures() === 0 && $tests->skipped === 0 && ($browser === null || ($browser->failures() === 0 && $browser->skipped === 0))
+                ? 'all tests passed and none were skipped.'
+                : null,
+            default => null,
+        };
+    }
+
     public function requiredFindings(PreflightSummary $preflight): array
     {
         $required = [];

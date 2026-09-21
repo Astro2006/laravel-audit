@@ -14,6 +14,8 @@ function auditProject(): string
     config()->set('audit.agent.driver', 'claude_code');
     config()->set('audit.agent.drivers.claude_code.binary', $dir.'/vendor/bin/pint'); // any existing file counts as the CLI
     config()->set('audit.report_language', 'en');
+    config()->set('audit.summary', 'agent');
+    config()->set('audit.agent.verify.enabled', false);
 
     return $dir;
 }
@@ -237,4 +239,46 @@ it('rejects unknown agents', function () {
     $this->artisan('audit', ['--agent' => 'cursor'])
         ->expectsOutputToContain('Unknown agent driver "cursor"')
         ->assertExitCode(3);
+});
+
+function hygieneFinding(string $id, string $title, string $constraint): string
+{
+    return "### {$id} — {$title}\n\n| Field | Value |\n|---|---|\n| Severity | medium |\n| Confidence | confirmed |\n| Category | dependency |\n| Check | loose-constraint |\n| Effort | S |\n| Locations | `composer.json:8` |\n\n**Evidence**\n```json\n{$constraint}\n```\n\n**Impact**\nAny version can be installed.\n\n**Recommendation**\nPin a range.\n\n---\n";
+}
+
+it('writes the summary itself and applies the verify pass', function () {
+    $project = auditProject();
+    config()->set('audit.summary', 'generated');
+    config()->set('audit.agent.verify.enabled', true);
+
+    $answers = dependencyAnswers();
+    $answers['dependencies.hygiene'] = "## Findings\n\n"
+        .hygieneFinding('DEP-001', 'acme/test-only accepts any version', '"acme/test-only": "*",')
+        ."\n".hygieneFinding('DEP-002', 'acme/used-lib constraint is too loose', '"acme/used-lib": "^2.0",')
+        ."\n".hygieneFinding('DEP-003', 'Made-up constraint', '"acme/fake": "dev-main",')
+        ."\n## Limitations\nNone.\n";
+    $answers['dependencies.hygiene.verify'] = "## Verdicts\n\n| ID | Verdict | Reason |\n|---|---|---|\n| DEP-001 | keep | Line 8 has `*`. |\n| DEP-002 | drop | `^2.0` is a normal range. |\n";
+    fakeAgent($answers);
+
+    $this->artisan('audit', ['--dependencies' => true])->assertExitCode(0);
+
+    $run = latestRun($project);
+    $report = file_get_contents($run.'/dependencies.md');
+    $manifest = file_get_contents($run.'/run.md');
+
+    expect($report)->toContain('acme/test-only accepts any version')
+        ->not->toContain('acme/used-lib constraint is too loose')
+        ->not->toContain('Made-up constraint')
+        ->toContain('## Summary'."\n\n".'4 findings from 4 tasks (2 medium, 2 low).')
+        ->toContain('- 2 findings were dropped')
+        ->and($run.'/logs/dependencies.summary.prompt.md')->not->toBeFile()
+        ->and($run.'/logs/dependencies.hygiene.verify.prompt.md')->toBeFile()
+        ->and(file_get_contents($run.'/logs/dependencies.hygiene.verify.prompt.md'))->toContain('### DEP-001 — acme/test-only accepts any version')
+        ->not->toContain('Made-up constraint')
+        // Findings that cover an advisory are facts, not claims, and are not verified.
+        ->and($run.'/logs/dependencies.security.verify.prompt.md')->not->toBeFile()
+        ->and($manifest)->toContain('## Rejected findings')
+        ->toContain('| dependencies.hygiene | DEP-002 | acme/used-lib constraint is too loose | verify pass: `^2.0` is a normal range. |')
+        ->toContain('| dependencies.hygiene | DEP-003 | Made-up constraint | the code in Evidence does not appear in `composer.json`. |')
+        ->toContain('| Wall clock |');
 });

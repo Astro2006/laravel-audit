@@ -8,7 +8,9 @@ use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 interface Audit
 {
@@ -51,4 +53,13 @@ interface Audit
      * @return list<RequiredFinding>
      */
     public function requiredFindings(PreflightSummary $preflight): array;
+
+    /**
+     * Why a task has nothing to audit in this run (e.g. no advisories), or
+     * null when it runs. Skipped tasks cost no agent call.
+     */
+    public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string;
+
+    /** Facts from the preflight a finding must not contradict. */
+    public function findingGuard(PreflightSummary $preflight, ProjectInspector $project): ?FindingGuard;
 }

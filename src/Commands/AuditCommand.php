@@ -22,6 +22,7 @@ use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\RunStatus;
+use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
@@ -304,10 +305,18 @@ class AuditCommand extends Command
             $project->basePath,
             $config,
             $extra,
-            max(1, (int) $this->factory->config('max_findings_per_task', 8)),
+            max(1, (int) $this->factory->config('max_findings_per_task', 5)),
+            $this->factory->config('summary', AuditTasks::SUMMARY_GENERATED) === AuditTasks::SUMMARY_AGENT ? AuditTasks::SUMMARY_AGENT : AuditTasks::SUMMARY_GENERATED,
+            (bool) $this->factory->config('agent.verify.enabled', true),
+            Severity::tryFrom((string) $this->factory->config('agent.verify.min_severity', 'medium')) ?? Severity::Medium,
         );
 
         $this->section('agents');
+        $jobs = $tasks->jobs();
+
+        foreach ($tasks->skipped() as $key => $reason) {
+            $this->line(sprintf('  <fg=gray>- %s · %s</>', $key, $this->messages->get('agents.skipped', ['reason' => $reason])));
+        }
 
         $runner = new AgentRunner(
             $driver,
@@ -318,7 +327,6 @@ class AuditCommand extends Command
             environment: $this->factory->childEnvironment($project),
         );
 
-        $jobs = $tasks->jobs();
         $board = new TaskBoard($jobs, $this->messages, microtime(true));
         $width = (new Terminal)->getWidth();
         $lastDrawn = 0.0;
@@ -471,6 +479,7 @@ class AuditCommand extends Command
     {
         $detail = $outcome->completed()
             ? $this->messages->get('agents.task_finished', ['findings' => count($outcome->findings), 'duration' => TaskBoard::duration($outcome->finishedAt - $outcome->startedAt)])
+                .($outcome->rejected === [] ? '' : ' · '.$this->messages->get('agents.rejected', ['count' => count($outcome->rejected)]))
             : $this->messages->get('agents.failed', ['reason' => mb_strimwidth((string) $outcome->reason, 0, 70, '…')]);
 
         $this->live->log(sprintf('  <fg=%s>%s</> <fg=gray>%s · %s</>', $outcome->completed() ? 'green' : 'red', $outcome->completed() ? '✔' : '✘', $outcome->key, $detail));

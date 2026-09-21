@@ -47,8 +47,20 @@ return [
         // CLIs hit their rate limits. Use parallel with a hosted API or a model
         // server that handles concurrent requests. --mode overrides it per run.
         'mode' => env('AUDIT_MODE', 'single'),
-        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4), // tasks at once in parallel mode
+
+        // Tasks at once in parallel mode; lower to 2 if you hit rate limits. A
+        // local Ollama only serves OLLAMA_NUM_PARALLEL requests at once: more
+        // slots do not make a run faster, they only queue and cost memory.
+        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4),
         'timeout' => 900,                             // seconds per task
+
+        // After each task, a second call with the same agent and model checks
+        // its findings (keep, downgrade or drop). Costs one call per task with
+        // findings at or above min_severity; turn off for faster runs.
+        'verify' => [
+            'enabled' => true,
+            'min_severity' => 'medium',
+        ],
 
         'drivers' => [
             'claude_code' => [
@@ -163,7 +175,16 @@ return [
 
     // Per task: more findings than this fail validation; agents group
     // instead. Raised automatically when a task has more required findings.
-    'max_findings_per_task' => 8,
+    'max_findings_per_task' => 5,
+
+    // Per task: how many files the agent should open at most. Keeps the
+    // context small, which matters most for local models.
+    'max_files_per_task' => 25,
+
+    // generated: the harness writes each audit's summary from the findings
+    // (no agent call). agent: a summary task per audit writes it. The tests
+    // audit always runs its summary task for "Top 10 missing tests".
+    'summary' => 'generated',
 
     'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
 

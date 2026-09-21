@@ -13,6 +13,7 @@ use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\Overlap;
+use Astro2006\LaravelAudit\Reports\Rejection;
 use Astro2006\LaravelAudit\Support\Json;
 use DateTimeImmutable;
 
@@ -110,7 +111,9 @@ final class RunManifest
                     'model' => $task->model,
                     'findings' => count($task->findings),
                     'telemetry' => $task->telemetry->toArray(),
+                    'wall_clock_seconds' => $this->wallClock($task),
                     'errors' => $task->errors,
+                    'rejected' => array_map(fn (Rejection $rejection): array => $rejection->toArray(), $task->rejected),
                 ], $outcome->tasks),
             ], $this->outcomes),
             'overlaps' => count($this->overlaps),
@@ -154,6 +157,7 @@ final class RunManifest
             ...$this->auditsSection(),
             ...$this->tasksSection(),
             ...$this->findingsSection(),
+            ...$this->rejectedSection(),
             ...$this->duplicatesSection(),
             ...$this->warningsSection(),
         );
@@ -262,7 +266,7 @@ final class RunManifest
             foreach ($outcome->tasks as $task) {
                 $t = $task->telemetry;
                 $rows[] = sprintf(
-                    '| %s | %s | %d | %s | %d | %d | %d | %d | %s | %ss | %s |',
+                    '| %s | %s | %d | %s | %d | %d | %d | %d | %s | %ss | %ss | %s |',
                     $task->key,
                     $task->status->value.($task->reason === null ? '' : ': '.$this->cell($task->reason)),
                     count($task->findings),
@@ -273,6 +277,7 @@ final class RunManifest
                     $t->cacheReadTokens,
                     $t->costUsd === null ? '–' : number_format($t->costUsd, 2),
                     round($t->durationMs / 1000, 1),
+                    $this->wallClock($task),
                     $task->promptHash,
                 );
             }
@@ -281,8 +286,8 @@ final class RunManifest
         return $rows === [] ? [] : [
             '## Tasks',
             '',
-            '| Task | Status | Findings | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Prompt |',
-            '|---|---|---|---|---|---|---|---|---|---|---|',
+            '| Task | Status | Findings | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Wall clock | Prompt |',
+            '|---|---|---|---|---|---|---|---|---|---|---|---|',
             ...$rows,
             '',
         ];
@@ -312,6 +317,37 @@ final class RunManifest
             '',
             '| Key | ID | Check | Severity | Confidence | Locations |',
             '|---|---|---|---|---|---|',
+            ...$rows,
+            '',
+        ];
+    }
+
+    /** Seconds from the start of the first attempt to the end of the last, repair included. */
+    private function wallClock(TaskOutcome $task): float
+    {
+        return round(max(0.0, $task->finishedAt - $task->startedAt), 1);
+    }
+
+    /** @return list<string> */
+    private function rejectedSection(): array
+    {
+        $rows = [];
+
+        foreach ($this->outcomes as $outcome) {
+            foreach ($outcome->tasks as $task) {
+                foreach ($task->rejected as $rejection) {
+                    $rows[] = sprintf('| %s | %s | %s | %s |', $task->key, $rejection->id, $this->cell($rejection->title), $this->cell($rejection->reason));
+                }
+            }
+        }
+
+        return $rows === [] ? [] : [
+            '## Rejected findings',
+            '',
+            'Dropped by the harness; they are not in the audit reports. IDs are the task\'s own.',
+            '',
+            '| Task | ID | Title | Reason |',
+            '|---|---|---|---|',
             ...$rows,
             '',
         ];

@@ -65,8 +65,18 @@ final class AgentRunner
                 }
 
                 unset($pending[$index]);
-                $onStarted?->__invoke($job);
                 $request = $job->request($finished);
+
+                if ($request === null) {
+                    // Nothing to do for this job (e.g. no findings to verify).
+                    $outcome = $this->nothingToDo($job);
+                    $finished[$job->key] = $outcome;
+                    $outcomes[] = $outcome;
+
+                    continue;
+                }
+
+                $onStarted?->__invoke($job);
                 $now = microtime(true);
                 $running[] = $this->start($job, $request, $request->prompt, $this->driver->command($request), false, $now);
             }
@@ -217,7 +227,15 @@ final class AgentRunner
             model: $result->model,
             startedAt: $attempt->jobStartedAt,
             finishedAt: microtime(true),
+            rejected: $report === null ? [] : $report->lint->rejected,
         );
+    }
+
+    private function nothingToDo(AgentJob $job): TaskOutcome
+    {
+        $now = microtime(true);
+
+        return new TaskOutcome($job->key, $job->audit, AuditStatus::Completed, 'Nothing to do.', null, [], [], [], new Telemetry, false, $job->promptHash, null, $now, $now);
     }
 
     private function failedBeforeStart(AgentJob $job, string $reason): TaskOutcome

@@ -19,11 +19,15 @@ final class ParsedFinding
 
     public bool $hasTable = false;
 
+    /** Last line of the finding in the report, including its closing `---`. */
+    public int $endLine;
+
     public function __construct(
         public readonly string $id,
         public readonly string $title,
         public readonly int $line,
     ) {
+        $this->endLine = $line;
         $this->fields = new Collection;
         $this->bodies = new Collection;
     }

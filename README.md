@@ -215,7 +215,7 @@ php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
 
 ### Tasks
 
-Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. A last summary task per audit sees only the merged findings and writes the summary.
+Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings of medium severity and above (`keep`, `downgrade` or `drop`); findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
@@ -314,8 +314,9 @@ Every report has frontmatter and the same structure. Every finding carries a fix
 ```
 
 - **Severity** `critical` · `high` · `medium` · `low` · `info`. **Confidence** `confirmed` · `likely` · `suspected`. **Effort** `XS` – `XL`.
-- Locations are files with lines, `route:METHOD /uri` or `package:vendor/name`. Locations that do not exist in the project are flagged as possibly hallucinated.
-- Each finding gets a stable key (audit, check and targets, without line numbers). Keys let you compare runs.
+- Locations are files with lines, `route:METHOD /uri`, `package:vendor/name`, or `missing:path` when the absence of a file is the finding.
+- The harness drops findings it can disprove, without a repair pass: a file that does not exist, a `missing:` file that does exist, quoted code that is not in the file, or a dependency finding that composer contradicts (an advisory or abandoned package composer does not report, a package that is not locked). `run.md` lists them under "Rejected findings".
+- Each finding gets a stable key (audit, check and targets, without line numbers). Keys let you compare runs. Findings that would share a key within one report are told apart by their line, then their title.
 - Findings from different audits, or from different tasks of one audit, that point to the same place are listed in `run.md` as possible duplicates. They are not merged.
 - There is no grade. `run.md` shows metrics (coverage, PHPStan errors, advisories …) and experimental risk points that you can weight in the config.
 
@@ -356,6 +357,7 @@ return [
         'mode' => env('AUDIT_MODE', 'single'),              // single: one task at a time; parallel: up to concurrency
         'concurrency' => env('AUDIT_CONCURRENCY', 4),       // tasks at once in parallel mode
         'timeout' => 900,                                   // seconds per task
+        'verify' => ['enabled' => true, 'min_severity' => 'medium'], // second call per task that checks its findings
         'drivers' => [
             'claude_code' => ['binary' => 'claude', 'model' => null, 'effort' => null, 'max_budget_usd' => null /* per task */],
             'opencode' => ['binary' => 'opencode', 'model' => null /* provider/model */],
@@ -378,7 +380,9 @@ return [
         'license_allowlist' => ['MIT', 'BSD-3-Clause', 'Apache-2.0', /* … */],
     ],
 
-    'max_findings_per_task' => 8,           // agents group instead of listing more
+    'max_findings_per_task' => 5,           // agents group instead of listing more
+    'max_files_per_task' => 25,             // files an agent should open at most
+    'summary' => 'generated',               // generated (no agent call) or agent
     'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
     'custom_checks' => ['tests' => [], 'frontend' => [], 'backend' => [], 'dependencies' => []],
     'risk_points' => [/* weights, experimental */],

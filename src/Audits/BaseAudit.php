@@ -6,6 +6,8 @@ namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Reports\FindingGuard;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 abstract class BaseAudit implements Audit
 {
@@ -31,6 +33,16 @@ abstract class BaseAudit implements Audit
     public function requiredFindings(PreflightSummary $preflight): array
     {
         return [];
+    }
+
+    public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string
+    {
+        return null;
+    }
+
+    public function findingGuard(PreflightSummary $preflight, ProjectInspector $project): ?FindingGuard
+    {
+        return null;
     }
 
     /**

@@ -9,7 +9,9 @@ use Astro2006\LaravelAudit\Data\Composer\Advisory;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 
 final class DependenciesAudit extends BaseAudit
 {
@@ -74,6 +76,28 @@ final class DependenciesAudit extends BaseAudit
             PreflightStep::LinesOfCode,
             PreflightStep::Composer,
         ];
+    }
+
+    public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string
+    {
+        if ($task->name !== 'security') {
+            return null;
+        }
+
+        $facts = $preflight->dependencyFacts();
+
+        return match (true) {
+            $facts === null => 'no dependency facts from the preflight.',
+            $facts->advisories === [] && $facts->abandoned === [] => 'composer audit reports no advisories and no abandoned packages.',
+            default => null,
+        };
+    }
+
+    public function findingGuard(PreflightSummary $preflight, ProjectInspector $project): ?FindingGuard
+    {
+        $facts = $preflight->dependencyFacts();
+
+        return $facts === null ? null : new DependencyGuard($facts, $project->lockedPackages()->keys()->values()->all());
     }
 
     public function requiredFindings(PreflightSummary $preflight): array

@@ -17,7 +17,9 @@ use RuntimeException;
 final class PromptRenderer
 {
     /** Prompt files of the single-agent layout; a published copy is ignored now. */
-    public const array OUTDATED_TEMPLATES = ['_base.md', 'tests.md', 'frontend.md', 'backend.md', 'dependencies.md'];
+    public const array OUTDATED_TEMPLATES = ['_base.md', 'tests.md', 'frontend.md', 'backend.md', 'dependencies.md', 'summary.md'];
+
+    private const string VERIFY_TEMPLATE = 'tasks/_verify.md';
 
     /**
      * @param  string  $packagePath  resources/prompts of this package
@@ -60,6 +62,26 @@ final class PromptRenderer
     }
 
     /**
+     * The prompt of the verify job that checks the findings of one task.
+     *
+     * @param  string  $findings  the findings to verify, as the task wrote them
+     */
+    public function renderVerify(Audit $audit, AuditTask $task, PromptContext $context, string $findings): RenderedPrompt
+    {
+        $text = strtr($this->template(self::VERIFY_TEMPLATE), [
+            ...$this->placeholders($audit, $task, $context),
+            '{{findings}}' => $findings,
+        ]);
+
+        return new RenderedPrompt($text, $this->verifyHash());
+    }
+
+    public function verifyHash(): string
+    {
+        return substr(sha1($this->template(self::VERIFY_TEMPLATE)), 0, 8);
+    }
+
+    /**
      * Depends on the templates and the task definition only, never on the
      * run, so equal hashes mean equal instructions.
      */
@@ -99,12 +121,6 @@ final class PromptRenderer
         return match (strtolower(substr($locale, 0, 2))) {
             'de' => 'German (de)',
             'en' => 'English (en)',
-            'fr' => 'French (fr)',
-            'es' => 'Spanish (es)',
-            'it' => 'Italian (it)',
-            'nl' => 'Dutch (nl)',
-            'pt' => 'Portuguese (pt)',
-            'pl' => 'Polish (pl)',
             default => $locale,
         };
     }
@@ -133,6 +149,7 @@ final class PromptRenderer
             '{{report_language}}' => self::languageLabel($context->reportLanguage),
             '{{exclude_paths}}' => implode(', ', array_map(fn (string $path): string => '`'.$path.'`', $context->excludePaths)),
             '{{max_findings}}' => (string) $context->maxFindings,
+            '{{max_files}}' => (string) $context->maxFiles,
             '{{checks}}' => $this->checkList($audit, $task),
             '{{custom_checks}}' => $customChecks === []
                 ? 'None.'

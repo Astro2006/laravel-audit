@@ -8,7 +8,8 @@ use Astro2006\LaravelAudit\Support\Regex;
 use Stringable;
 
 /**
- * One location of a finding: a file (optionally with lines), a route or a package.
+ * One location of a finding: a file (optionally with lines), a route, a
+ * package, or a file whose absence is the finding (`missing:path`).
  */
 final readonly class Location implements Stringable
 {
@@ -18,6 +19,7 @@ final readonly class Location implements Stringable
         public ?int $endLine = null,
         public ?string $route = null,
         public ?string $package = null,
+        public ?string $missing = null,
     ) {}
 
     /**
@@ -68,6 +70,14 @@ final readonly class Location implements Stringable
             return new self(package: strtolower($value));
         }
 
+        $missing = Regex::groups('/^missing:\s*(\S+)$/i', $raw);
+
+        if ($missing !== null) {
+            [$value] = $missing;
+
+            return new self(missing: self::normalizePath($value));
+        }
+
         $lines = Regex::groups('/^(.+?):(\d+)(?:\s*-\s*(\d+))?$/', $raw);
 
         if ($lines !== null) {
@@ -92,6 +102,7 @@ final readonly class Location implements Stringable
         return match (true) {
             $this->route !== null => 'route:'.$this->route,
             $this->package !== null => 'package:'.$this->package,
+            $this->missing !== null => 'missing:'.$this->missing,
             default => (string) $this->file,
         };
     }
@@ -99,6 +110,11 @@ final readonly class Location implements Stringable
     public function isFile(): bool
     {
         return $this->file !== null;
+    }
+
+    public function isMissing(): bool
+    {
+        return $this->missing !== null;
     }
 
     /** Last line covered by this location, or null for whole-file locations. */

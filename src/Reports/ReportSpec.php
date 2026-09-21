@@ -18,6 +18,7 @@ final readonly class ReportSpec
      * @param  array<string, string>  $checks  allowed check slugs => description
      * @param  list<string>  $sections  required level-2 sections in order; Limitations, if listed, must come last
      * @param  int|null  $maxFindings  null = no limit
+     * @param  FindingGuard|null  $guard  facts a finding must not contradict
      */
     public function __construct(
         public string $label,
@@ -25,9 +26,10 @@ final readonly class ReportSpec
         public array $checks,
         public array $sections,
         public ?int $maxFindings = null,
+        public ?FindingGuard $guard = null,
     ) {}
 
-    public static function forAudit(Audit $audit, ?int $maxFindings = null): self
+    public static function forAudit(Audit $audit, ?int $maxFindings = null, ?FindingGuard $guard = null): self
     {
         return new self(
             $audit->type()->value,
@@ -35,10 +37,11 @@ final readonly class ReportSpec
             $audit->checks(),
             ['Summary', 'Findings', ...$audit->sections(), 'Positive observations', 'Limitations'],
             $maxFindings,
+            $guard,
         );
     }
 
-    public static function forTask(Audit $audit, AuditTask $task, ?int $maxFindings = null): self
+    public static function forTask(Audit $audit, AuditTask $task, ?int $maxFindings = null, ?FindingGuard $guard = null): self
     {
         if ($task->isSummary()) {
             return new self($task->key(), $audit->idPrefix(), [], ['Summary', ...$task->sections]);
@@ -46,7 +49,7 @@ final readonly class ReportSpec
 
         $checks = array_intersect_key($audit->checks(), array_flip([...$task->checks, 'other']));
 
-        return new self($task->key(), $audit->idPrefix(), $checks, ['Findings', ...$task->sections, 'Limitations'], $maxFindings);
+        return new self($task->key(), $audit->idPrefix(), $checks, ['Findings', ...$task->sections, 'Limitations'], $maxFindings, $guard);
     }
 
     public function hasFindings(): bool
