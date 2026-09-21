@@ -42,9 +42,11 @@ final class AgentRunner
      * @param  list<AgentJob>  $jobs  in the order they should start
      * @param  (Closure(AgentJob): void)|null  $onStarted
      * @param  (Closure(TaskOutcome): void)|null  $onFinished
+     * @param  (Closure(): void)|null  $onTick  called after every poll round
+     * @param  (Closure(AgentJob): void)|null  $onRepair  called when a job starts its repair pass
      * @return list<TaskOutcome> in the order the jobs finished
      */
-    public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null): array
+    public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null): array
     {
         $keys = array_map(fn (AgentJob $job): string => $job->key, $jobs);
         $pending = $jobs;
@@ -96,6 +98,7 @@ final class AgentRunner
 
                 if ($next instanceof Attempt) {
                     $stillRunning[] = $next;
+                    $onRepair?->__invoke($next->job);
 
                     continue;
                 }
@@ -106,6 +109,7 @@ final class AgentRunner
             }
 
             $running = $stillRunning;
+            $onTick?->__invoke();
 
             if ($running !== []) {
                 usleep($this->pollMicroseconds);

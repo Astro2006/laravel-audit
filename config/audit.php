@@ -38,7 +38,16 @@ return [
     'agent' => [
         'driver' => env('AUDIT_AGENT', 'auto'),
         'model' => env('AUDIT_MODEL'),                // overrides the driver's model; null = driver/CLI default
-        'concurrency' => 4,                           // tasks at once; lower to 2 if you hit rate limits
+
+        // single: one task at a time. parallel: up to `concurrency` tasks at
+        // once. single is the default because most setups cannot serve several
+        // agent sessions at the same time: a self-hosted model (Ollama and
+        // others) usually answers one request after the other, so parallel
+        // tasks queue up there, run into the timeout or fail; subscription
+        // CLIs hit their rate limits. Use parallel with a hosted API or a model
+        // server that handles concurrent requests. --mode overrides it per run.
+        'mode' => env('AUDIT_MODE', 'single'),
+        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4), // tasks at once in parallel mode
         'timeout' => 900,                             // seconds per task
 
         'drivers' => [

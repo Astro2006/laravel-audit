@@ -141,3 +141,43 @@ it('ignores dependencies outside the run and fails tasks stuck in a cycle', func
 
     Process::assertRanTimes(fn () => true, 1);
 });
+
+it('runs one task at a time with a concurrency of 1', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+    $events = [];
+
+    runner(tempDir('logs'), concurrency: 1)->run(
+        [taskJob('backend.a'), taskJob('backend.b')],
+        function (AgentJob $job) use (&$events) {
+            $events[] = 'start '.$job->key;
+        },
+        function (TaskOutcome $outcome) use (&$events) {
+            $events[] = 'finish '.$outcome->key;
+        },
+    );
+
+    expect($events)->toBe(['start backend.a', 'finish backend.a', 'start backend.b', 'finish backend.b']);
+});
+
+it('reports every poll round and the start of a repair pass', function () {
+    $broken = str_replace("## Limitations\nQueues were not inspected.\n", '', file_get_contents(fixture('reports/backend-valid.md')));
+
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::describe()->output(claudeJson(['result' => $broken]))->iterations(3))
+        ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))])))]);
+    $ticks = 0;
+    $repairs = [];
+
+    runner(tempDir('logs'))->run(
+        [backendJob()],
+        onTick: function () use (&$ticks) {
+            $ticks++;
+        },
+        onRepair: function (AgentJob $job) use (&$repairs) {
+            $repairs[] = $job->key;
+        },
+    );
+
+    expect($ticks)->toBeGreaterThanOrEqual(3)
+        ->and($repairs)->toBe(['backend']);
+});

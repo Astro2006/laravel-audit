@@ -49,6 +49,14 @@ final class StepFormatter
         return new StepLine($failed ? '✘' : '✔', $failed ? 'red' : 'green', $label, $this->detail($result));
     }
 
+    /** The label of a step that has not finished yet. */
+    public function label(PreflightStep $step): string
+    {
+        return $step === PreflightStep::Phpstan
+            ? $this->messages->get('steps.phpstan_plain')
+            : $this->messages->get('steps.'.$step->value, ['level' => '?']);
+    }
+
     /** @return list<string> */
     public function warnings(StepResult $result): array
     {

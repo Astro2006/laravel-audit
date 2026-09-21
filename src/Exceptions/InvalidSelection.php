@@ -19,6 +19,12 @@ final class InvalidSelection extends InvalidArgumentException
         return new self(sprintf('The audit "%s" is selected and excluded at the same time.', $audit));
     }
 
+    /** @param list<string> $allowed */
+    public static function unknownMode(string $value, array $allowed): self
+    {
+        return new self(sprintf('Unknown agent mode "%s". Allowed: %s.', $value, implode(', ', $allowed)));
+    }
+
     public static function nothingLeft(): self
     {
         return new self('No audit left to run.');

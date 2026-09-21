@@ -7,10 +7,15 @@ All notable changes to `laravel-audit` will be documented in this file.
 ### Changed
 
 - Agents run through drivers named like Laravel Boost's agents: `claude_code`, `opencode` and `codex`. `agent.driver = auto` picks the first installed agent from `boost.json`; `--agent` and `--model` override it per run. Models, including self-hosted ones, are configured in the agent CLI.
-- Every audit is split into small tasks (2–7 related checks) that run as separate agent calls in parallel, plus a summary task. Tasks that need another task's output wait for it. The harness assembles one report per audit; a failed task makes the audit `partial` instead of failing it.
+- Every audit is split into small tasks (2–7 related checks) that run as separate agent calls, plus a summary task. Tasks that need another task's output wait for it. The harness assembles one report per audit; a failed task makes the audit `partial` instead of failing it.
 - `max_findings` is now `max_findings_per_task` (default 8), `agent.timeout` is per task (default 900 s).
 - Prompts moved to `_task.md` and `tasks/<audit>/<task>.md`. Published prompts of the old layout are ignored, with a warning.
 - The Boost MCP server no longer needs an `.mcp.json` entry, and `get-config` is never allowed because it returns secret values.
+
+### Added
+
+- `agent.mode` (`AUDIT_MODE`) and `--mode`: `single` runs one task at a time and is the default, because self-hosted model servers and subscription CLIs rarely handle parallel sessions; `parallel` runs up to `agent.concurrency` (`AUDIT_CONCURRENCY`) tasks at once. The header shows the mode.
+- Live progress: the console lists all tasks of the run before the first starts, then shows what runs (with its time and repair passes), what waits and what is done, redrawn in place. Preflight steps show while they run. Without a terminal every start and finish is a plain line.
 
 ### Fixed
 
