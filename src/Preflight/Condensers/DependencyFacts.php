@@ -147,22 +147,23 @@ final class DependencyFacts
      */
     private function abandoned(array $audit, array $outdated): array
     {
-        $abandoned = new Collection;
+        /** @var array<string, string|null> $abandoned */
+        $abandoned = [];
 
         foreach (Read::array($audit, 'abandoned') as $package => $replacement) {
-            $abandoned->put(strtolower((string) $package), is_string($replacement) && $replacement !== '' ? $replacement : null);
+            $abandoned[strtolower((string) $package)] = is_string($replacement) && $replacement !== '' ? $replacement : null;
         }
 
         foreach (Read::arrays($outdated, 'installed') as $package) {
             $flag = data_get($package, 'abandoned', false);
             $name = strtolower(Read::string($package, 'name'));
 
-            if ($flag !== false && $name !== '' && ! $abandoned->has($name)) {
-                $abandoned->put($name, is_string($flag) ? $flag : null);
+            if ($flag !== false && $name !== '' && ! array_key_exists($name, $abandoned)) {
+                $abandoned[$name] = is_string($flag) ? $flag : null;
             }
         }
 
-        return $abandoned
+        return (new Collection($abandoned))
             ->sortKeys()
             ->map(fn (?string $replacement, int|string $package): AbandonedPackage => new AbandonedPackage((string) $package, $replacement))
             ->values()
