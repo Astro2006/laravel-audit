@@ -9,7 +9,6 @@ use Astro2006\LaravelAudit\Audits\DependencyGuard;
 use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
 use Astro2006\LaravelAudit\Data\Composer\Advisory;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
@@ -32,42 +31,6 @@ final class DependenciesAgent extends Agent
     public function title(): string
     {
         return 'Dependencies Audit';
-    }
-
-    public function checks(): array
-    {
-        return [
-            'vulnerable-dependency' => 'A package with a security advisory (one finding per package).',
-            'abandoned-package' => 'An abandoned package.',
-            'unused-package' => 'A direct dependency without explicit or implicit usage.',
-            'misplaced-package' => 'require vs require-dev in the wrong place.',
-            'shadow-dependency' => 'Production code using a package that is only installed transitively.',
-            'redundant-package' => 'Several packages for the same job, or packages superseded by the framework.',
-            'outdated-major' => 'A direct dependency one or more majors behind.',
-            'unsupported-runtime' => 'Laravel or PHP version without bug or security fixes.',
-            'stale-package' => 'A package without releases for a long time.',
-            'loose-constraint' => 'Constraints like *, dev-*, >= without upper bound, or pins that block patches.',
-            'lock-out-of-sync' => 'composer.lock missing or out of sync with composer.json.',
-            'composer-config' => 'allow-plugins true, untrusted repositories, scripts executing remote code, platform mismatch.',
-            'autoload-bloat' => 'Large files autoloads or classmap bloat.',
-            'license-risk' => 'Copyleft licenses in a proprietary project, or unknown licenses.',
-            ...$this->commonChecks(),
-        ];
-    }
-
-    public function sections(): array
-    {
-        return ['Dependency inventory', 'Upgrade plan'];
-    }
-
-    protected function taskList(): array
-    {
-        return [
-            $this->task('security', 'Advisories and abandoned packages', ['vulnerable-dependency', 'abandoned-package'], snapshots: [SnapshotType::Composer]),
-            $this->task('necessity', 'Necessity and placement', ['unused-package', 'misplaced-package', 'shadow-dependency', 'redundant-package'], sections: ['Dependency inventory'], snapshots: [SnapshotType::Composer]),
-            $this->task('freshness', 'Freshness and support', ['outdated-major', 'unsupported-runtime', 'stale-package'], sections: ['Upgrade plan'], snapshots: [SnapshotType::Composer]),
-            $this->task('hygiene', 'Constraints, Composer config and licenses', ['loose-constraint', 'lock-out-of-sync', 'composer-config', 'autoload-bloat', 'license-risk'], snapshots: [SnapshotType::Composer]),
-        ];
     }
 
     public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string

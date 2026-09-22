@@ -23,6 +23,7 @@ return [
         'output' => 'Output-Ordner :path',
         'legacy_key' => 'config/audit.php setzt :old, das nicht mehr gelesen wird. Nutze stattdessen :new.',
         'legacy_key_removed' => 'config/audit.php setzt :old, das nicht mehr gelesen wird. Du kannst es entfernen.',
+        'checks_outdated' => 'Den veröffentlichten Checks des :audit-Audits (resources/audits/vendor/laravel-audit) fehlen neuere Checks: :checks. Neu veröffentlichen mit --tag=audit-checks --force oder ergänzen.',
         'output_not_writable' => 'Output-Ordner :path ist nicht beschreibbar.',
         'boost' => 'Boost-MCP (:count Tools freigegeben)',
         'boost_missing' => 'Laravel Boost nicht installiert — Agents arbeiten nur mit den Dateien → php artisan audit:install',

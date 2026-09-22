@@ -437,7 +437,17 @@ The prompts are plain Markdown. Publish them to change wording or focus:
 php artisan vendor:publish --tag="audit-prompts"
 ```
 
-They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `agents/_task.md` holds the shared rules and output format, `agents/<audit>/<task>.md` the instructions of one task, `agents/_summary.md` the summary. Each audit is a single self-contained class in `Astro2006\LaravelAudit\Agents` (`BackendAgent`, `FrontendAgent`, `DependenciesAgent`, `TestsAgent`): it owns its checks, tasks and sections, and generates its own prompts. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
+They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `agents/_task.md` holds the shared rules and output format, `agents/<audit>/<task>.md` the instructions of one task, `agents/_summary.md` the summary. Each audit has a class in `Astro2006\LaravelAudit\Agents` (`BackendAgent`, `FrontendAgent`, `DependenciesAgent`, `TestsAgent`) that renders its prompts and holds its rules (skipped tasks, required findings); its tasks and checks are in `resources/audits/<audit>.php`. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
+
+### Customizing checks
+
+Every audit's tasks and checks are listed in one plain PHP file: per task its title, the checks it owns with a one-line description, the tasks it depends on, the sections it writes and the preflight snapshots it gets. Publish them to reword checks or leave tasks out for one project:
+
+```bash
+php artisan vendor:publish --tag="audit-checks"
+```
+
+They land in `resources/audits/vendor/laravel-audit/<audit>.php` and win over the package files. When a package update adds checks that a published copy lacks, the requirements check names them. A new task needs its prompt in `resources/prompts/…/agents/<audit>/<task>.md`. For project rules without touching the tasks, use `custom_checks`.
 
 To change the console texts, publish the translations with `php artisan vendor:publish --tag="audit-translations"`.
 

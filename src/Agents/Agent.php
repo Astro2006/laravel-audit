@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents;
 
+use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
@@ -30,15 +31,32 @@ abstract class Agent implements Audit
 
     private readonly PromptTemplates $templates;
 
-    /** @param  string|null  $overridePath  published prompts (PromptTemplates::publishedPath()); files there win */
-    public function __construct(?string $overridePath = null)
+    private readonly AuditDefinition $definition;
+
+    /**
+     * @param  string|null  $overridePath  published prompts (PromptTemplates::publishedPath()); files there win
+     * @param  AuditDefinition|null  $definition  tasks and checks; null = resources/audits/<audit>.php
+     */
+    public function __construct(?string $overridePath = null, ?AuditDefinition $definition = null)
     {
         $this->templates = new PromptTemplates($overridePath);
+        $this->definition = $definition ?? AuditDefinition::for($this->type());
+    }
+
+    /** Every check the audit's tasks own, plus the shared ones. */
+    public function checks(): array
+    {
+        return [...$this->definition->checks, ...$this->commonChecks()];
+    }
+
+    public function sections(): array
+    {
+        return $this->definition->sections;
     }
 
     final public function tasks(bool $withCustom = false): array
     {
-        $tasks = $this->taskList();
+        $tasks = $this->definition->tasks;
 
         if ($withCustom) {
             $tasks[] = $this->task(AuditTask::CUSTOM, 'Custom checks', ['custom']);
@@ -148,20 +166,13 @@ abstract class Agent implements Audit
     }
 
     /**
-     * The audit's own tasks, without custom and summary.
-     *
-     * @return list<AuditTask>
-     */
-    abstract protected function taskList(): array;
-
-    /**
      * Sections the summary task writes from the merged findings.
      *
      * @return list<string>
      */
     protected function summarySections(): array
     {
-        return [];
+        return $this->definition->summarySections;
     }
 
     /**

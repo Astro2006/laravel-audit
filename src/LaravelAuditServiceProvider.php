@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit;
 
+use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Commands\InstallCommand;
@@ -41,5 +42,10 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
         $this->publishes([
             $this->package->basePath('/../resources/prompts') => resource_path(PromptTemplates::PUBLISHED_PATH),
         ], 'audit-prompts');
+
+        // Tasks and checks per audit can be published too; published copies win.
+        $this->publishes([
+            $this->package->basePath('/../resources/audits') => resource_path(AuditDefinition::PUBLISHED_PATH),
+        ], 'audit-checks');
     }
 }

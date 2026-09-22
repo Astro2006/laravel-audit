@@ -23,6 +23,7 @@ return [
         'output' => 'Output folder :path',
         'legacy_key' => 'config/audit.php sets :old, which is no longer read. Use :new instead.',
         'legacy_key_removed' => 'config/audit.php sets :old, which is no longer read. You can remove it.',
+        'checks_outdated' => 'The published checks of the :audit audit (resources/audits/vendor/laravel-audit) lack newer checks: :checks. Re-publish with --tag=audit-checks --force or add them.',
         'output_not_writable' => 'Output folder :path is not writable.',
         'boost' => 'Boost MCP (:count tools allowed)',
         'boost_missing' => 'Laravel Boost not installed — agents work from files only → php artisan audit:install',

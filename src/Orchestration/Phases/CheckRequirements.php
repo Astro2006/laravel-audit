@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Orchestration\Phases;
 
+use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Orchestration\RunPlan;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Requirements\Check;
@@ -28,6 +29,10 @@ final class CheckRequirements
 
         if ($outdated !== [] && $withAgents) {
             $checks[] = Check::warning($messages->get('requirements.prompts_outdated', ['files' => implode(', ', $outdated)]));
+        }
+
+        foreach ($withAgents ? AuditDefinition::outdatedPublished() : [] as $audit => $missing) {
+            $checks[] = Check::warning($messages->get('requirements.checks_outdated', ['audit' => $audit, 'checks' => implode(', ', $missing)]));
         }
 
         return $checks;
