@@ -42,6 +42,7 @@ final class OpenCodeDriver implements AgentDriver
         private readonly string $basePath,
         private readonly string $binary = 'opencode',
         private readonly ?string $model = null,
+        private readonly ?int $maxTurns = null,
         private readonly ?McpServer $boost = null,
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
@@ -70,7 +71,7 @@ final class OpenCodeDriver implements AgentDriver
     public function writeConfig(string $directory, array $extraDirectories = []): string
     {
         $path = $directory.'/opencode.json';
-        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles))->toArray($extraDirectories));
+        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns))->toArray($extraDirectories));
 
         return $path;
     }

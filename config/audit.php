@@ -42,6 +42,12 @@ return [
 
         'timeout' => 900,   // seconds per task
 
+        // Tool calls (turns) one agent session may take before it has to
+        // answer. Every turn sends the whole conversation again, so long
+        // sessions get slow and expensive, above all with local models.
+        // null = no limit. Claude Code and OpenCode; Codex has no such limit.
+        'max_turns' => (int) env('AUDIT_MAX_TURNS', 15) ?: null,
+
         // A second call checks each task's findings (keep, downgrade, drop).
         'verify' => true,
 

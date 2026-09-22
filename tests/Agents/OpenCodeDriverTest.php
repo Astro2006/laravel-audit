@@ -42,6 +42,15 @@ it('writes a config with read-only tools, denied secrets and only the allowed bo
         ->and($config['mcp']['laravel-boost'])->toBe(['type' => 'local', 'command' => ['php', 'artisan', 'boost:mcp'], 'enabled' => true]);
 });
 
+it('limits the steps of the audit agent', function () {
+    $dir = tempDir('opencode');
+    $limited = json_decode(file_get_contents((new OpenCodeDriver('/app', maxTurns: 12))->writeConfig($dir)), true);
+    $unlimited = json_decode(file_get_contents((new OpenCodeDriver('/app'))->writeConfig($dir)), true);
+
+    expect($limited['agent']['laravel-audit']['steps'])->toBe(12)
+        ->and($unlimited['agent']['laravel-audit'])->not->toHaveKey('steps');
+});
+
 it('parses the json event stream of a real run', function () {
     $driver = new OpenCodeDriver('/app', model: 'opencode/big-pickle');
     $result = $driver->parse(file_get_contents(fixture('agents/opencode-run.jsonl')), 0);

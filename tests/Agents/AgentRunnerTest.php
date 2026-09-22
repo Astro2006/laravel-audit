@@ -86,6 +86,19 @@ it('repairs an invalid answer in the same session', function () {
         && str_contains($process->input, 'starting with the `## Summary` line'));
 });
 
+it('asks for the report once the turn limit is reached', function () {
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['subtype' => 'error_max_turns', 'is_error' => true, 'result' => ''])))
+        ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))])))]);
+
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed);
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'You reached the turn limit.'));
+});
+
 it('fails after an unsuccessful repair pass', function () {
     $broken = str_replace('## Summary', '## Overview', file_get_contents(fixture('reports/backend-valid.md')));
     Process::fake(['*' => Process::result(claudeJson(['result' => $broken]))]);

@@ -34,6 +34,13 @@ it('builds a read-only headless command', function () {
         ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
 });
 
+it('limits the turns', function () {
+    $command = implode(' ', (new ClaudeCodeDriver(maxTurns: 12))->command(new AgentRequest('k', 'p', '/app')));
+
+    expect($command)->toContain('--max-turns 12')
+        ->and(implode(' ', (new ClaudeCodeDriver)->command(new AgentRequest('k', 'p', '/app'))))->not->toContain('--max-turns');
+});
+
 it('allows no mcp tools without an mcp config', function () {
     $command = (new ClaudeCodeDriver(boostTools: ['application-info']))->command(new AgentRequest('tests', 'p', '/app'));
 

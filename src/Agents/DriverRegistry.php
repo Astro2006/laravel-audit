@@ -103,6 +103,7 @@ final class DriverRegistry
                 basePath: $this->project->basePath,
                 binary: $this->binary($name),
                 model: $model,
+                maxTurns: $this->maxTurns(),
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
@@ -119,12 +120,20 @@ final class DriverRegistry
                 binary: $this->binary($name),
                 model: $model,
                 effort: $this->config->nullableString("agent.drivers.{$name}.effort"),
+                maxTurns: $this->maxTurns(),
                 maxBudgetUsd: $this->config->nullableFloat("agent.drivers.{$name}.max_budget_usd"),
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
             ),
         };
+    }
+
+    private function maxTurns(): ?int
+    {
+        $turns = $this->config->int('agent.max_turns');
+
+        return $turns > 0 ? $turns : null;
     }
 
     /** The configured CLI binary; an empty value falls back to the driver's name for its CLI. */

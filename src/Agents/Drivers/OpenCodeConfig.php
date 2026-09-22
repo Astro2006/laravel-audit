@@ -21,12 +21,14 @@ final readonly class OpenCodeConfig
      * @param  string  $basePath  project root; deny rules match absolute paths too
      * @param  list<string>  $boostTools  allowed Boost MCP tools
      * @param  list<string>  $deniedFiles  project-relative files the agent must not read
+     * @param  int|null  $steps  tool-call rounds before the agent must answer
      */
     public function __construct(
         private string $basePath,
         private ?McpServer $boost,
         private array $boostTools,
         private array $deniedFiles,
+        private ?int $steps = null,
     ) {}
 
     /**
@@ -43,6 +45,8 @@ final readonly class OpenCodeConfig
                     'mode' => 'primary',
                     'tools' => $this->tools(),
                     'permission' => $this->permission($extraDirectories),
+                    // At the limit OpenCode asks the model for its answer instead of more tool calls.
+                    ...($this->steps === null ? [] : ['steps' => $this->steps]),
                 ],
             ],
         ];

@@ -375,6 +375,7 @@ return [
         'mode' => env('AUDIT_MODE', 'single'),          // single: one task at a time; parallel: up to concurrency
         'concurrency' => (int) env('AUDIT_CONCURRENCY', 4),
         'timeout' => 900,                               // seconds per task
+        'max_turns' => 15,                              // tool calls per agent session before it must answer; null = no limit
         'verify' => true,                               // second call per task that checks its findings
         'drivers' => [
             'claude_code' => ['binary' => 'claude', 'effort' => null, 'max_budget_usd' => null /* per task */],

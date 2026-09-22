@@ -48,6 +48,7 @@ final class ClaudeCodeDriver implements AgentDriver
         private readonly ?string $model = null,
         private readonly ?string $effort = null,
         private readonly ?float $maxBudgetUsd = null,
+        private readonly ?int $maxTurns = null,
         private readonly ?McpServer $boost = null,
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
@@ -125,6 +126,10 @@ final class ClaudeCodeDriver implements AgentDriver
 
         if ($this->effort !== null && $this->effort !== '') {
             array_push($command, '--effort', $this->effort);
+        }
+
+        if ($this->maxTurns !== null) {
+            array_push($command, '--max-turns', (string) $this->maxTurns);
         }
 
         if ($this->maxBudgetUsd !== null && $this->maxBudgetUsd > 0) {

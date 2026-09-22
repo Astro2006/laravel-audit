@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
+use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
@@ -25,6 +26,8 @@ final class AgentRunner
 
         Errors:
         TEXT;
+
+    private const string ANSWER_NOW_MESSAGE = 'You reached the turn limit. Stop investigating and write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
 
     private readonly AgentProcesses $processes;
 
@@ -189,6 +192,13 @@ final class AgentRunner
     {
         $job = $attempt->job;
         $telemetry = $attempt->telemetry->plus($result->telemetry);
+
+        // At the turn limit the agent answers from what it has, once.
+        if ($result->exit === AgentExit::MaxTurns && ! $attempt->repair && $result->sessionId !== null) {
+            $message = sprintf(self::ANSWER_NOW_MESSAGE, $job->spec->firstSection());
+
+            return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
+        }
 
         if (! $result->succeeded()) {
             $reason = $result->truncated ? 'Answer truncated (output token limit).' : ($result->error ?? $result->exit->value);
