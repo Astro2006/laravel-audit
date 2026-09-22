@@ -6,13 +6,8 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
 use Astro2006\LaravelAudit\Support\Files;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Illuminate\Support\Arr;
 
-/**
- * Lines that match a risky pattern (raw SQL, shell calls, unescaped output,
- * …), found once before the agents start. An agent opens the lines of its
- * checks instead of searching the codebase itself; it still decides whether
- * a line is a problem. Agent CLIs without a search tool depend on this.
- */
 final class CodeCandidates
 {
     private const int MAX_HITS = 200;
@@ -57,11 +52,11 @@ final class CodeCandidates
             $hits = [];
             $total = 0;
 
-            foreach ($this->files($project, $pattern['dirs'], $pattern['extensions']) as $file) {
+            foreach ($this->files($project, Arr::get($pattern, 'dirs'), Arr::get($pattern, 'extensions')) as $file) {
                 $lines = $contents[$file] ??= preg_split('/\R/', (string) file_get_contents($project->path($file))) ?: [];
 
                 foreach ($lines as $number => $line) {
-                    if (preg_match($pattern['regex'], $line) !== 1 || (isset($pattern['and']) && preg_match($pattern['and'], $line) !== 1) || $this->isComment($line)) {
+                    if (preg_match(Arr::get($pattern, 'regex'), $line) !== 1 || (Arr::has($pattern, 'and') && preg_match(Arr::get($pattern, 'and'), $line) !== 1) || $this->isComment($line)) {
                         continue;
                     }
 
@@ -73,7 +68,7 @@ final class CodeCandidates
                 }
             }
 
-            $result[] = ['pattern' => $name, 'checks' => $pattern['checks'], 'total' => $total, 'hits' => $hits];
+            $result[] = ['pattern' => $name, 'checks' => Arr::get($pattern, 'checks'), 'total' => $total, 'hits' => $hits];
         }
 
         return $result;

@@ -13,15 +13,6 @@ use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Claude Code, started headless with `claude -p`.
- *
- * Read-only is enforced by the CLI, not by the prompt: restricted mode (no
- * code-running tools, project and user settings ignored), only Read, Grep
- * and Glob, only the Boost MCP server with an allowlist, deny rules for
- * secret files (Grep honours them too), and every permission prompt
- * answered with "no".
- */
 final class ClaudeCodeDriver implements AgentDriver
 {
     use RunsCli;
@@ -32,7 +23,6 @@ final class ClaudeCodeDriver implements AgentDriver
 
     private const array ALWAYS_DENIED = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch'];
 
-    /** Variables that tie a child process to a parent Claude Code session. */
     private const array SESSION_VARIABLES = [
         'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SSE_PORT', 'CLAUDE_CODE_SESSION_ID',
         'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN',
@@ -74,18 +64,12 @@ final class ClaudeCodeDriver implements AgentDriver
         return 'You can read and search files (Read, Grep, Glob). There is no shell, no web access and no write access. `.env` files are blocked on purpose.';
     }
 
-    /**
-     * An MCP config with only the Boost server, so the user's other MCP
-     * servers never load into an audit.
-     */
     public function writeConfig(string $directory, array $extraDirectories = []): ?string
     {
         if ($this->boost === null) {
             return null;
         }
 
-        // Relative commands like "php artisan boost:mcp" work because the
-        // agent runs with the project root as working directory.
         $path = $directory.'/mcp.json';
         Json::writeFile($path, ['mcpServers' => [McpServer::NAME => $this->boost->config]]);
 

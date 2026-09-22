@@ -12,11 +12,6 @@ use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * Collects what is missing. Larastan and Pint come with this package; the
- * plan only contains optional parts: Boost, paratest, the Pest browser
- * plugin and Playwright.
- */
 final class InstallPlanner
 {
     public function __construct(
@@ -41,8 +36,6 @@ final class InstallPlanner
             $plan->present[] = 'playwright';
         }
 
-        // The audit starts Boost's MCP server itself (php artisan boost:mcp),
-        // so an installed Boost needs no further setup.
         if (! $project->isInstalled('laravel/boost')) {
             $plan->packages[] = new PlannedPackage('laravel/boost', 'composer');
             $plan->setup[] = 'boost';
@@ -127,7 +120,6 @@ final class InstallPlanner
         }
     }
 
-    /** Playwright keeps its browsers in a cache folder outside the project. */
     private function playwrightBrowsersInstalled(): bool
     {
         $home = (string) (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '');
@@ -144,7 +136,6 @@ final class InstallPlanner
         return (glob($home.'/chromium*') ?: []) !== [];
     }
 
-    /** Whether an enabled audit lists the step in its config. */
     private function needs(PreflightStep $step): bool
     {
         try {

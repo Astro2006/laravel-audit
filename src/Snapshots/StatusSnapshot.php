@@ -9,7 +9,6 @@ use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 
-/** Which preflight steps ran, which were skipped and which failed. */
 final class StatusSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

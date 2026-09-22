@@ -14,16 +14,6 @@ use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * OpenAI Codex, started headless with `codex exec --json`.
- *
- * Codex works through a shell. The read-only sandbox stops writes and
- * network access, but not reading files: Codex cannot keep an agent away
- * from .env. A run with this driver therefore only starts when the config
- * accepts that (agent.drivers.codex.allow_unrestricted_read).
- * Models and providers (including self-hosted ones) come from the user's
- * Codex config; extra `-c key=value` overrides can be set per run.
- */
 final class CodexDriver implements AgentDriver
 {
     use RunsCli;
@@ -78,10 +68,6 @@ final class CodexDriver implements AgentDriver
         return [...$this->base(), 'resume', (string) $previous->sessionId, '-'];
     }
 
-    /**
-     * Reads the JSON Lines stream: thread.started (thread_id), item.completed
-     * (agent_message text), turn.completed (usage), turn.failed and error.
-     */
     public function parse(string $stdout, int $exitCode): AgentResult
     {
         $threadId = null;

@@ -12,7 +12,6 @@ enum Severity: string
     case Low = 'low';
     case Info = 'info';
 
-    /** Higher is more severe. */
     public function rank(): int
     {
         return match ($this) {
@@ -24,7 +23,6 @@ enum Severity: string
         };
     }
 
-    /** One step less severe; info stays info. */
     public function lower(): self
     {
         return match ($this) {

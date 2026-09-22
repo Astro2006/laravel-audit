@@ -10,9 +10,6 @@ use Astro2006\LaravelAudit\Support\Read;
 use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Support\Collection;
 
-/**
- * Security advisories from `composer audit`, with the direct parents of transitive packages.
- */
 final class Advisories
 {
     /**

@@ -16,13 +16,6 @@ use Astro2006\LaravelAudit\Prompts\TaskPlaceholders;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * One audit domain, fully self-contained: what it checks, how it splits into
- * tasks, and how it generates its own prompts (_task.md plus the task's own
- * instructions below resources/prompts/agents, or _summary.md for the
- * summary task). Placeholders are replaced with strtr, not Blade, because
- * prompts contain code examples.
- */
 abstract class Agent implements Audit
 {
     private const string BASE_TEMPLATE = 'agents/_task.md';
@@ -43,7 +36,6 @@ abstract class Agent implements Audit
         $this->definition = $definition ?? AuditDefinition::for($this->type());
     }
 
-    /** Every check the audit's tasks own, plus the shared ones. */
     public function checks(): array
     {
         return [...$this->definition->checks, ...$this->commonChecks()];
@@ -142,10 +134,6 @@ abstract class Agent implements Audit
         return $this->templates->hash(self::VERIFY_TEMPLATE);
     }
 
-    /**
-     * Depends on the templates and the task definition only, never on the
-     * run, so equal hashes mean equal instructions.
-     */
     public function taskHash(AuditTask $task): string
     {
         $templates = $task->isSummary()

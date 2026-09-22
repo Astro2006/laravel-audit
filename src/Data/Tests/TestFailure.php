@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Data\Tests;
 
-/**
- * One failing test case, before grouping.
- */
 final readonly class TestFailure
 {
     public function __construct(

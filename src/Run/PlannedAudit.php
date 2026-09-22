@@ -8,11 +8,8 @@ use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Illuminate\Support\Arr;
 
-/**
- * One selected audit as this run plans it: its tasks and the preflight
- * facts its report has to respect.
- */
 final readonly class PlannedAudit
 {
     /**
@@ -28,7 +25,7 @@ final readonly class PlannedAudit
 
     public function summaryTask(): AuditTask
     {
-        return $this->tasks[count($this->tasks) - 1];
+        return Arr::last($this->tasks);
     }
 
     /** @return list<RequiredFinding> the required findings one of the task's checks covers */

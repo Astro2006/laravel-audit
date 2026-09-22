@@ -10,10 +10,6 @@ use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\Location;
 
-/**
- * Composer knows the advisories, the abandoned packages and the locked
- * packages; a dependency finding that claims otherwise is dropped.
- */
 final readonly class DependencyGuard implements FindingGuard
 {
     /** @param list<string> $locked lower-cased names from composer.lock */

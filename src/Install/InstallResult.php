@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Install;
 
-/**
- * What `audit:install` did, checked against the files afterwards.
- */
 final readonly class InstallResult
 {
     /**

@@ -9,7 +9,6 @@ use Throwable;
 
 final class PackageVersion
 {
-    /** The installed version of this package, or `dev`. */
     public static function get(): string
     {
         try {

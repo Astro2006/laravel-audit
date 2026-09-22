@@ -7,11 +7,8 @@ namespace Astro2006\LaravelAudit\Console;
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Support\Messages;
+use Illuminate\Support\Arr;
 
-/**
- * What the agent phase is doing: every task of the run, which ones are
- * running (and for how long), which wait and which are done.
- */
 final class TaskBoard
 {
     /** @var list<AgentJob> */
@@ -44,7 +41,8 @@ final class TaskBoard
 
     public function finished(TaskOutcome $outcome): void
     {
-        unset($this->running[$outcome->key], $this->repairing[$outcome->key]);
+        Arr::forget($this->running, $outcome->key);
+        Arr::forget($this->repairing, $outcome->key);
         $this->finished[$outcome->key] = $outcome;
     }
 
@@ -82,7 +80,7 @@ final class TaskBoard
     {
         $waiting = array_values(array_filter(
             array_map(fn (AgentJob $job): string => $job->key, $this->jobs),
-            fn (string $key): bool => ! isset($this->running[$key]) && ! isset($this->finished[$key]),
+            fn (string $key): bool => ! Arr::has($this->running, $key) && ! Arr::has($this->finished, $key),
         ));
 
         if ($this->running === [] && $waiting === []) {
@@ -101,7 +99,7 @@ final class TaskBoard
         ])];
 
         foreach ($this->running as $key => $startedAt) {
-            $detail = self::duration($now - $startedAt).(isset($this->repairing[$key]) ? ' · '.$this->messages->get('board.repair') : '');
+            $detail = self::duration($now - $startedAt).(Arr::has($this->repairing, $key) ? ' · '.$this->messages->get('board.repair') : '');
             $lines[] = Columns::detail('<fg=yellow>●</> '.$key, '<fg=yellow>'.$detail.'</>', $width);
         }
 

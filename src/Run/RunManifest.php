@@ -16,10 +16,6 @@ use Astro2006\LaravelAudit\Reports\Rejection;
 use Astro2006\LaravelAudit\Support\Json;
 use DateTimeImmutable;
 
-/**
- * run.md (for people) and run.json (for audit:eval): what ran, with which
- * result, cost and findings. Written at the start and updated at the end.
- */
 final class RunManifest
 {
     public RunStatus $status = RunStatus::Running;
@@ -36,7 +32,6 @@ final class RunManifest
 
     public ?string $model = null;
 
-    /** The run's overview, written by the results agent once every selected audit is done. */
     public ?string $overview = null;
 
     public StepResults $steps;
@@ -66,7 +61,6 @@ final class RunManifest
         $this->finishedAt = new DateTimeImmutable;
     }
 
-    /** Finishes the run with this status and writes run.md and run.json. */
     public function close(RunStatus $status): void
     {
         $this->finish($status);
@@ -146,7 +140,6 @@ final class RunManifest
         return ['critical' => $count('critical'), 'high' => $count('high'), 'medium' => $count('medium'), 'low' => $count('low'), 'info' => $count('info')];
     }
 
-    /** Seconds from the start of the first attempt to the end of the last, repair included. */
     public static function wallClock(TaskOutcome $task): float
     {
         return round(max(0.0, $task->finishedAt - $task->startedAt), 1);

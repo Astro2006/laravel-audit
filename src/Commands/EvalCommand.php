@@ -11,10 +11,6 @@ use Astro2006\LaravelAudit\Eval\ExpectedSet;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
-/**
- * Developer command: runs the audit several times against the fixture app
- * and measures recall, false positives, stability and cost.
- */
 class EvalCommand extends Command
 {
     protected $signature = 'audit:eval

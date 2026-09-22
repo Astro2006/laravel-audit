@@ -8,10 +8,6 @@ use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
 use Astro2006\LaravelAudit\Data\Routes\RouteFactsReport;
 use Closure;
 
-/**
- * Candidates from route:list — not findings. The frontend agent confirms
- * or rejects each one.
- */
 final class RouteFacts
 {
     private const array WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
@@ -24,7 +20,6 @@ final class RouteFacts
 
     private const string PUBLIC_WRITES = '#^/?(login|logout|register|forgot-password|reset-password|email/verification-notification|two-factor-challenge|livewire(-[a-z0-9]+)?/|broadcasting/auth|sanctum/|_ignition|_boost/)#i';
 
-    // Local disk serve/upload routes (Laravel 12+) check a signed URL themselves.
     private const string FRAMEWORK_SIGNED_ROUTES = '/^storage\.[\w-]+\.(serve|upload)$/';
 
     /** @var Closure(string): bool */

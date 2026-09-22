@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Data\Run;
 use Astro2006\LaravelAudit\Agents\Telemetry;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * One audit of a run, as stored in run.json.
- */
 final readonly class OutcomeRecord
 {
     /**

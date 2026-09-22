@@ -7,31 +7,23 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
 use Astro2006\LaravelAudit\Agents\Telemetry;
-use Astro2006\LaravelAudit\Contracts\AgentDriver;
+use Astro2006\LaravelAudit\Contracts\OrchestratingDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Arr;
 
-/**
- * OpenCode, started headless with `opencode run --format json`.
- *
- * The run gets its own config (OPENCODE_CONFIG) with a `laravel-audit` agent:
- * every tool off except read, glob and list, every other permission denied,
- * read denied for the secret files, only the Boost MCP tools that are
- * allowed. OpenCode's grep tool is left out on purpose: with an `include`
- * pattern it returns the content of files the read rules deny.
- * Models come from the user's OpenCode config (`provider/model`), which is
- * how self-hosted models (Ollama and others) get in.
- */
-final class OpenCodeDriver implements AgentDriver
+final class OpenCodeDriver implements OrchestratingDriver
 {
     use RunsCli;
 
     public const string NAME = 'opencode';
 
     public const string AGENT = 'laravel-audit';
+
+    public const string ORCHESTRATOR_AGENT = 'laravel-audit-orchestrator';
 
     /**
      * @param  string  $basePath  project root; deny rules match absolute paths too
@@ -81,15 +73,24 @@ final class OpenCodeDriver implements AgentDriver
         return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::AGENT, ...$this->modelArguments()];
     }
 
+    public function writeOrchestratorConfig(string $directory, array $extraDirectories = [], ?int $maxTurns = null): string
+    {
+        $path = $directory.'/opencode-orchestrator.json';
+        Json::writeFile($path, (new OpenCodeConfig($this->basePath, null, [], $this->deniedFiles))->orchestrator($extraDirectories, $maxTurns));
+
+        return $path;
+    }
+
+    public function orchestratorCommand(AgentRequest $request): array
+    {
+        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::ORCHESTRATOR_AGENT, ...$this->modelArguments()];
+    }
+
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array
     {
         return [...$this->command($request), '--session', (string) $previous->sessionId];
     }
 
-    /**
-     * Reads the JSON event stream: step_start, text, tool_use, step_finish
-     * (tokens, cost, reason) and error events, one per line.
-     */
     public function parse(string $stdout, int $exitCode): AgentResult
     {
         $sessionId = null;
@@ -121,7 +122,7 @@ final class OpenCodeDriver implements AgentDriver
             $type = Read::string($event, 'type');
 
             if ($type === 'text') {
-                $texts[$message] = ($texts[$message] ?? '').Read::string($part, 'text');
+                $texts[$message] = Arr::get($texts, $message, '').Read::string($part, 'text');
             } elseif ($type === 'error') {
                 $error = Read::nullableString($event, 'error.data.message') ?? Read::string($event, 'error.name', 'unknown error');
             } elseif ($type === 'step_finish') {
@@ -133,14 +134,13 @@ final class OpenCodeDriver implements AgentDriver
                 $cost = $stepCost === null ? $cost : ($cost ?? 0.0) + $stepCost;
                 $lastReason = Read::string($part, 'reason');
 
-                // The answer is the text of the last step that did not end in tool calls.
                 if ($lastReason !== 'tool-calls') {
                     $answerMessage = $message;
                 }
             }
         }
 
-        $answer = trim($answerMessage !== null && isset($texts[$answerMessage]) ? $texts[$answerMessage] : (string) end($texts));
+        $answer = trim($answerMessage !== null && Arr::has($texts, $answerMessage) ? Arr::get($texts, $answerMessage) : (string) end($texts));
 
         $telemetry = new Telemetry(
             inputTokens: $input,

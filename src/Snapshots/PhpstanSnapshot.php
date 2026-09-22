@@ -7,8 +7,8 @@ namespace Astro2006\LaravelAudit\Snapshots;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Arr;
 
-/** phpstan/phpstan-grouped.json: one row per error identifier, baselined ones marked. */
 final class PhpstanSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType
@@ -34,12 +34,12 @@ final class PhpstanSnapshot extends PreflightSnapshot
                 Read::string($group, 'identifier'),
                 (string) Read::int($group, 'count'),
                 (string) Read::int($group, 'file_count'),
-                $group['baselined'] ? 'baselined' : 'open',
+                Arr::get($group, 'baselined') ? 'baselined' : 'open',
             ],
             Details::fields([
                 'Identifier' => Read::string($group, 'identifier'),
                 'Errors' => (string) Read::int($group, 'count'),
-                'In baseline' => $group['baselined'],
+                'In baseline' => Arr::get($group, 'baselined'),
                 'Top files' => array_map(fn (array $file): string => sprintf('`%s` (%d)', Read::string($file, 'file'), Read::int($file, 'count')), Read::arrays($group, 'top_files')),
                 'Examples' => array_map(fn (array $message): string => sprintf('`%s:%s` — %s', Read::string($message, 'file'), Read::nullableInt($message, 'line') ?? '?', Read::string($message, 'message')), Read::arrays($group, 'examples')),
             ]),

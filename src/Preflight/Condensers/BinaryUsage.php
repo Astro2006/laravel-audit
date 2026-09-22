@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Whether a package binary appears in Composer or npm scripts, CI workflows, a Makefile or a Taskfile.
- */
 final class BinaryUsage
 {
     private ?string $scripts = null;

@@ -8,11 +8,6 @@ use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Closure;
 use Illuminate\Support\Facades\Process;
 
-/**
- * Turns an install plan into commands and runs them: one composer require
- * for all Composer packages, one install for all npm packages, then the
- * setup steps.
- */
 final class PlanExecutor
 {
     public function __construct(
@@ -31,7 +26,6 @@ final class PlanExecutor
 
         $command = [...$this->composerBinary(), 'require', '--dev', ...array_map(fn (PlannedPackage $package): string => $package->installName(), $packages)];
 
-        // Upgrades (e.g. PHPUnit → Pest) need Composer to move dependencies.
         foreach ($packages as $package) {
             if ($package->isUpgrade()) {
                 $command[] = '--with-all-dependencies';
@@ -67,7 +61,6 @@ final class PlanExecutor
         };
     }
 
-    /** Creates phpstan.neon from the stub, but never overwrites a config. */
     public function writeStub(int $level): bool
     {
         if ($this->project->phpstanConfigPath() !== null) {

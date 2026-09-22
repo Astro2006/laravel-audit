@@ -9,16 +9,10 @@ use Astro2006\LaravelAudit\Data\Composer\PackageUsage;
 use Astro2006\LaravelAudit\Data\Composer\TransitiveUsage;
 use Astro2006\LaravelAudit\Data\Composer\UsageMap;
 
-/**
- * Packages the usage map suggests are misplaced, unused or used without
- * being required. Candidates, not findings: the agent confirms them.
- */
 final class UsageCandidates
 {
-    /** Packages whose namespaces apps commonly use through the framework. */
     private const array FRAMEWORK_PROVIDED = ['psr/', 'symfony/', 'nesbot/carbon', 'illuminate/', 'laravel/serializable-closure', 'league/flysystem', 'monolog/monolog', 'guzzlehttp/guzzle', 'guzzlehttp/psr7', 'ramsey/uuid', 'brick/math', 'nunomaduro/termwind', 'vlucas/phpdotenv'];
 
-    /** Dev packages that are used implicitly and never flagged as unused. */
     private const array IMPLICIT = ['laravel/framework', 'laravel/tinker', 'laravel/sail', 'laravel/pail', 'laravel/pint', 'laravel/boost', 'larastan/larastan', 'nunomaduro/collision', 'phpunit/phpunit', 'mockery/mockery', 'fakerphp/faker', 'spatie/laravel-ignition', 'astro2006/laravel-audit', 'barryvdh/laravel-ide-helper', 'barryvdh/laravel-debugbar', 'roave/security-advisories'];
 
     /** @return list<PackageCandidate> */

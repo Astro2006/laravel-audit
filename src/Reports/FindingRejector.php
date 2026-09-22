@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Findings the harness drops without a repair pass: a file that does not
- * exist, a `missing:` file that does exist, a code quote that is not in the
- * files, or a contradiction with the preflight facts.
- */
 final class FindingRejector
 {
     /** @var array<string, string> path => content; agents cannot write, so files do not change during a run */
@@ -19,7 +14,6 @@ final class FindingRejector
         private readonly EvidenceChecker $evidence = new EvidenceChecker,
     ) {}
 
-    /** Why the finding is dropped, or null when it stays. */
     public function reason(Finding $finding, ReportSpec $spec): ?string
     {
         $contents = [];

@@ -27,7 +27,6 @@ final class AboutStep implements Step
 
         $about = Json::decode($result->output());
 
-        // The running app knows the basics even if "about" fails.
         $fallback = new AboutDTO((string) config('app.name'), app()->version(), PHP_VERSION, (string) app()->environment());
 
         if ($about === []) {

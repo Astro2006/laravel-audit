@@ -14,17 +14,12 @@ use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Arr;
 
-/**
- * Builds the agent driver from config/audit.php. Driver names follow
- * Laravel Boost's agent names, so `auto` can pick the agent the project
- * already set up with `boost:install` (boost.json).
- */
 final class DriverRegistry
 {
     public const string AUTO = 'auto';
 
-    /** Fallback order when boost.json names no agent with a driver. */
     public const array DRIVERS = [ClaudeCodeDriver::NAME, OpenCodeDriver::NAME, CodexDriver::NAME];
 
     private const array ALIASES = ['claude' => ClaudeCodeDriver::NAME];
@@ -82,9 +77,7 @@ final class DriverRegistry
             }
         }
 
-        // Nothing installed: return the first candidate so the requirement
-        // check can name the CLI that is missing.
-        return $this->make($candidates[0], $model);
+        return $this->make(Arr::first($candidates), $model);
     }
 
     private function make(string $name, ?string $model): AgentDriver
@@ -136,7 +129,6 @@ final class DriverRegistry
         return $turns > 0 ? $turns : null;
     }
 
-    /** The configured CLI binary; an empty value falls back to the driver's name for its CLI. */
     private function binary(string $name): string
     {
         return $this->config->nullableString("agent.drivers.{$name}.binary") ?? match ($name) {
@@ -149,7 +141,7 @@ final class DriverRegistry
     {
         $name = strtolower(trim($name));
 
-        return self::ALIASES[$name] ?? ($name === '' ? self::AUTO : $name);
+        return Arr::get(self::ALIASES, $name) ?? ($name === '' ? self::AUTO : $name);
     }
 
     private function filled(mixed $value): ?string

@@ -7,12 +7,8 @@ namespace Astro2006\LaravelAudit\Reports;
 use Astro2006\LaravelAudit\Enums\Confidence;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
-/**
- * Changes findings in a report body: removes rejected ones and lowers the
- * severity and confidence of downgraded ones. Everything else stays as the
- * agent wrote it.
- */
 final class FindingEditor
 {
     public function __construct(private readonly ReportParser $parser = new ReportParser) {}
@@ -80,18 +76,17 @@ final class FindingEditor
             }
 
             for ($number = $finding->line; $number <= $finding->endLine; $number++) {
-                $line = $lines[$number - 1];
+                $line = Arr::get($lines, $number - 1);
 
-                // The metadata table comes before the body; nothing below it is touched.
                 if (preg_match('/^\*\*(Evidence|Impact|Recommendation)\*\*/i', trim($line)) === 1) {
                     break;
                 }
 
                 $lines[$number - 1] = (string) preg_replace_callback(
                     '/^(\|\s*(Severity|Confidence)\s*\|\s*)([a-z]+)(\s*\|\s*)$/i',
-                    fn (array $match): string => $match[1].(strcasecmp($match[2], 'Severity') === 0
-                        ? (Severity::tryFrom(strtolower($match[3]))?->lower()->value ?? $match[3])
-                        : Confidence::Suspected->value).$match[4],
+                    fn (array $match): string => Arr::get($match, 1).(strcasecmp(Arr::get($match, 2), 'Severity') === 0
+                        ? (Severity::tryFrom(strtolower(Arr::get($match, 3)))?->lower()->value ?? Arr::get($match, 3))
+                        : Confidence::Suspected->value).Arr::get($match, 4),
                     $line,
                 );
             }
@@ -100,7 +95,6 @@ final class FindingEditor
         return implode("\n", $lines);
     }
 
-    /** Puts "No findings." under `## Findings` once every finding is gone. */
     private function markEmpty(string $body): string
     {
         return (string) preg_replace('/^(##\s+Findings\s*)$/mi', "$1\n\nNo findings.", $body, 1);

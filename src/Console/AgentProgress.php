@@ -9,11 +9,6 @@ use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Support\Messages;
 use Symfony\Component\Console\Terminal;
 
-/**
- * The live task board while the agents run: the plan first, then one log
- * line per finished task, with the running tasks redrawn below at most once
- * a second.
- */
 final class AgentProgress
 {
     private readonly TaskBoard $board;

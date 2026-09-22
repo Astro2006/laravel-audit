@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Cuts the report body out of the agent's final answer: drops a surrounding
- * code fence and anything before the first level-2 heading (introductions,
- * a frontmatter or an H1 the agent was told not to write).
- */
 final class ReportExtractor
 {
     public function extract(string $answer): string

@@ -8,6 +8,7 @@ use Astro2006\LaravelAudit\Enums\Category;
 use Astro2006\LaravelAudit\Enums\Confidence;
 use Astro2006\LaravelAudit\Enums\Effort;
 use Astro2006\LaravelAudit\Enums\Severity;
+use Illuminate\Support\Arr;
 
 final readonly class Finding
 {
@@ -34,11 +35,6 @@ final readonly class Finding
         public ?string $keySalt = null,
     ) {}
 
-    /**
-     * Stable identifier across runs: audit, check and every location target.
-     * Line numbers are ignored because they shift with every edit; only
-     * findings that would collide within one report get a salt.
-     */
     public function key(string $audit): string
     {
         $targets = array_map(fn (Location $location): string => $location->target(), $this->locations);
@@ -58,8 +54,8 @@ final readonly class Finding
     public static function withUniqueKeys(array $findings): array
     {
         foreach ([
-            fn (self $finding): string => (string) ($finding->locations[0]->line ?? ''),
-            fn (self $finding): string => ($finding->locations[0]->line ?? '').'|'.mb_strtolower(trim($finding->title)),
+            fn (self $finding): string => (string) (Arr::first($finding->locations)->line ?? ''),
+            fn (self $finding): string => (Arr::first($finding->locations)->line ?? '').'|'.mb_strtolower(trim($finding->title)),
         ] as $salt) {
             $counts = array_count_values(array_map(fn (self $finding): string => $finding->key(''), $findings));
 
@@ -68,7 +64,7 @@ final readonly class Finding
             }
 
             $findings = array_map(
-                fn (self $finding): self => ($counts[$finding->key('')] ?? 0) > 1 ? $finding->withKeySalt($salt($finding)) : $finding,
+                fn (self $finding): self => Arr::get($counts, $finding->key(''), 0) > 1 ? $finding->withKeySalt($salt($finding)) : $finding,
                 $findings,
             );
         }

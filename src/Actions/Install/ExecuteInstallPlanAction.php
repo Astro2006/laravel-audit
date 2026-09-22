@@ -9,11 +9,7 @@ use Astro2006\LaravelAudit\Install\PlanExecutor;
 use Astro2006\LaravelAudit\Install\ShellCommand;
 use Closure;
 
-/**
- * Installs the composer and npm packages of the plan, then runs its setup
- * steps.
- */
-final class ExecuteInstallPlan
+final class ExecuteInstallPlanAction
 {
     /**
      * @param  bool  $tty  whether interactive setup (boost:install) can run here

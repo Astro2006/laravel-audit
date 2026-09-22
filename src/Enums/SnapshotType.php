@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
-/**
- * One kind of preflight data an agent sees as a compact snapshot in its
- * prompt, with one detail file per ID below preflight/details/<type>/.
- */
 enum SnapshotType: string
 {
     case Status = 'status';
@@ -41,7 +37,28 @@ enum SnapshotType: string
         };
     }
 
-    /** Letter of the row IDs (T-01). One letter, so IDs never look like finding IDs (BE-001). */
+    /**
+     * The preflight steps whose data the snapshot shows.
+     *
+     * @return list<PreflightStep>
+     */
+    public function steps(): array
+    {
+        return match ($this) {
+            self::Status => [],
+            self::Tests, self::Coverage => [PreflightStep::Tests],
+            self::Browser => [PreflightStep::Browser],
+            self::Phpstan => [PreflightStep::Phpstan],
+            self::RouteTests => [PreflightStep::Routes, PreflightStep::Tests],
+            self::Routes => [PreflightStep::Routes],
+            self::Pint => [PreflightStep::Pint],
+            self::Translations => [PreflightStep::Translations],
+            self::Composer => [PreflightStep::Composer],
+            self::DatabaseSchema => [PreflightStep::Migrations],
+            self::CodeCandidates => [PreflightStep::Candidates],
+        };
+    }
+
     public function prefix(): string
     {
         return match ($this) {

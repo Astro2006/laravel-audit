@@ -4,39 +4,39 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Orchestration\Phases;
 
+use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Console\AgentProgress;
 use Astro2006\LaravelAudit\Orchestration\RunContext;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
-use Astro2006\LaravelAudit\Prompts\PromptContextBuilder;
-use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Run\JobPlan;
-use Astro2006\LaravelAudit\Run\JobPlanner;
 use Astro2006\LaravelAudit\Run\OutcomeAssembler;
-use Astro2006\LaravelAudit\Run\TaskRequests;
-use Astro2006\LaravelAudit\Run\TaskSettings;
-use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
+use Astro2006\LaravelAudit\Run\RunJobs;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
-use Astro2006\LaravelAudit\Support\McpServer;
+use Closure;
+use Illuminate\Support\Arr;
 
-/**
- * Runs the agent tasks of the selected audits on top of the preflight and
- * turns their answers into one outcome per audit.
- */
 final class RunAgents
 {
     public function __construct(private readonly AuditConfig $config) {}
 
-    /** @return list<AuditOutcome> */
-    public function handle(RunContext $context, PreflightSummary $summary): array
+    /**
+     * @param  list<string>|null  $only  task keys an orchestrator started; the others count as skipped
+     * @param  (Closure(JobPlan): array<string, TaskOutcome>)|null  $earlier  outcomes of the jobs that already ran, read once the plan exists
+     * @return list<AuditOutcome>
+     */
+    public function handle(RunContext $context, PreflightSummary $summary, ?array $only = null, ?Closure $earlier = null): array
     {
         $console = $context->console;
         $project = $context->plan->project;
         $validator = ReportValidator::forProject($project->basePath);
-        $plan = $this->plan($context, $summary);
+        $plan = (new RunJobs($this->config))->plan($context->plan, $context->run, $summary, $console->messages->locale, $only);
+        $done = $earlier === null ? [] : $earlier($plan);
+        $jobs = array_values(array_filter($plan->jobs, fn (AgentJob $job): bool => ! Arr::has($done, $job->key)));
 
         $console->section('agents');
 
@@ -53,10 +53,10 @@ final class RunAgents
             environment: ChildEnvironment::forApp($project),
         );
 
-        $progress = new AgentProgress($plan->jobs, $console->live, $console->messages);
+        $progress = new AgentProgress($jobs, $console->live, $console->messages);
         $progress->begin();
 
-        $raw = $runner->run($plan->jobs, $progress->started(...), $progress->finished(...), $progress->tick(...), $progress->repairing(...));
+        $raw = [...array_values($done), ...$runner->run($jobs, $progress->started(...), $progress->finished(...), $progress->tick(...), $progress->repairing(...), $done)];
 
         $assembler = new OutcomeAssembler($validator);
         $outcomes = $assembler->outcomes($plan, $raw);
@@ -70,23 +70,5 @@ final class RunAgents
         }
 
         return $outcomes;
-    }
-
-    private function plan(RunContext $context, PreflightSummary $summary): JobPlan
-    {
-        $run = $context->run;
-        $project = $context->plan->project;
-        $driver = $context->plan->driver;
-        $settings = TaskSettings::fromConfig($this->config);
-
-        // Agents may read the run folder even when it lives outside the project.
-        $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
-        $driverConfig = $driver->writeConfig($run->logsDir(), $extra);
-        $snapshots = SnapshotWriter::standard($this->config->int('snapshot_rows'))->write($summary, $project->relative($run->preflightDir()));
-        $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $context->console->messages->locale, McpServer::forProject($project) !== null, $driver->toolsNote(), $snapshots);
-        $overridePath = PromptTemplates::publishedPath();
-        $requests = new TaskRequests($prompt, $overridePath, $run, $project->basePath, $driverConfig, $extra);
-
-        return (new JobPlanner($requests, $settings, $overridePath))->plan($context->plan->selection->audits, $summary, $prompt, $project);
     }
 }

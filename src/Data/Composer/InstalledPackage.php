@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Data\Composer;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * One package from vendor/composer/installed.json.
- */
 final readonly class InstalledPackage
 {
     /**

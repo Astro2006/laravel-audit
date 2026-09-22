@@ -6,11 +6,8 @@ namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
+use Illuminate\Support\Arr;
 
-/**
- * What a report has to look like: a task report (its findings and sections)
- * or the assembled audit report.
- */
 final readonly class ReportSpec
 {
     /**
@@ -57,9 +54,8 @@ final readonly class ReportSpec
         return in_array('Findings', $this->sections, true);
     }
 
-    /** The section a corrected answer starts with. */
     public function firstSection(): string
     {
-        return $this->sections[0] ?? 'Findings';
+        return Arr::first($this->sections) ?? 'Findings';
     }
 }

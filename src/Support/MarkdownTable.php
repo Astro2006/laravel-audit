@@ -24,7 +24,6 @@ final class MarkdownTable
         return $lines;
     }
 
-    /** One line, pipes escaped. */
     public static function cell(string $value): string
     {
         return str_replace(["\r", "\n", '|'], ['', ' ', '\\|'], trim($value));

@@ -75,3 +75,20 @@ it('resumes the session and reports errors', function () {
         ->and($driver->parse($error, 1))->exit->toBe(AgentExit::Error)->error->toBe('Model hy3-free is not supported')
         ->and($driver->parse('', 1)->exit)->toBe(AgentExit::Error);
 });
+
+it('gives the orchestrator a shell that runs audit:tool only', function () {
+    $dir = tempDir('opencode');
+    $driver = new OpenCodeDriver('/app', model: 'ollama/qwen3-coder:30b', deniedFiles: ['.env']);
+
+    $config = json_decode(file_get_contents($driver->writeOrchestratorConfig($dir, [], 80)), true);
+    $agent = $config['agent']['laravel-audit-orchestrator'];
+
+    expect($agent['tools'])->toBe(['*' => false, 'bash' => true, 'read' => true, 'glob' => true, 'list' => true])
+        ->and($agent['permission']['bash'])->toBe(['*' => 'deny', 'php artisan audit:tool *' => 'allow'])
+        ->and($agent['permission'])->toMatchArray(['edit' => 'deny', 'webfetch' => 'deny', 'task' => 'deny'])
+        ->and($agent['permission']['read'])->toBe(['*' => 'allow', '.env' => 'deny', '/app/.env' => 'deny'])
+        ->and($agent['steps'])->toBe(80)
+        ->and($config)->not->toHaveKey('mcp')
+        ->and($driver->orchestratorCommand(new AgentRequest('orchestrator', 'p', '/app')))
+        ->toBe(['opencode', 'run', '--pure', '--format', 'json', '--agent', 'laravel-audit-orchestrator', '--model', 'ollama/qwen3-coder:30b']);
+});

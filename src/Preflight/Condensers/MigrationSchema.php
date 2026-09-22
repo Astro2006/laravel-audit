@@ -6,23 +6,16 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
-/**
- * The schema as the migrations build it, read from the files without a
- * database: tables, columns, indexes, foreign keys, and candidates for the
- * database task. A static read misses dynamic migrations; the agent confirms.
- */
 final class MigrationSchema
 {
     private const string DIRECTORY = 'database/migrations';
 
-    /** Column types that hold a reference to another table. */
     private const array KEY_TYPES = ['foreignId', 'foreignUuid', 'foreignUlid', 'unsignedBigInteger', 'bigInteger', 'unsignedInteger', 'integer', 'uuid', 'ulid'];
 
-    /** Column names that usually hold money. */
     private const string MONEY = '/(^|_)(price|amount|total|cost|balance|fee|salary|revenue)(_|$)/';
 
-    /** Column names that usually hold a date. */
     private const string DATE = '/(_at|_on|_date|^date)$/';
 
     /**
@@ -39,9 +32,10 @@ final class MigrationSchema
 
             foreach ($this->blocks($code) as [$table, $block]) {
                 $touched[] = $table;
-                $tables[$table] ??= ['migrations' => [], 'columns' => [], 'indexed' => [], 'foreign' => [], 'unique' => [], 'flags' => []];
-                $tables[$table]['migrations'][] = $file;
-                $this->columns($block, $tables[$table]);
+                $entry = Arr::get($tables, $table, ['migrations' => [], 'columns' => [], 'indexed' => [], 'foreign' => [], 'unique' => [], 'flags' => []]);
+                $entry['migrations'][] = $file;
+                $this->columns($block, $entry);
+                $tables[$table] = $entry;
             }
 
             $migrations[] = ['file' => $file, 'tables' => array_values(array_unique($touched)), 'flags' => $this->migrationFlags($code)];
@@ -82,8 +76,7 @@ final class MigrationSchema
             $table = Regex::groups('/^[\'"]([^\'"]+)[\'"]/', $part);
 
             if ($table !== null) {
-                // Up to the next Schema:: call or the end of the method.
-                $blocks[] = [$table[0], (string) preg_replace('/\n\s*}\s*\n\s*(public|protected|private)?\s*function.*$/s', '', $part)];
+                $blocks[] = [Arr::first($table), (string) preg_replace('/\n\s*}\s*\n\s*(public|protected|private)?\s*function.*$/s', '', $part)];
             }
         }
 
@@ -98,37 +91,43 @@ final class MigrationSchema
         preg_match_all('/\$table->(\w+)\(\s*(\[[^\]]*\]|[\'"][^\'"]*[\'"])?[^;]*;/', $block, $matches, PREG_SET_ORDER);
 
         foreach ($matches as $match) {
-            [$statement, $method] = [$match[0], $match[1]];
-            $names = Regex::all('/[\'"]([^\'"]+)[\'"]/', $match[2] ?? '');
+            [$statement, $method] = $match;
+            $names = Regex::all('/[\'"]([^\'"]+)[\'"]/', Arr::get($match, 2, ''));
 
             if ($method === 'id' && $names === []) {
-                $names = ['id']; // $table->id() without a name
+                $names = ['id'];
             }
 
+            $name = Arr::first($names);
+
             if (in_array($method, ['index', 'unique', 'primary'], true)) {
-                array_push($table[$method === 'unique' ? 'unique' : 'indexed'], ...array_slice($names, 0, 1));
+                if ($name !== null) {
+                    $table[$method === 'unique' ? 'unique' : 'indexed'][] = $name;
+                }
 
                 continue;
             }
 
             if ($method === 'foreign') {
-                array_push($table['foreign'], ...array_slice($names, 0, 1));
+                if ($name !== null) {
+                    $table['foreign'][] = $name;
+                }
 
                 continue;
             }
 
-            if (in_array($method, ['morphs', 'nullableMorphs', 'uuidMorphs', 'ulidMorphs'], true) && $names !== []) {
-                $table['columns'][$names[0].'_id'] = $method;
-                $table['indexed'][] = $names[0].'_id';
+            if (in_array($method, ['morphs', 'nullableMorphs', 'uuidMorphs', 'ulidMorphs'], true) && $name !== null) {
+                $table['columns'][$name.'_id'] = $method;
+                $table['indexed'][] = $name.'_id';
 
                 continue;
             }
 
-            if ($names === [] || str_starts_with($method, 'drop') || str_starts_with($method, 'rename')) {
+            if ($name === null || str_starts_with($method, 'drop') || str_starts_with($method, 'rename')) {
                 continue;
             }
 
-            $column = $names[0];
+            $column = $name;
             $table['columns'][$column] = $method;
 
             if (str_contains($statement, '->constrained(') || str_contains($statement, '->references(')) {
@@ -152,16 +151,15 @@ final class MigrationSchema
     private function tableFlags(array $table): array
     {
         $flags = [];
-        $indexed = [...$table['indexed'], ...$table['unique']];
+        $indexed = [...Arr::get($table, 'indexed'), ...Arr::get($table, 'unique')];
 
-        foreach ($table['columns'] as $column => $type) {
+        foreach (Arr::get($table, 'columns') as $column => $type) {
             $reference = str_ends_with($column, '_id') && in_array($type, self::KEY_TYPES, true);
 
-            if ($reference && ! in_array($column, $table['foreign'], true)) {
+            if ($reference && ! in_array($column, Arr::get($table, 'foreign'), true)) {
                 $flags[] = sprintf('`%s` has no foreign key constraint', $column);
             }
 
-            // MySQL indexes foreign keys itself; PostgreSQL and SQLite do not.
             if ($reference && ! in_array($column, $indexed, true)) {
                 $flags[] = sprintf('`%s` has no explicit index', $column);
             }
@@ -186,12 +184,12 @@ final class MigrationSchema
 
         if (str_contains($code, 'function up') && $down === null) {
             $flags[] = 'no down()';
-        } elseif ($down !== null && trim((string) preg_replace('/\/\/.*$/m', '', $down[0])) === '') {
+        } elseif ($down !== null && trim((string) preg_replace('/\/\/.*$/m', '', Arr::first($down))) === '') {
             $flags[] = 'empty down()';
         }
 
         $up = Regex::groups('/function\s+up\s*\(\s*\)\s*(?::\s*void\s*)?\{(.*?)\n\s{4}\}/s', $code);
-        $up = $up === null ? '' : $up[0];
+        $up = $up === null ? '' : Arr::first($up);
 
         if (preg_match('/->drop(Column|Columns)?\(|Schema::drop(IfExists)?\(/', $up) === 1) {
             $flags[] = 'drops data in up()';

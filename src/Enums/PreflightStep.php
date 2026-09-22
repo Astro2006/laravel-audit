@@ -33,10 +33,6 @@ enum PreflightStep: string
     case Browser = 'browser';
     case Phpstan = 'phpstan';
 
-    /**
-     * Heavy steps compete for CPU and run one after another:
-     * tests → browser → phpstan.
-     */
     public function isHeavy(): bool
     {
         return in_array($this, [

@@ -18,12 +18,9 @@ use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Console\View\Components\Factory;
+use Illuminate\Support\Arr;
 use Symfony\Component\Console\Terminal;
 
-/**
- * Everything `php artisan audit` prints and asks, apart from the live task
- * board of the agent phase (AgentProgress).
- */
 final class AuditConsole
 {
     public readonly LiveOutput $live;
@@ -55,7 +52,6 @@ final class AuditConsole
         $this->components->error($message);
     }
 
-    /** A last line with space around it. */
     public function closing(string $line): void
     {
         $this->output->newLine();
@@ -104,7 +100,6 @@ final class AuditConsole
         }
     }
 
-    /** Shows the step as running until its result arrives. */
     public function stepStarted(PreflightStep $step): void
     {
         $this->runningSteps[$step->value] = true;
@@ -113,7 +108,7 @@ final class AuditConsole
 
     public function stepFinished(StepResult $result): void
     {
-        unset($this->runningSteps[$result->step->value]);
+        Arr::forget($this->runningSteps, $result->step->value);
         $this->showRunningSteps();
 
         $line = $this->formatter->format($result);
@@ -124,7 +119,6 @@ final class AuditConsole
         }
     }
 
-    /** What fails in the tests and browser tests, before the gate decides. */
     public function gateFailures(StepResults $results): void
     {
         $this->live->release();

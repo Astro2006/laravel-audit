@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Run;
 
 use DateTimeImmutable;
 
-/**
- * One run: a timestamped folder below the output path.
- */
 final readonly class AuditRun
 {
     public function __construct(
@@ -24,7 +21,6 @@ final readonly class AuditRun
 
         self::ensureOutputRoot($outputRoot);
 
-        // No colons, so the folder name works on Windows as well.
         $id = $now->format('Y-m-d_H-i-s');
         $suffix = 1;
 
@@ -40,7 +36,19 @@ final readonly class AuditRun
         return $run;
     }
 
-    /** Reports describe concrete weaknesses; they never belong in the repository. */
+    public static function open(string $outputRoot, string $id): ?self
+    {
+        $outputRoot = rtrim($outputRoot, '/');
+
+        if ($id === '' || str_contains($id, '/') || ! is_dir($outputRoot.'/'.$id)) {
+            return null;
+        }
+
+        $startedAt = DateTimeImmutable::createFromFormat('Y-m-d_H-i-s', substr($id, 0, 19)) ?: new DateTimeImmutable('@'.filemtime($outputRoot.'/'.$id));
+
+        return new self($id, $outputRoot, $startedAt);
+    }
+
     public static function ensureOutputRoot(string $outputRoot): void
     {
         if (! is_dir($outputRoot)) {

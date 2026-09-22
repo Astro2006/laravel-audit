@@ -11,10 +11,6 @@ use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
 use Astro2006\LaravelAudit\Data\Phpstan\PhpstanReport;
 use Illuminate\Support\Collection;
 
-/**
- * Groups PHPStan errors by identifier and file, and adds the baseline
- * entries as "baselined" so hidden errors stay visible.
- */
 final class PhpstanGrouper
 {
     /**

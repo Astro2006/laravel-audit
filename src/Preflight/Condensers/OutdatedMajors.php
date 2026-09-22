@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Data\Composer\OutdatedPackage;
 use Astro2006\LaravelAudit\Support\Read;
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * Direct packages at least one major version behind (for 0.x: one minor version).
- */
 final class OutdatedMajors
 {
     /**
@@ -45,7 +42,6 @@ final class OutdatedMajors
         [$aMajor, $aMinor] = $a;
         [$bMajor, $bMinor] = $b;
 
-        // 0.x releases treat the minor version as the breaking one.
         return $aMajor === 0 && $bMajor === 0 ? $bMinor > $aMinor : $bMajor > $aMajor;
     }
 

@@ -7,8 +7,8 @@ namespace Astro2006\LaravelAudit\Snapshots;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Arr;
 
-/** database/schema.json: the tables the migrations build, flagged ones first. */
 final class DatabaseSchemaSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType
@@ -25,7 +25,7 @@ final class DatabaseSchemaSnapshot extends PreflightSnapshot
         }
 
         $tables = Read::array($schema, 'tables');
-        uksort($tables, fn (string $a, string $b): int => [Read::strings($tables[$a], 'flags') === [], $a] <=> [Read::strings($tables[$b], 'flags') === [], $b]);
+        uksort($tables, fn (string $a, string $b): int => [Read::strings(Arr::get($tables, $a), 'flags') === [], $a] <=> [Read::strings(Arr::get($tables, $b), 'flags') === [], $b]);
         $migrations = Read::arrays($schema, 'migrations');
         $flaggedMigrations = array_values(array_filter($migrations, fn (array $migration): bool => Read::strings($migration, 'flags') !== []));
 

@@ -6,11 +6,8 @@ namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
-/**
- * Applies the verdicts of finished verify jobs (keep, drop, downgrade) to
- * the task they checked.
- */
 final class VerdictApplier
 {
     private const string VERDICT_ROW = '/^\|\s*([A-Z]{2,4}-\d{3})\s*\|\s*`?(keep|drop|downgrade)`?\s*\|\s*(.*?)\s*\|\s*$/i';
@@ -29,7 +26,7 @@ final class VerdictApplier
     public function apply(array $outcomes): array
     {
         foreach ($outcomes as $key => $verify) {
-            $task = $outcomes[substr($key, 0, -strlen(TaskOutcome::VERIFY_SUFFIX))] ?? null;
+            $task = Arr::get($outcomes, substr($key, 0, -strlen(TaskOutcome::VERIFY_SUFFIX)));
 
             if (! $verify->isVerify() || ! $verify->completed() || $verify->body === null || $task === null || $task->body === null) {
                 continue;
@@ -48,7 +45,7 @@ final class VerdictApplier
             foreach (Regex::lines((string) $this->parser->parse($verify->body)->section('Verdicts')) as $line) {
                 $row = Regex::groups(self::VERDICT_ROW, trim($line));
 
-                if ($row === null || ! isset($titles[$row[0]])) {
+                if ($row === null || ! Arr::has($titles, Arr::first($row))) {
                     continue;
                 }
 
@@ -56,7 +53,7 @@ final class VerdictApplier
 
                 if (strcasecmp($verdict, 'drop') === 0) {
                     $dropped[] = $id;
-                    $rejected[] = new Rejection($id, $titles[$id], 'verify pass: '.$reason);
+                    $rejected[] = new Rejection($id, Arr::get($titles, $id), 'verify pass: '.$reason);
                 } elseif (strcasecmp($verdict, 'downgrade') === 0) {
                     $downgraded[] = $id;
                 }

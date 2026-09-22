@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Prompts;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Run-specific values the prompt placeholders are filled with.
- */
 final readonly class PromptContext
 {
     /**

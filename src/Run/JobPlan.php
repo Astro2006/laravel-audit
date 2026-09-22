@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AgentJob;
 
-/**
- * The agent jobs of one run and the audits they belong to.
- */
 final readonly class JobPlan
 {
     /**

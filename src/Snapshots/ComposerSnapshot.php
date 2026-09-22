@@ -9,14 +9,8 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * composer/dependency-facts.json and composer/usage-map.json: one row per
- * fact (advisory, abandoned package, candidate …); the details add the
- * package's usage.
- */
 final class ComposerSnapshot extends PreflightSnapshot
 {
-    /** Kinds in the order of the table; the names are the keys of dependency-facts.json. */
     private const array KINDS = [
         'advisories', 'abandoned', 'outdated_major', 'unused_candidates', 'misplaced_candidates',
         'shadow_candidates', 'licenses_flagged', 'constraints_flagged',

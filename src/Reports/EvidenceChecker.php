@@ -4,19 +4,14 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Compares the code block of a finding's evidence with the files it points
- * at. Weak models quote code that does not exist; a quote is accepted when
- * at least half of its significant lines appear in the files, whitespace
- * removed.
- */
+use Illuminate\Support\Arr;
+
 final class EvidenceChecker
 {
     private const int MIN_LINE_LENGTH = 8;
 
     private const float MIN_SHARE = 0.5;
 
-    /** Fence languages that quote tool output rather than project files. */
     private const array OUTPUT_LANGUAGES = ['text', 'txt', 'plaintext', 'console', 'shell', 'bash', 'sh', 'zsh', 'log', 'output', 'diff'];
 
     /**
@@ -50,14 +45,13 @@ final class EvidenceChecker
             return [];
         }
 
-        if (in_array(strtolower($match[2]), self::OUTPUT_LANGUAGES, true)) {
+        if (in_array(strtolower(Arr::get($match, 2)), self::OUTPUT_LANGUAGES, true)) {
             return [];
         }
 
         $lines = [];
 
-        foreach (preg_split('/\R/', $match[3]) ?: [] as $line) {
-            // Line numbers some models prefix: "42: code", "42 | code".
+        foreach (preg_split('/\R/', Arr::get($match, 3)) ?: [] as $line) {
             $line = $this->normalize((string) preg_replace('/^\s*\d+\s*[:|]\s/', '', $line));
 
             if (mb_strlen($line) < self::MIN_LINE_LENGTH || $this->isFiller($line)) {
@@ -70,7 +64,6 @@ final class EvidenceChecker
         return $lines;
     }
 
-    /** Omissions and comments the model adds around the quote. */
     private function isFiller(string $line): bool
     {
         return preg_match('~^(//|#|/\*|\*|<!--|\{\{--)~', $line) === 1

@@ -18,9 +18,6 @@ use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\select;
 
-/**
- * Everything `php artisan audit:install` prints and asks.
- */
 final class InstallConsole
 {
     public function __construct(
@@ -50,7 +47,6 @@ final class InstallConsole
         $this->line(' <options=bold>'.$this->messages->get('install.header').'</>');
     }
 
-    /** A short note on its own, like "dry run" or "not interactive". */
     public function note(string $key, string $color = ''): void
     {
         $this->newLine();

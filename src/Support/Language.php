@@ -6,7 +6,6 @@ namespace Astro2006\LaravelAudit\Support;
 
 final class Language
 {
-    /** How prompts name the report language, e.g. "German (de)". */
     public static function label(string $locale): string
     {
         return match (strtolower(substr($locale, 0, 2))) {

@@ -8,11 +8,8 @@ use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Support\Language;
+use Illuminate\Support\Arr;
 
-/**
- * The placeholders every task, summary and verify prompt shares: project
- * facts, the audit, the task and its checks.
- */
 final class TaskPlaceholders
 {
     private const string TOOLS_NOTE = 'You can read and search files. There is no shell, no web access and no write access. `.env` files are blocked on purpose.';
@@ -70,7 +67,7 @@ final class TaskPlaceholders
         $parts = [];
 
         foreach (self::snapshotTypes($task) as $type) {
-            $parts[] = $context->snapshots[$type->value] ?? "### {$type->label()}\nNo data in this run (see the preflight steps).";
+            $parts[] = Arr::get($context->snapshots, $type->value) ?? "### {$type->label()}\nNo data in this run (see the preflight steps).";
         }
 
         return implode("\n\n", $parts);
@@ -103,7 +100,7 @@ final class TaskPlaceholders
         $lines = [];
 
         foreach ([...$task->checks, 'other'] as $slug) {
-            $lines[] = sprintf('- `%s` — %s', $slug, $checks[$slug] ?? '');
+            $lines[] = sprintf('- `%s` — %s', $slug, Arr::get($checks, $slug, ''));
         }
 
         return implode("\n", $lines);

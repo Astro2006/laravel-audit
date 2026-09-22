@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** translations.json: missing keys per locale compared to the default locale. */
 final class TranslationsSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

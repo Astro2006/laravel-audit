@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
 use Illuminate\Support\Collection;
 
-/**
- * Maps class names to the installed package that autoloads them.
- */
 final class NamespaceIndex
 {
     /** @var Collection<string, string> namespace prefix (lower case, trailing backslash) => package, longest first */
@@ -33,7 +30,6 @@ final class NamespaceIndex
         $this->namespaces = $namespaces->sortKeysUsing(fn (string $a, string $b): int => strlen($b) <=> strlen($a));
     }
 
-    /** The package whose namespace the class belongs to. */
     public function packageFor(string $name): ?string
     {
         $key = strtolower($name).'\\';

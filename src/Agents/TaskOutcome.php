@@ -10,13 +10,8 @@ use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Rejection;
 use Astro2006\LaravelAudit\Reports\ValidatedReport;
 
-/**
- * The result of one task: its validated report body and findings (with the
- * task's own IDs; the audit report renumbers them).
- */
 final readonly class TaskOutcome
 {
-    /** Key suffix of the verify job that checks a task's findings. */
     public const string VERIFY_SUFFIX = '.verify';
 
     /**
@@ -44,7 +39,6 @@ final readonly class TaskOutcome
         public array $rejected = [],
     ) {}
 
-    /** A job that ends without an agent call, e.g. nothing to verify. */
     public static function immediate(AgentJob $job, AuditStatus $status, string $reason): self
     {
         $now = microtime(true);
@@ -52,7 +46,6 @@ final readonly class TaskOutcome
         return new self($job->key, $job->audit, $status, $reason, null, [], [], [], new Telemetry, false, $job->promptHash, null, $now, $now);
     }
 
-    /** The outcome of a job's last attempt, with the telemetry of all its attempts. */
     public static function fromAttempt(Attempt $attempt, AuditStatus $status, ?string $reason, ?ValidatedReport $report, Telemetry $telemetry, AgentResult $result): self
     {
         $job = $attempt->job;
@@ -107,7 +100,6 @@ final readonly class TaskOutcome
         return $this->status === AuditStatus::Completed;
     }
 
-    /** The name part of the key: backend.injection → injection. Jobs without an audit (e.g. results) return the key unchanged. */
     public function name(): string
     {
         return $this->audit === null ? $this->key : substr($this->key, strlen($this->audit->value) + 1);

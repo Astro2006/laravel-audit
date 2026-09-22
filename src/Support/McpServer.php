@@ -4,15 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-/**
- * The Laravel Boost MCP server as a stdio command. Each driver renders it in
- * its CLI's own config format.
- */
 final readonly class McpServer
 {
     public const string NAME = 'laravel-boost';
 
-    /** Boost tools that execute code, query data, read logs or return config values. */
     public const array DENIED_TOOLS = ['tinker', 'database-query', 'read-log-entries', 'last-error', 'browser-logs', 'list-available-env-vars', 'get-config'];
 
     /**
@@ -23,11 +18,6 @@ final readonly class McpServer
         public array $config,
     ) {}
 
-    /**
-     * The Laravel Boost MCP server, if Boost is installed: the entry from
-     * .mcp.json when there is one (it may use Sail or an absolute PHP), else
-     * the default `php artisan boost:mcp`. Independent of the agent CLI.
-     */
     public static function forProject(ProjectInspector $project): ?self
     {
         if (! $project->isInstalled('laravel/boost')) {
@@ -47,7 +37,6 @@ final readonly class McpServer
         return self::default();
     }
 
-    /** The default entry Boost itself writes: php artisan boost:mcp. */
     public static function default(): self
     {
         return new self(self::NAME, ['command' => 'php', 'args' => ['artisan', 'boost:mcp']]);

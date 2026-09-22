@@ -11,9 +11,6 @@ use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\Overlap;
 use Astro2006\LaravelAudit\Support\MarkdownTable;
 
-/**
- * run.md: frontmatter plus one table per part of the run, for people.
- */
 final class RunMarkdown
 {
     private const array TELEMETRY_HEADERS = ['Turns', 'Input', 'Output', 'Cache read', 'Cost USD', 'Duration'];
@@ -190,7 +187,6 @@ final class RunMarkdown
                 $warnings[] = '- '.$outcome->audit->value.': '.$message;
             }
 
-            // Errors of failed tasks; completed tasks are covered by the audit's own lint.
             foreach ($outcome->tasks as $task) {
                 foreach ($task->completed() ? [] : $task->errors as $message) {
                     $warnings[] = '- '.$task->key.': '.$message;

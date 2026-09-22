@@ -16,10 +16,6 @@ use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Messages;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * What `php artisan audit` checks before it starts. It never installs
- * anything; missing parts point to `php artisan audit:install`.
- */
 final class RequirementChecker
 {
     public function __construct(

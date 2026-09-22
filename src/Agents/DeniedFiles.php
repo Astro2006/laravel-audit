@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents;
 
-/**
- * Expands the deny_read globs to the files that exist right now, minus the
- * allow_read exceptions. Deny rules win over allow rules in the CLI, so
- * exceptions have to be resolved here.
- */
 final class DeniedFiles
 {
     /**

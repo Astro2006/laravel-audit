@@ -8,10 +8,6 @@ use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 
-/**
- * Starts an agent CLI headless. The prompt always goes through STDIN. Names
- * follow Laravel Boost's agent names (claude_code, opencode, codex).
- */
 interface AgentDriver
 {
     public function name(): string;
@@ -20,14 +16,12 @@ interface AgentDriver
 
     public function binary(): string;
 
-    /** The model from the config, or null for the CLI default. */
     public function model(): ?string;
 
     public function isAvailable(): bool;
 
     public function readProtection(): ReadProtection;
 
-    /** One sentence for the prompt: which tools the agent has and what is blocked. */
     public function toolsNote(): string;
 
     /**

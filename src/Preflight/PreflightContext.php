@@ -46,7 +46,6 @@ final class PreflightContext
         $this->results->put($result);
     }
 
-    /** Absolute path below the preflight directory; parent directories are created. */
     public function path(string $relative): string
     {
         $path = $this->preflightDir.'/'.ltrim($relative, '/');
@@ -102,7 +101,6 @@ final class PreflightContext
         return [$this->phpBinary, $this->project->path('vendor/bin/'.$name), ...$arguments];
     }
 
-    /** Last lines of a tool's output, for error messages. */
     public static function tail(string $output, int $lines = 15): string
     {
         $all = Regex::lines(trim($output));

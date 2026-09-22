@@ -6,14 +6,10 @@ namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Support\Json;
 
-/**
- * The log files of one agent call in the run's logs folder.
- */
 final class TaskLog
 {
     public function __construct(private readonly string $logsDir) {}
 
-    /** Writes <name>.json and, when there is any, <name>.stderr.log. */
     public function write(string $name, string $output, string $errorOutput): void
     {
         if (! is_dir($this->logsDir)) {
@@ -31,12 +27,6 @@ final class TaskLog
         }
     }
 
-    /**
-     * Turns the agent output into one JSON document, so the log can be read
-     * and formatted like any JSON file. A JSON Lines stream (OpenCode, Codex)
-     * becomes a list of its events; a line that is not valid JSON stays in
-     * the list as a string.
-     */
     private function readable(string $output): mixed
     {
         $document = json_decode($output, true);

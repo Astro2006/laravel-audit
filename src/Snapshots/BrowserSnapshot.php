@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** tests/browser-condensed.json: results, screenshots of failures, visited URIs per test file. */
 final class BrowserSnapshot extends JunitSnapshot
 {
     public function type(): SnapshotType

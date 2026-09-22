@@ -12,10 +12,6 @@ use Astro2006\LaravelAudit\Run\RiskPoints;
 use Astro2006\LaravelAudit\Run\RunFinalizer;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 
-/**
- * Writes the reports, completes run.md and shows the summary. The run
- * fails when any audit did not complete.
- */
 final class FinalizeRun
 {
     public function __construct(private readonly AuditConfig $config) {}

@@ -14,7 +14,6 @@ use Astro2006\LaravelAudit\Support\Read;
 
 final class StackStep implements Step
 {
-    /** stack label => composer packages and npm packages that reveal it */
     private const array FRONTEND = [
         'livewire' => [['livewire/livewire'], []],
         'inertia' => [['inertiajs/inertia-laravel'], ['@inertiajs/vue3', '@inertiajs/react', '@inertiajs/svelte']],

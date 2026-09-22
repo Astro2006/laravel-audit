@@ -10,9 +10,6 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 
-/**
- * Non-blank lines in app/. Used to put finding counts in relation to size.
- */
 final class LinesOfCodeStep implements Step
 {
     public function step(): PreflightStep

@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Preflight;
 use Astro2006\LaravelAudit\Enums\AssetBuildMode;
 use Astro2006\LaravelAudit\Support\Files;
 
-/**
- * Builds the frontend assets before the browser tests when they are missing
- * (or always, per config), and warns when they are older than their sources.
- */
 final class AssetBuild
 {
     /** @return list<string> warning codes */

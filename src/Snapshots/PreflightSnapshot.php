@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Contracts\Snapshot;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Json;
 
-/**
- * Shared helpers for snapshots built from the condensed preflight files.
- */
 abstract class PreflightSnapshot implements Snapshot
 {
     /** @return array<mixed>|null null when the file is missing or empty */
@@ -37,7 +34,6 @@ abstract class PreflightSnapshot implements Snapshot
         return implode(', ', array_slice($items, 0, $max)).($more > 0 ? ' +'.$more : '');
     }
 
-    /** The class name without its namespace. */
     protected static function shortClass(string $class): string
     {
         $position = strrpos($class, '\\');

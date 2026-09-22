@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Reports;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Run\RunManifest;
 
-/**
- * The audit summary the harness writes itself, without an agent call.
- */
 final class GeneratedSummary
 {
     /**

@@ -10,10 +10,6 @@ use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * What a run will do, resolved from the options and the config before
- * anything is written.
- */
 final readonly class RunPlan
 {
     public function __construct(

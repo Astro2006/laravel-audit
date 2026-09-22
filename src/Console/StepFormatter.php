@@ -21,9 +21,6 @@ use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Messages;
 
-/**
- * One console line per preflight step.
- */
 final class StepFormatter
 {
     public function __construct(private readonly Messages $messages) {}
@@ -51,7 +48,6 @@ final class StepFormatter
         return new StepLine($failed ? '✘' : '✔', $failed ? 'red' : 'green', $label, $this->detail($result));
     }
 
-    /** The label of a step that has not finished yet. */
     public function label(PreflightStep $step): string
     {
         return $step === PreflightStep::Phpstan

@@ -19,14 +19,6 @@ use Astro2006\LaravelAudit\Orchestration\Phases\StartRun;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Support\PackageVersion;
 
-/**
- * One audit run from start to end, without AI:
- *
- *   plan → requirements → start → preflight + test gate → agents → finalize
- *
- * Each phase is its own class and holds its own rules; this class only
- * decides what comes next and which exit code the run ends with.
- */
 final class AuditOrchestrator implements Orchestrator
 {
     public function __construct(

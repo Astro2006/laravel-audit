@@ -9,13 +9,6 @@ use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Dotenv\Dotenv;
 
-/**
- * Tests with RefreshDatabase wipe the database they run against. Before any
- * test runs, the guard resolves the test connection the way Laravel does
- * (.env.testing replaces .env, phpunit.xml <env> wins over it, variables
- * exported in the shell win over <env> without force="true") and compares it
- * with the app database. When in doubt, it says "not safe".
- */
 final class DatabaseGuard
 {
     /**
@@ -30,7 +23,6 @@ final class DatabaseGuard
         private readonly array $inherited = [],
     ) {}
 
-    /** Compares the test database with the running app's database config. */
     public static function forApp(ProjectInspector $project): self
     {
         return new self(
@@ -43,7 +35,6 @@ final class DatabaseGuard
 
     public function check(): DatabaseGuardResult
     {
-        // The running app already resolved its own connection from the environment.
         $app = $this->describe($this->appConnection, []);
 
         $env = $this->testEnv();

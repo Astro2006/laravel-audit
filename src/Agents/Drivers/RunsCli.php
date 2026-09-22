@@ -6,10 +6,6 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 
 use Symfony\Component\Process\ExecutableFinder;
 
-/**
- * What every CLI driver shares: its binary and model. The using class
- * declares `$binary` and `$model`.
- */
 trait RunsCli
 {
     public function binary(): string

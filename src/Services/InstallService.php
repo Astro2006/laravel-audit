@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Services;
 
-use Astro2006\LaravelAudit\Actions\Install\ExecuteInstallPlan;
-use Astro2006\LaravelAudit\Actions\Install\PreviewComposerChanges;
-use Astro2006\LaravelAudit\Actions\Install\PublishConfig;
-use Astro2006\LaravelAudit\Actions\Install\VerifyInstall;
+use Astro2006\LaravelAudit\Actions\Install\ExecuteInstallPlanAction;
+use Astro2006\LaravelAudit\Actions\Install\PreviewComposerChangesAction;
+use Astro2006\LaravelAudit\Actions\Install\PublishConfigAction;
+use Astro2006\LaravelAudit\Actions\Install\VerifyInstallAction;
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Console\InstallConsole;
 use Astro2006\LaravelAudit\Install\InstallPlan;
@@ -18,10 +18,6 @@ use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Symfony\Component\Process\Process as SymfonyProcess;
 
-/**
- * `audit:install` from start to end: plan what is missing, ask, install,
- * check what really got installed.
- */
 final class InstallService
 {
     public const int SUCCESS = 0;
@@ -30,10 +26,10 @@ final class InstallService
 
     public function __construct(
         private readonly AuditConfig $config,
-        private readonly PublishConfig $publishConfig,
-        private readonly PreviewComposerChanges $previewComposerChanges,
-        private readonly ExecuteInstallPlan $executeInstallPlan,
-        private readonly VerifyInstall $verifyInstall,
+        private readonly PublishConfigAction $publishConfig,
+        private readonly PreviewComposerChangesAction $previewComposerChanges,
+        private readonly ExecuteInstallPlanAction $executeInstallPlan,
+        private readonly VerifyInstallAction $verifyInstall,
     ) {}
 
     /** @param bool $yes install the plan without asking (except upgrades) */

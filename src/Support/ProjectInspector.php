@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Enums\PackageManager;
 use Illuminate\Support\Facades\Process;
 use Symfony\Component\Process\ExecutableFinder;
 
-/**
- * Read-only facts about the audited project, from its files.
- */
 class ProjectInspector
 {
     private ?ComposerPackages $composer = null;
@@ -27,7 +24,6 @@ class ProjectInspector
 
     public function __construct(public readonly string $basePath) {}
 
-    /** The app this package is installed in; `base_path` in the config points elsewhere (tests). */
     public static function fromConfig(AuditConfig $config): self
     {
         return new self($config->nullableString('base_path') ?? base_path());
@@ -46,7 +42,6 @@ class ProjectInspector
         return str_starts_with($absolute, $base) ? substr($absolute, strlen($base)) : $absolute;
     }
 
-    /** Packages from composer.json, composer.lock and vendor/composer/installed.json. */
     public function composer(): ComposerPackages
     {
         return $this->composer ??= new ComposerPackages($this);
@@ -93,11 +88,6 @@ class ProjectInspector
         };
     }
 
-    /**
-     * The ini Laravel Herd loads for `herd coverage` (Xdebug), when it loads
-     * Xdebug for this PHP version. The test step passes it as PHPRC: unlike
-     * `herd coverage`'s -c, it reaches the processes the test runner starts.
-     */
     public function herdCoverageIni(): ?string
     {
         if ($this->herdCoverageIni === null) {
@@ -144,7 +134,6 @@ class ProjectInspector
         return is_dir($this->path('node_modules/'.$name));
     }
 
-    /** Where the Pest browser tests live: a test suite or a directory with tests. */
     public function browserTests(string $suite, string $path): ?BrowserTestLocation
     {
         $path = trim($path, '/');

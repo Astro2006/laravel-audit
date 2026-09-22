@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Data\Composer\FlaggedLicense;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Packages whose license is not on the allowlist.
- */
 final class LicenseCheck
 {
     /**

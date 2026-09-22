@@ -9,9 +9,6 @@ use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
 use InvalidArgumentException;
 
-/**
- * expected.json of the fixture app: planted problems and negative controls.
- */
 final readonly class ExpectedSet
 {
     /**
@@ -49,7 +46,6 @@ final readonly class ExpectedSet
         return array_values(array_filter($this->controls, fn (ExpectedFinding $expected): bool => $expected->audit === $audit));
     }
 
-    /** Planted problems and controls together, to tell "other" findings apart. */
     public function explains(string $audit, FindingRecord $finding): bool
     {
         foreach ([...$this->plantedFor($audit), ...$this->controlsFor($audit)] as $expected) {

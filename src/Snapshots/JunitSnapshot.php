@@ -6,10 +6,6 @@ namespace Astro2006\LaravelAudit\Snapshots;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * A condensed JUnit report as a snapshot: totals, one row per failure group,
- * skipped and slow tests as extra files.
- */
 abstract class JunitSnapshot extends PreflightSnapshot
 {
     /**

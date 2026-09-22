@@ -9,10 +9,6 @@ use Astro2006\LaravelAudit\Enums\Confidence;
 use Astro2006\LaravelAudit\Enums\Effort;
 use Astro2006\LaravelAudit\Enums\Severity;
 
-/**
- * Validates one finding: ID, metadata table, allowed values, locations and
- * body. Errors go back to the agent in the repair pass.
- */
 final class FindingLinter
 {
     private const array REQUIRED_FIELDS = ['severity', 'confidence', 'category', 'check', 'effort', 'locations'];
@@ -156,7 +152,7 @@ final class FindingLinter
         $path = $this->basePath.'/'.$location->file;
 
         if (! is_file($path)) {
-            return; // FindingRejector drops the finding
+            return;
         }
 
         if ($location->lastLine() !== null) {

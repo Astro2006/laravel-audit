@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Agent answer → report body → normalized → parsed → linted; rejected
- * findings are removed from the body.
- */
 final class ReportValidator
 {
     public function __construct(
@@ -29,7 +25,6 @@ final class ReportValidator
         $body = $this->normalizer->normalize($this->extractor->extract($answer));
         $lint = $this->linter->lint($this->parser->parse($body), $spec, $required);
 
-        // Rejected findings leave the body too, so the audit report never shows them.
         $rejected = array_map(fn (Rejection $rejection): string => $rejection->id, $lint->rejected);
 
         return new ValidatedReport($this->editor->remove($body, $rejected), $lint);

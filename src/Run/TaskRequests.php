@@ -19,11 +19,8 @@ use Astro2006\LaravelAudit\Reports\ReportParser;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Astro2006\LaravelAudit\Reports\VerdictApplier;
 use Astro2006\LaravelAudit\Reports\VerifyPolicy;
+use Illuminate\Support\Arr;
 
-/**
- * Builds the agent request of a task, a verify job or the results job from
- * what the jobs before it produced, and keeps each prompt in the logs.
- */
 final class TaskRequests
 {
     /** @param list<string> $extraDirectories */
@@ -67,13 +64,12 @@ final class TaskRequests
      */
     public function verify(Audit $audit, AuditTask $task, array $required, array $finished): ?AgentRequest
     {
-        $outcome = $finished[$task->key()] ?? null;
+        $outcome = Arr::get($finished, $task->key());
 
         if ($outcome === null || ! $outcome->completed() || $outcome->body === null) {
             return null;
         }
 
-        // Findings that cover a preflight fact (advisory, failing test, …) are facts, not claims.
         $ids = array_map(
             fn (Finding $finding): string => $finding->id,
             array_filter($outcome->findings, fn (Finding $finding): bool => VerifyPolicy::needsVerify($finding)
@@ -108,7 +104,7 @@ final class TaskRequests
 
             foreach ($parsed->findings as $finding) {
                 $severity = $finding->field('severity') ?? 'unknown';
-                $counts[$severity] = ($counts[$severity] ?? 0) + 1;
+                $counts[$severity] = Arr::get($counts, $severity, 0) + 1;
             }
 
             $digests[] = sprintf(
@@ -149,7 +145,7 @@ final class TaskRequests
                 continue;
             }
 
-            $outcome = $finished[$dependency->key()] ?? null;
+            $outcome = Arr::get($finished, $dependency->key());
 
             if ($outcome === null || ! $outcome->completed() || $outcome->body === null) {
                 $missing[] = $dependency->key();

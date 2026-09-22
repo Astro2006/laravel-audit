@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Data\Translations\MissingTranslations;
 use Astro2006\LaravelAudit\Data\Translations\TranslationReport;
 use Illuminate\Support\Collection;
 
-/**
- * Translation keys that exist in the default locale but not in another one.
- */
 final class TranslationDiff
 {
     private const int MAX_KEYS = 50;

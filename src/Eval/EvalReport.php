@@ -8,10 +8,6 @@ use Astro2006\LaravelAudit\Data\Run\FindingRecord;
 use Astro2006\LaravelAudit\Data\Run\OutcomeRecord;
 use Astro2006\LaravelAudit\Data\Run\RunRecord;
 
-/**
- * Compares several runs (run.json) with the expected set: recall, negative
- * control hits, stability of finding keys, format problems and cost.
- */
 final class EvalReport
 {
     /** @param list<RunRecord> $runs oldest first */

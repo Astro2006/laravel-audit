@@ -9,11 +9,7 @@ use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\PlanExecutor;
 use Astro2006\LaravelAudit\Install\PlannedPackage;
 
-/**
- * Runs the composer command as a dry run and lists what it would change
- * besides the planned packages.
- */
-final class PreviewComposerChanges
+final class PreviewComposerChangesAction
 {
     /** @return list<string> */
     public function handle(InstallPlan $plan, PlanExecutor $executor): array

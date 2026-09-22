@@ -11,10 +11,8 @@ use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\MigrationSchema;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Illuminate\Support\Arr;
 
-/**
- * Reads the schema from database/migrations, without a database.
- */
 final class MigrationsStep implements Step
 {
     public function __construct(private readonly MigrationSchema $schema = new MigrationSchema) {}
@@ -33,9 +31,9 @@ final class MigrationsStep implements Step
         $schema = $this->schema->read($context->project);
         $context->writeJson('database/schema.json', $schema);
 
-        $flagged = count(array_filter($schema['tables'], fn (array $table): bool => $table['flags'] !== []))
-            + count(array_filter($schema['migrations'], fn (array $migration): bool => $migration['flags'] !== []));
+        $flagged = count(array_filter(Arr::get($schema, 'tables'), fn (array $table): bool => Arr::get($table, 'flags') !== []))
+            + count(array_filter(Arr::get($schema, 'migrations'), fn (array $migration): bool => Arr::get($migration, 'flags') !== []));
 
-        return StepResult::ok($this->step(), new MigrationsDTO(count($schema['migrations']), count($schema['tables']), $flagged));
+        return StepResult::ok($this->step(), new MigrationsDTO(count(Arr::get($schema, 'migrations')), count(Arr::get($schema, 'tables')), $flagged));
     }
 }

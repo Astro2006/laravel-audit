@@ -21,14 +21,10 @@ use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Throwable;
 
-/**
- * Runs the preflight: tests and PHPStan start in the background first, the
- * light steps run meanwhile, the browser tests follow the tests (they share
- * the database). The test gate comes afterwards, once every step has a result.
- */
 final class PreflightRunner
 {
     /** @var Collection<string, Step> */
@@ -40,7 +36,6 @@ final class PreflightRunner
         $this->steps = (new Collection($steps))->keyBy(fn (Step $step): string => $step->step()->value);
     }
 
-    /** Every step the package has. */
     public static function standard(DatabaseGuard $guard, string $locale): self
     {
         return new self([
@@ -80,7 +75,6 @@ final class PreflightRunner
             $async = $this->step($step);
 
             if (! $async instanceof AsyncStep) {
-                // Tests always come first, even when they cannot run in the background.
                 if ($step === PreflightStep::Tests) {
                     $onStart?->__invoke($step);
                     $this->runStep($context, $async, $onResult);
@@ -106,10 +100,9 @@ final class PreflightRunner
             $this->runStep($context, $this->step($step), $onResult);
         }
 
-        // Browser tests share the database with the tests: they wait.
         foreach ([PreflightStep::Tests, PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
-            if (isset($running[$step->value])) {
-                [$async, $process, $startedAt] = $running[$step->value];
+            if (Arr::has($running, $step->value)) {
+                [$async, $process, $startedAt] = Arr::get($running, $step->value);
                 $result = $this->attempt($step, fn () => $async->finish($context, $process->wait()));
                 $this->record($context, $result->withDuration(microtime(true) - $startedAt), $onResult);
 

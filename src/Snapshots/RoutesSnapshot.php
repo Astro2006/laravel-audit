@@ -7,11 +7,8 @@ namespace Astro2006\LaravelAudit\Snapshots;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Support\Arr;
 
-/**
- * routes.json and route-facts.json: the flagged routes (candidates, not
- * findings) as rows, the full route table as an extra file.
- */
 final class RoutesSnapshot extends PreflightSnapshot
 {
     private const array FACTS = [
@@ -59,7 +56,7 @@ final class RoutesSnapshot extends PreflightSnapshot
         foreach ($routes as $route) {
             foreach (explode('|', Read::string($route, 'method')) as $method) {
                 if ($method !== 'HEAD' && $method !== '') {
-                    $methods[$method] = ($methods[$method] ?? 0) + 1;
+                    $methods[$method] = Arr::get($methods, $method, 0) + 1;
                 }
             }
         }

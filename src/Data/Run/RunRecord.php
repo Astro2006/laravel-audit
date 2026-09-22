@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Data\Run;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * A run as stored in run.json.
- */
 final readonly class RunRecord
 {
     /** @param list<OutcomeRecord> $outcomes */

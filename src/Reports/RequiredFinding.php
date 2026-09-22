@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * A preflight fact the report must cover, e.g. every security advisory.
- */
 final readonly class RequiredFinding
 {
     /**

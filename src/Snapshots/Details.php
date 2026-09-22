@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Snapshots;
 
-/**
- * Markdown for detail files: labelled fields, lists and verbatim text.
- */
 final class Details
 {
     /**
@@ -45,7 +42,6 @@ final class Details
         return implode("\n", array_map(fn (string $item): string => '- '.$item, $items));
     }
 
-    /** Verbatim text such as an error message, fenced so it is never read as structure. */
     public static function text(string $text): string
     {
         $text = trim($text);

@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Writes a report file: the harness owns frontmatter and H1, the agent only
- * delivers the body.
- */
 final class ReportWriter
 {
     /** @param array<string, string|int|null> $frontmatter */

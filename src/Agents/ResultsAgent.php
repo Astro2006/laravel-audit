@@ -9,11 +9,6 @@ use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
 use Astro2006\LaravelAudit\Support\Language;
 
-/**
- * Writes the run's overview: one agent call after every selected audit is
- * done, reading their summaries and finding counts to spot cross-audit
- * patterns a single audit cannot see on its own.
- */
 final class ResultsAgent
 {
     private const string TEMPLATE = 'agents/_results.md';
@@ -40,7 +35,6 @@ final class ResultsAgent
         return new RenderedPrompt($text, $this->hash());
     }
 
-    /** Depends on the template only, never on the run. */
     public function hash(): string
     {
         return $this->templates->hash(self::TEMPLATE);

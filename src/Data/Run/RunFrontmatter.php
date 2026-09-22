@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Data\Run;
 use Astro2006\LaravelAudit\Support\Read;
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * The frontmatter of a run.md.
- */
 final readonly class RunFrontmatter
 {
     public function __construct(
@@ -61,7 +58,6 @@ final readonly class RunFrontmatter
         );
     }
 
-    /** Commit plus a "+dirty" marker, to compare code states. */
     public function codeState(): string
     {
         return ($this->gitCommit ?? '').($this->gitDirty ? '+dirty' : '');

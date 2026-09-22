@@ -18,10 +18,6 @@ use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Files;
 use Illuminate\Support\Collection;
 
-/**
- * Runs existing Pest browser tests (Playwright). No browser tests → the
- * step is skipped quietly.
- */
 final class BrowserStep implements Step
 {
     public function __construct(

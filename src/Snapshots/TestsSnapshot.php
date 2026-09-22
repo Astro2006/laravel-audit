@@ -7,7 +7,6 @@ namespace Astro2006\LaravelAudit\Snapshots;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 
-/** tests/tests-condensed.json */
 final class TestsSnapshot extends JunitSnapshot
 {
     public function type(): SnapshotType

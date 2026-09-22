@@ -6,12 +6,8 @@ namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * Fully qualified class names a PHP or Blade file refers to.
- */
 final class ClassNames
 {
-    /** Blade markers that reveal a package without a class reference: package => markers. */
     private const array BLADE_MARKERS = [
         'livewire/livewire' => ['@livewire', '<livewire:', 'wire:model', 'wire:click', '@livewireStyles', '@livewireScripts'],
         'filament/filament' => ['<x-filament'],

@@ -9,13 +9,8 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Support\Read;
 use RuntimeException;
 
-/**
- * An audit's tasks and checks, from resources/audits/<audit>.php. A copy
- * published with `vendor:publish --tag=audit-checks` wins.
- */
 final readonly class AuditDefinition
 {
-    /** Where `vendor:publish --tag=audit-checks` puts the files, below resources/. */
     public const string PUBLISHED_PATH = 'audits/vendor/laravel-audit';
 
     /**

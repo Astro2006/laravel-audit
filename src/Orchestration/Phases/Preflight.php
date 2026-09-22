@@ -16,11 +16,6 @@ use Astro2006\LaravelAudit\Run\PreflightReuse;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 
-/**
- * Runs every preflight step the selected audits need, or copies the
- * preflight of an earlier run (--reuse-preflight), then asks the test gate
- * once every step has a result.
- */
 final class Preflight
 {
     public function __construct(
@@ -122,7 +117,7 @@ final class Preflight
         return $stored->steps;
     }
 
-    private static function browserLabel(PreflightSummary $summary): string
+    public static function browserLabel(PreflightSummary $summary): string
     {
         $result = $summary->steps->get(PreflightStep::Browser);
 

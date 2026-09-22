@@ -13,11 +13,6 @@ use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Collection;
 
-/**
- * Where does the app use each Composer package? Counts class references in
- * production code and tests, so the dependencies agent does not have to
- * grep the codebase itself.
- */
 final class UsageMapBuilder
 {
     private const array PRODUCTION_DIRS = ['app', 'config', 'database', 'routes', 'bootstrap', 'resources/views'];

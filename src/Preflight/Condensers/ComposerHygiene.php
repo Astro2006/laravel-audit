@@ -8,9 +8,6 @@ use Astro2006\LaravelAudit\Data\Composer\FlaggedConstraint;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Risky version constraints and composer.json settings.
- */
 final class ComposerHygiene
 {
     /** @return list<FlaggedConstraint> */

@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** tests/route-test-map.json: routes without a test as rows, the full map as an extra file. */
 final class RouteTestsSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

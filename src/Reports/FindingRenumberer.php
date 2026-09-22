@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
 final class FindingRenumberer
 {
@@ -27,9 +28,9 @@ final class FindingRenumberer
 
             if ($heading !== null) {
                 [$hashes, $id, $rest] = $heading;
-                $line = $hashes.($ids[$id] ?? $id).$rest;
+                $line = $hashes.Arr::get($ids, $id, $id).$rest;
             } elseif (preg_match('/^\|\s*Related\s*\|/i', $line) === 1) {
-                $line = (string) preg_replace_callback('/\b[A-Z]{2,4}-\d{3}\b/', fn (array $match): string => $ids[$match[0]] ?? $match[0], $line);
+                $line = (string) preg_replace_callback('/\b[A-Z]{2,4}-\d{3}\b/', fn (array $match): string => Arr::get($ids, Arr::first($match), Arr::first($match)), $line);
             }
 
             $lines[] = $line;

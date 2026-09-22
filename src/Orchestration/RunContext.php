@@ -9,9 +9,6 @@ use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Run\RunManifest;
 
-/**
- * Everything the phases of one started run share.
- */
 final readonly class RunContext
 {
     public function __construct(

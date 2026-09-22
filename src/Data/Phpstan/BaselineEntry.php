@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Data\Phpstan;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * An ignoreErrors entry of a PHPStan baseline (it has a count and a path).
- */
 final readonly class BaselineEntry
 {
     public function __construct(

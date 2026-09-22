@@ -12,10 +12,6 @@ use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Collection;
 
-/**
- * Everything Composer can tell about the dependencies, computed before the
- * agent starts. Candidates are not findings — the agent confirms them.
- */
 final class DependencyFacts
 {
     /**

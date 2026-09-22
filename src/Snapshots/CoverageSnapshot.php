@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** tests/coverage-by-class.json: line coverage per class in app/, lowest first. */
 final class CoverageSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

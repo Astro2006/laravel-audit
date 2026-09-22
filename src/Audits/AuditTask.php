@@ -7,12 +7,6 @@ namespace Astro2006\LaravelAudit\Audits;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 
-/**
- * One small, focused piece of an audit: a few related checks that read the
- * same code, run as one agent call. Tasks run in parallel unless they
- * depend on another task's output (its sections are injected as context).
- * Every audit ends with a summary task that only sees the merged findings.
- */
 final readonly class AuditTask
 {
     public const string SUMMARY = 'summary';
@@ -35,7 +29,6 @@ final readonly class AuditTask
         public array $snapshots = [],
     ) {}
 
-    /** Unique across the run, e.g. backend.injection. */
     public function key(): string
     {
         return $this->audit->value.'.'.$this->name;
@@ -52,7 +45,6 @@ final readonly class AuditTask
         return $this->name === self::SUMMARY;
     }
 
-    /** Template below resources/prompts. Summary and custom tasks share one per kind. */
     public function promptFile(): string
     {
         return match ($this->name) {
@@ -62,7 +54,6 @@ final readonly class AuditTask
         };
     }
 
-    /** Optional audit-specific addition to a shared template (e.g. agents/tests/summary.md). */
     public function extraPromptFile(): ?string
     {
         return $this->isSummary() ? 'agents/'.$this->audit->value.'/summary.md' : null;

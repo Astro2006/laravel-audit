@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** pint-grouped.json: one row per Pint rule. */
 final class PintSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

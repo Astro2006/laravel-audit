@@ -14,10 +14,6 @@ use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * Resolves audits, agent and mode from the options, falling back to the
- * config. Nothing is written yet.
- */
 final class PlanRun
 {
     public function __construct(private readonly AuditConfig $config) {}

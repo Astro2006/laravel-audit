@@ -6,10 +6,6 @@ namespace Astro2006\LaravelAudit\Enums;
 
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 
-/**
- * How many agent tasks run at once: one (single) or up to
- * agent.concurrency (parallel).
- */
 enum AgentMode: string
 {
     case Single = 'single';

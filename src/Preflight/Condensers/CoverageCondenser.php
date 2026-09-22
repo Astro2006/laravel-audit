@@ -9,9 +9,6 @@ use Astro2006\LaravelAudit\Data\Tests\CoverageReport;
 use Astro2006\LaravelAudit\Support\Xml;
 use SimpleXMLElement;
 
-/**
- * Clover coverage per class in app/, lowest coverage first.
- */
 final class CoverageCondenser
 {
     public function condense(string $cloverPath, string $basePath, string $sourceDir = 'app'): ?CoverageReport

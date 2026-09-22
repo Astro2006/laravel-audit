@@ -8,10 +8,6 @@ use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
 use Astro2006\LaravelAudit\Data\Tests\RouteTestLink;
 use Astro2006\LaravelAudit\Data\Tests\RouteTestMap;
 
-/**
- * Heuristic map from routes to the test files that reference them by route
- * name, URI literal or controller class. The tests agent verifies it.
- */
 final class RouteTestMapper
 {
     /**

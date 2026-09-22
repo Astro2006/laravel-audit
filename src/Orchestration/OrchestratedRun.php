@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Astro2006\LaravelAudit\Orchestration;
+
+use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
+use Astro2006\LaravelAudit\Orchestration\Phases\PlanRun;
+use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Run\AuditRun;
+use Astro2006\LaravelAudit\Support\AuditConfig;
+
+final readonly class OrchestratedRun
+{
+    public const string DIRECTORY = 'orchestration';
+
+    public function __construct(
+        public AuditRun $run,
+        public OrchestrationState $state,
+        public RunPlan $plan,
+        public TaskStore $store,
+        public WorkerLock $lock,
+    ) {}
+
+    /** @throws InvalidSelection when the run does not exist or was not started with --orchestrate */
+    public static function open(AuditConfig $config, string $runId): self
+    {
+        $run = AuditRun::open($config->string('output_path'), $runId)
+            ?? throw new InvalidSelection(sprintf('Run "%s" not found.', $runId));
+        $state = OrchestrationState::read(self::directory($run))
+            ?? throw new InvalidSelection(sprintf('Run "%s" was not started with --orchestrate.', $runId));
+
+        return self::for($run, $state, (new PlanRun($config))->handle($state->options()));
+    }
+
+    public static function for(AuditRun $run, OrchestrationState $state, RunPlan $plan): self
+    {
+        $directory = self::directory($run);
+
+        return new self($run, $state, $plan, new TaskStore($directory.'/tasks'), new WorkerLock($directory.'/worker.lock'));
+    }
+
+    public static function directory(AuditRun $run): string
+    {
+        return $run->dir().'/'.self::DIRECTORY;
+    }
+
+    public function preflight(): ?PreflightSummary
+    {
+        return is_file($this->run->preflightDir().'/summary.json') ? PreflightSummary::fromDirectory($this->run->preflightDir()) : null;
+    }
+}

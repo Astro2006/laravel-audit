@@ -15,11 +15,8 @@ use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Astro2006\LaravelAudit\Reports\VerdictApplier;
+use Illuminate\Support\Arr;
 
-/**
- * Puts the task outcomes back together into one outcome per audit, after
- * applying the verdicts of the verify jobs.
- */
 final class OutcomeAssembler
 {
     public function __construct(
@@ -76,7 +73,7 @@ final class OutcomeAssembler
     {
         $audit = $planned->audit;
         $summaryTask = $planned->summaryTask();
-        [$summaryText, $summarySections] = $this->summaryParts($byKey[$summaryTask->key()] ?? null, $summaryTask);
+        [$summaryText, $summarySections] = $this->summaryParts(Arr::get($byKey, $summaryTask->key()), $summaryTask);
 
         $report = $this->assembler->assemble($audit, $planned->tasks, $byKey, $summaryText, $summarySections, $skipped);
         $required = array_values(array_filter(
@@ -89,8 +86,8 @@ final class OutcomeAssembler
 
         foreach ($planned->tasks as $task) {
             foreach ([$task->key(), $task->key().TaskOutcome::VERIFY_SUFFIX] as $key) {
-                if (isset($byKey[$key])) {
-                    $taskOutcomes[] = $byKey[$key];
+                if (Arr::has($byKey, $key)) {
+                    $taskOutcomes[] = Arr::get($byKey, $key);
                 }
             }
         }

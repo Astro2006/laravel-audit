@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 use Astro2006\LaravelAudit\Agents\Telemetry;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Token usage of a Claude Code result, summed over all models (the CLI may
- * use a small model for housekeeping), and the model that did most of the work.
- */
 final readonly class ClaudeUsage
 {
     public function __construct(

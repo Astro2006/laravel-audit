@@ -14,9 +14,6 @@ use Astro2006\LaravelAudit\Run\RunManifest;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\PackageVersion;
 
-/**
- * Creates the run folder and writes the first run.md.
- */
 final class StartRun
 {
     public function __construct(private readonly AuditConfig $config) {}

@@ -8,14 +8,8 @@ use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
-/**
- * Puts the task reports of one audit together into the audit report:
- * findings in task order with new IDs (Related is remapped), each section
- * from the task that owns it, positive observations and limitations merged,
- * failed tasks listed. The summary comes from the summary task, or a short
- * generated one when it failed.
- */
 final class AuditAssembler
 {
     private const int MAX_POSITIVE = 5;
@@ -51,14 +45,14 @@ final class AuditAssembler
                 continue;
             }
 
-            $outcome = $outcomes[$task->key()] ?? null;
+            $outcome = Arr::get($outcomes, $task->key());
 
-            if (isset($skipped[$task->key()])) {
+            if (Arr::has($skipped, $task->key())) {
                 $skippedTasks[] = $task->key();
-                $limitations[] = sprintf('- The task `%s` (%s) was skipped: %s', $task->key(), $task->title, $skipped[$task->key()]);
+                $limitations[] = sprintf('- The task `%s` (%s) was skipped: %s', $task->key(), $task->title, Arr::get($skipped, $task->key()));
 
                 foreach ($task->sections as $title) {
-                    $sections[$title] = 'Skipped: '.$skipped[$task->key()];
+                    $sections[$title] = 'Skipped: '.Arr::get($skipped, $task->key());
                 }
 
                 continue;
@@ -86,7 +80,7 @@ final class AuditAssembler
 
             foreach ($report->findings as $parsed) {
                 $ids[$parsed->id] = sprintf('%s-%03d', $audit->idPrefix(), ++$number);
-                $findingTasks[$ids[$parsed->id]] = $task->key();
+                $findingTasks[Arr::get($ids, $parsed->id)] = $task->key();
             }
 
             $block = FindingRenumberer::renumber((string) $report->section('Findings'), $ids);
@@ -172,10 +166,6 @@ final class AuditAssembler
         return [$limitations, $outOfScope];
     }
 
-    /**
-     * One line of a merged list: plain text becomes a bullet, list items and
-     * table rows stay as they are, empty lines and "None." disappear.
-     */
     private function bullet(string $line): ?string
     {
         $line = rtrim($line);
@@ -207,7 +197,7 @@ final class AuditAssembler
                 }
             }
 
-            $content = $sections[$title] ?? '';
+            $content = Arr::get($sections, $title, '');
 
             if ($content === '') {
                 $content = $owner !== null && in_array($owner->key(), $failed, true)

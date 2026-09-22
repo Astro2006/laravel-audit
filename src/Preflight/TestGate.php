@@ -8,11 +8,6 @@ use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Closure;
 
-/**
- * Decides whether agents may run when tests or browser tests fail. It looks
- * at the finished preflight, right before the agents. Default is "no":
- * audits on a broken environment waste tokens.
- */
 final class TestGate
 {
     /**
@@ -36,7 +31,6 @@ final class TestGate
         };
     }
 
-    /** Failing tests and browser tests of the steps that ran. */
     public static function failures(StepResults $results): int
     {
         return ($results->tests()?->failures() ?? 0) + ($results->browser()?->failures() ?? 0);

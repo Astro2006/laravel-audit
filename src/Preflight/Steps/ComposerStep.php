@@ -20,10 +20,6 @@ use Illuminate\Process\Pool;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Process;
 
-/**
- * Composer audit, show, outdated, licenses and validate in parallel, then
- * the usage map, "composer why" for flagged packages and the facts file.
- */
 final class ComposerStep implements Step
 {
     private const int MAX_WHY = 20;

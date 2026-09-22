@@ -9,10 +9,6 @@ use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Json;
 use Closure;
 
-/**
- * Runs the audit several times and collects the run.json of every run,
- * then writes the evaluation next to the runs.
- */
 final class EvalRunner
 {
     public function __construct(private readonly AuditConfig $config) {}
@@ -29,7 +25,6 @@ final class EvalRunner
         for ($i = 0; $i < $runs; $i++) {
             $before = $this->runDirectories();
 
-            // The tools are deterministic; only the agents vary between runs.
             $runAudit($i + 1, [
                 '--force' => true,
                 '--no-interaction' => true,
@@ -49,7 +44,6 @@ final class EvalRunner
         return $records;
     }
 
-    /** Writes eval-<time>.md and .json into the output folder and returns the .md path. */
     public function write(EvalReport $report, EvalResult $result): string
     {
         $path = $this->outputRoot().'/eval-'.date('Y-m-d_H-i-s').'.md';

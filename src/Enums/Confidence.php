@@ -10,7 +10,6 @@ enum Confidence: string
     case Likely = 'likely';
     case Suspected = 'suspected';
 
-    /** How sure the agent is; higher is surer. */
     public function rank(): int
     {
         return match ($this) {

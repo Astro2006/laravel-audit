@@ -9,11 +9,9 @@ use Astro2006\LaravelAudit\Install\InstallResult;
 use Astro2006\LaravelAudit\Install\PlannedPackage;
 use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Illuminate\Support\Arr;
 
-/**
- * Prepares the output folder and checks what really got installed.
- */
-final class VerifyInstall
+final class VerifyInstallAction
 {
     /**
      * @param  list<string>  $declined
@@ -23,8 +21,6 @@ final class VerifyInstall
     {
         AuditRun::ensureOutputRoot($outputPath);
 
-        // Re-check from the files: composer.lock and node_modules tell the
-        // truth, independent of what this process has loaded.
         $fresh = new ProjectInspector($project->basePath);
         $installed = array_filter($plan->packages, fn (PlannedPackage $package): bool => $package->manager === 'npm'
             ? $fresh->hasNodeModule($package->name)
@@ -36,8 +32,8 @@ final class VerifyInstall
             stubCreated: in_array('phpstan-stub', $plan->setup, true) && $fresh->phpstanConfigPath() !== null,
             stubLevel: $stubLevel,
             declined: $declined,
-            failed: $executed['failed'],
-            manualCommands: $executed['manual'],
+            failed: Arr::get($executed, 'failed'),
+            manualCommands: Arr::get($executed, 'manual'),
             manualKeys: $plan->manual,
         );
     }

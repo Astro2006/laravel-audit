@@ -8,15 +8,10 @@ use Astro2006\LaravelAudit\Data\Phpstan\BaselineEntry;
 use Astro2006\LaravelAudit\Support\Read;
 use Nette\Neon\Neon;
 
-/**
- * Reads the project's PHPStan config: level (as a fallback when
- * dump-parameters is not available) and baseline entries.
- */
 final class PhpstanConfig
 {
     public function __construct(private readonly string $configPath) {}
 
-    /** Level from the config and its includes; the main config comes first. */
     public function level(): ?string
     {
         foreach ($this->files() as $data) {

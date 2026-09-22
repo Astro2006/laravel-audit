@@ -9,10 +9,6 @@ use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Closure;
 
-/**
- * One agent call. The request may be built lazily, once the jobs it
- * depends on have finished (their output becomes part of the prompt).
- */
 final readonly class AgentJob
 {
     /**

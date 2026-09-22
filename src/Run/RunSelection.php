@@ -8,11 +8,8 @@ use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
+use Illuminate\Support\Arr;
 
-/**
- * Which audits run, which preflight steps they need and which optional
- * preflight parts are left out.
- */
 final readonly class RunSelection
 {
     /**
@@ -65,14 +62,14 @@ final readonly class RunSelection
         $steps = [];
 
         foreach (AuditType::cases() as $type) {
-            $config = $configuredAudits[$type->value] ?? [];
+            $config = Arr::get($configuredAudits, $type->value, []);
             $config = is_array($config) ? $config : [];
 
-            if ((bool) ($config['enabled'] ?? false)) {
+            if ((bool) Arr::get($config, 'enabled', false)) {
                 $enabled[] = $type->value;
             }
 
-            $steps[$type->value] = self::steps($type, $config['preflight'] ?? []);
+            $steps[$type->value] = self::steps($type, Arr::get($config, 'preflight', []));
         }
 
         $base = $explicit !== [] ? $explicit : $enabled;
@@ -117,6 +114,17 @@ final readonly class RunSelection
         return $steps;
     }
 
+    /**
+     * The same audits, but only these preflight steps run (the steps an
+     * orchestrator asked for).
+     *
+     * @param  list<PreflightStep>  $steps
+     */
+    public function onlySteps(array $steps): self
+    {
+        return new self($this->audits, $this->without, array_fill_keys($this->auditValues(), $steps));
+    }
+
     public function includes(AuditType $audit): bool
     {
         return in_array($audit, $this->audits, true);
@@ -127,7 +135,6 @@ final readonly class RunSelection
         return in_array($step, $this->without, true);
     }
 
-    /** Only the tests audit reads coverage; measuring it slows the test run down a lot. */
     public function wantsCoverage(): bool
     {
         return $this->includes(AuditType::Tests) && ! $this->skips(OptionalStep::Coverage);
@@ -145,7 +152,7 @@ final readonly class RunSelection
         $needed = [];
 
         foreach ($this->audits as $audit) {
-            array_push($needed, ...($this->steps[$audit->value] ?? []));
+            array_push($needed, ...Arr::get($this->steps, $audit->value, []));
         }
 
         return array_values(array_filter(

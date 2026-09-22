@@ -6,23 +6,18 @@ namespace Astro2006\LaravelAudit\Support;
 
 use Illuminate\Support\Arr;
 
-/**
- * The audit config, read once. Every value has exactly one default: the
- * keys people change are in config/audit.php, everything else is in
- * DEFAULTS below. Both are merged deeply under the project's config, so a
- * published config/audit.php only needs the keys it changes and never
- * loses keys a newer package version adds. Lists replace, they never merge.
- */
 final readonly class AuditConfig
 {
-    /** Settings that rarely change. Any of them can still be set in config/audit.php. */
     public const array DEFAULTS = [
         'agent' => [
-            'drivers' => [
-                'codex' => ['config' => []],   // extra -c overrides, e.g. 'model_provider="ollama"'
+            'orchestrator' => [
+                'timeout' => 7200,
+                'max_turns' => 80,
+                'wait_timeout' => 100,
             ],
-            // Read-only Boost MCP tools the agents may use. Tinker, database
-            // queries, log readers and get-config are never allowed.
+            'drivers' => [
+                'codex' => ['config' => []],
+            ],
             'boost_tools' => [
                 'application-info',
                 'database-connections',
@@ -35,9 +30,6 @@ final readonly class AuditConfig
             ],
         ],
 
-        // The preflight steps each audit needs: about, stack, loc, pint,
-        // routes, translations, composer, migrations, candidates, tests,
-        // browser, phpstan.
         'audits' => [
             'tests' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'tests', 'browser', 'phpstan']],
             'frontend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'candidates', 'tests', 'browser']],
@@ -46,26 +38,25 @@ final readonly class AuditConfig
         ],
 
         'preflight' => [
-            // Tests only run when their database is provably not the app database.
             'allow_shared_database' => false,
             'tests' => [
-                'command' => null,          // null = php artisan test with JUnit (+ Clover)
+                'command' => null,
                 'timeout' => 1800,
             ],
             'browser' => [
                 'command' => null,
-                'testsuite' => 'Browser',       // excluded from the regular test step
-                'path' => 'tests/Browser',      // fallback if the suite does not exist
-                'build_assets' => 'if-missing', // if-missing | always | never
+                'testsuite' => 'Browser',
+                'path' => 'tests/Browser',
+                'build_assets' => 'if-missing',
                 'timeout' => 1200,
                 'max_artifacts' => 10,
             ],
             'phpstan' => [
-                'level' => null,        // null = level from phpstan.neon
-                'stub_level' => 5,      // only for a phpstan.neon created by audit:install
+                'level' => null,
+                'stub_level' => 5,
                 'memory_limit' => '2G',
                 'timeout' => 1800,
-                'parallel' => true,     // runs next to the tests; false = after them
+                'parallel' => true,
             ],
             'composer' => [
                 'outdated' => true,
@@ -77,20 +68,18 @@ final readonly class AuditConfig
             ],
         ],
 
-        'max_findings_per_task' => 5,   // raised automatically for tasks with more required findings
+        'max_findings_per_task' => 5,
         'max_files_per_task' => 25,
-        'snapshot_rows' => 15,          // rows per preflight snapshot in the prompt
-        'summary' => 'generated',       // generated | agent
+        'snapshot_rows' => 15,
+        'summary' => 'generated',
         'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
 
-        // Experimental, no grade: sum of weight × confidence factor.
         'risk_points' => [
             'weights' => ['critical' => 20, 'high' => 10, 'medium' => 4, 'low' => 1, 'info' => 0],
             'confidence' => ['confirmed' => 1.0, 'likely' => 0.7, 'suspected' => 0.3],
         ],
     ];
 
-    /** Keys that are no longer read => the key that replaces them, or null when nothing does. */
     public const array LEGACY_KEYS = [
         'agent.verify.min_severity' => null,
         'agent.binary' => 'agent.drivers.claude_code.binary',
@@ -135,7 +124,6 @@ final readonly class AuditConfig
         return Read::string($this->values, $key);
     }
 
-    /** Null for a missing or empty value. */
     public function nullableString(string $key): ?string
     {
         $value = Read::nullableString($this->values, $key);
@@ -185,14 +173,16 @@ final readonly class AuditConfig
      */
     private static function normalize(array $config): array
     {
-        foreach (array_keys((array) ($config['audits'] ?? [])) as $audit) {
-            if (is_bool($config['audits'][$audit])) {
-                $config['audits'][$audit] = ['enabled' => $config['audits'][$audit]];
+        foreach ((array) Arr::get($config, 'audits', []) as $audit => $enabled) {
+            if (is_bool($enabled)) {
+                $config['audits'][$audit] = ['enabled' => $enabled];
             }
         }
 
-        if (is_bool($config['agent']['verify'] ?? null)) {
-            $config['agent']['verify'] = ['enabled' => $config['agent']['verify']];
+        $verify = Arr::get($config, 'agent.verify');
+
+        if (is_bool($verify)) {
+            $config['agent']['verify'] = ['enabled' => $verify];
         }
 
         return $config;
@@ -206,8 +196,9 @@ final readonly class AuditConfig
     private static function merge(array $base, array $override): array
     {
         foreach ($override as $key => $value) {
-            $base[$key] = is_array($value) && ! array_is_list($value) && is_array($base[$key] ?? null) && ! array_is_list($base[$key])
-                ? self::merge($base[$key], $value)
+            $current = Arr::get($base, $key);
+            $base[$key] = is_array($value) && ! array_is_list($value) && is_array($current) && ! array_is_list($current)
+                ? self::merge($current, $value)
                 : $value;
         }
 

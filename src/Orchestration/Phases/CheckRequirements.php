@@ -12,10 +12,6 @@ use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Messages;
 
-/**
- * Checks tools, agent and environment before anything runs, and warns
- * about published prompts older than the package's own.
- */
 final class CheckRequirements
 {
     public function __construct(private readonly AuditConfig $config) {}

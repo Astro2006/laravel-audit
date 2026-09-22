@@ -12,15 +12,8 @@ use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Closure;
+use Illuminate\Support\Arr;
 
-/**
- * Runs the agent jobs in parallel (up to the concurrency limit). A job
- * starts once the jobs it depends on have finished, whatever their status.
- * Of the jobs that are ready, those with the longest chain of jobs waiting
- * on them start first, so the run does not end on a long tail.
- * Every answer is validated, and each job gets one repair pass in the same
- * session.
- */
 final class AgentRunner
 {
     private const string REPAIR_MESSAGE = <<<'TEXT'
@@ -53,14 +46,15 @@ final class AgentRunner
      * @param  (Closure(TaskOutcome): void)|null  $onFinished
      * @param  (Closure(): void)|null  $onTick  called after every poll round
      * @param  (Closure(AgentJob): void)|null  $onRepair  called when a job starts its repair pass
+     * @param  array<string, TaskOutcome>  $earlier  outcomes of jobs that finished in an earlier call; not part of the result
      * @return list<TaskOutcome> in the order the jobs finished
      */
-    public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null): array
+    public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null, array $earlier = []): array
     {
         $keys = array_map(fn (AgentJob $job): string => $job->key, $jobs);
         $pending = self::criticalFirst($jobs);
         $running = [];
-        $finished = [];
+        $finished = $earlier;
         $outcomes = [];
 
         while ($pending !== [] || $running !== []) {
@@ -73,11 +67,10 @@ final class AgentRunner
                     continue;
                 }
 
-                unset($pending[$index]);
+                Arr::forget($pending, $index);
                 $request = $job->request($finished);
 
                 if ($request === null) {
-                    // Nothing to do for this job (e.g. no findings to verify).
                     $outcome = TaskOutcome::immediate($job, AuditStatus::Completed, 'Nothing to do.');
                     $finished[$job->key] = $outcome;
                     $outcomes[] = $outcome;
@@ -91,7 +84,6 @@ final class AgentRunner
             }
 
             if ($running === [] && $pending !== []) {
-                // Nothing runs and nothing can start: a dependency cycle.
                 foreach ($pending as $job) {
                     $outcome = TaskOutcome::immediate($job, AuditStatus::Failed, 'Waiting for tasks that never finished: '.implode(', ', $job->dependsOn).'.');
                     $finished[$job->key] = $outcome;
@@ -179,14 +171,13 @@ final class AgentRunner
 
         $chains = [];
         $chain = function (string $key, array $seen = []) use (&$chain, &$chains, $dependents): int {
-            if (isset($chains[$key])) {
-                return $chains[$key];
+            if (Arr::has($chains, $key)) {
+                return Arr::get($chains, $key);
             }
 
             $longest = 0;
 
-            foreach ($dependents[$key] ?? [] as $dependent) {
-                // A cycle never finishes anyway; the run loop reports it.
+            foreach (Arr::get($dependents, $key, []) as $dependent) {
                 $longest = in_array($dependent, $seen, true) ? $longest : max($longest, $chain($dependent, [...$seen, $key]));
             }
 
@@ -194,9 +185,9 @@ final class AgentRunner
         };
 
         $order = array_keys($jobs);
-        usort($order, fn (int $a, int $b): int => [$chain($jobs[$b]->key), $a] <=> [$chain($jobs[$a]->key), $b]);
+        usort($order, fn (int $a, int $b): int => [$chain(Arr::get($jobs, $b)->key), $a] <=> [$chain(Arr::get($jobs, $a)->key), $b]);
 
-        return array_map(fn (int $index): AgentJob => $jobs[$index], $order);
+        return array_map(fn (int $index): AgentJob => Arr::get($jobs, $index), $order);
     }
 
     /**
@@ -206,7 +197,7 @@ final class AgentRunner
     private function ready(AgentJob $job, array $finished, array $keys): bool
     {
         foreach ($job->dependsOn as $dependency) {
-            if (in_array($dependency, $keys, true) && ! isset($finished[$dependency])) {
+            if (in_array($dependency, $keys, true) && ! Arr::has($finished, $dependency)) {
                 return false;
             }
         }
@@ -219,7 +210,6 @@ final class AgentRunner
         $job = $attempt->job;
         $telemetry = $attempt->telemetry->plus($result->telemetry);
 
-        // At the turn limit the agent answers from what it has, once.
         if ($result->exit === AgentExit::MaxTurns && ! $attempt->repair && $result->sessionId !== null) {
             $message = sprintf(self::ANSWER_NOW_MESSAGE, $job->spec->firstSection());
 

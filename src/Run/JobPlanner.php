@@ -15,14 +15,8 @@ use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
-/**
- * Splits the selected audits into agent jobs: one per task, one verify job
- * per task, and the results job once every audit is done. Tasks with
- * nothing to audit are skipped without an agent call.
- */
 final class JobPlanner
 {
-    /** Key of the job that writes the run's overview once every selected audit is done. */
     public const string RESULTS_KEY = 'results';
 
     /** @param  string|null  $overridePath  published prompts */
@@ -32,8 +26,14 @@ final class JobPlanner
         private readonly ?string $overridePath = null,
     ) {}
 
-    /** @param  list<AuditType>  $audits */
-    public function plan(array $audits, PreflightSummary $preflight, PromptContext $context, ProjectInspector $project): JobPlan
+    public const string NOT_STARTED = 'Not started by the orchestrator.';
+
+    /**
+     * @param  list<AuditType>  $audits
+     * @param  list<string>|null  $only  task keys to plan (an orchestrator's choice); null = every task
+     * @param  bool  $withHarnessJobs  plan the summary tasks and the results job too
+     */
+    public function plan(array $audits, PreflightSummary $preflight, PromptContext $context, ProjectInspector $project, ?array $only = null, bool $withHarnessJobs = true): JobPlan
     {
         $jobs = [];
         $planned = [];
@@ -50,11 +50,15 @@ final class JobPlanner
             $verifyKeys = [];
 
             foreach ($plannedAudit->tasks as $task) {
-                if ($task->isSummary() && $this->settings->summaryMode === TaskSettings::SUMMARY_GENERATED && $task->sections === []) {
+                if ($task->isSummary() && (! $withHarnessJobs || ($this->settings->summaryMode === TaskSettings::SUMMARY_GENERATED && $task->sections === []))) {
                     continue;
                 }
 
                 $reason = $task->isSummary() ? null : $audit->skipReason($task, $preflight);
+
+                if ($reason === null && ! $task->isSummary() && $only !== null && ! in_array($task->key(), $only, true)) {
+                    $reason = self::NOT_STARTED;
+                }
 
                 if ($reason !== null) {
                     $skipped[$task->key()] = $reason;
@@ -62,7 +66,6 @@ final class JobPlanner
                     continue;
                 }
 
-                // The summary reads the findings after the verify pass.
                 $jobs[] = $this->taskJob($type, $plannedAudit, $task, $task->isSummary() ? $verifyKeys : [], $skipped);
 
                 if ($this->settings->verify && ! $task->isSummary()) {
@@ -72,7 +75,7 @@ final class JobPlanner
             }
         }
 
-        if ($audits !== []) {
+        if ($audits !== [] && $withHarnessJobs) {
             $jobs[] = $this->resultsJob(array_map(fn (AgentJob $job): string => $job->key, $jobs), $planned, $skipped);
         }
 

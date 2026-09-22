@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Support\Read;
 
-/** code/candidates.json: lines that match a risky pattern, one row per pattern. */
 final class CodeCandidatesSnapshot extends PreflightSnapshot
 {
     public function type(): SnapshotType

@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Data;
 
-/**
- * What `php artisan audit` was asked to do, read from its options.
- */
 final readonly class AuditOptions
 {
     /**

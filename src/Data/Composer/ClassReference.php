@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Data\Composer;
 
-/**
- * References from one source file to one package.
- */
 final readonly class ClassReference
 {
     /** @param 'prod'|'test' $scope */

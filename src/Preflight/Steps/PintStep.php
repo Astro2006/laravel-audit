@@ -44,7 +44,6 @@ final class PintStep implements Step
 
         $context->writeJson('pint.json', $report);
 
-        // One entry per (rule, file), then grouped by rule.
         $pairs = new Collection;
 
         foreach (Read::arrays($report, 'files') as $file) {

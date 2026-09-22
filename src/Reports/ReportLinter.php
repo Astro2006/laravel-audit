@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Validates a parsed report against the report format. Errors go back to
- * the agent in the repair pass, so they are written for the agent.
- */
 final class ReportLinter
 {
     private readonly FindingRejector $rejector;
@@ -26,8 +22,6 @@ final class ReportLinter
         $errors = $this->sectionErrors($report, $spec);
         $warnings = [];
 
-        // A report without a Findings section (the summary task) has no
-        // findings to check; anything it lists there is ignored.
         if (! $spec->hasFindings()) {
             return new LintResult($errors, $this->summaryWarnings($report), []);
         }

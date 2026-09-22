@@ -10,10 +10,6 @@ use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Facades\Process;
 
-/**
- * Starts agent CLI processes, polls them, stops them after the timeout and
- * logs their output.
- */
 final class AgentProcesses
 {
     private readonly TaskLog $logs;
@@ -32,14 +28,13 @@ final class AgentProcesses
     {
         $process = Process::path($request->workingDirectory)
             ->timeout($this->timeout + 60)
-            ->env([...$this->environment->overrides(), ...$this->driver->environment($request), 'AUDIT_TASK' => $job->key])
+            ->env([...$this->environment->overrides(), ...$this->driver->environment($request), ...$request->environment, 'AUDIT_TASK' => $job->key])
             ->input($input)
             ->start($command);
 
         return new Attempt($job, $request, $process, microtime(true), $repair, $previous ?? new Telemetry, $jobStartedAt);
     }
 
-    /** Returns the finished result, or null while the agent is still running. */
     public function poll(Attempt $attempt): ?AgentResult
     {
         $elapsed = microtime(true) - $attempt->startedAt;

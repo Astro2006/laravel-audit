@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Install;
 
-/**
- * A command as the user would type it: `php` instead of the PHP binary,
- * arguments quoted only where the shell needs it.
- */
 final class ShellCommand
 {
     /** @param list<string> $command */

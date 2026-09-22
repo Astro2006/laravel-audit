@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * An audit report put together from its task reports.
- */
 final readonly class AssembledReport
 {
     /**

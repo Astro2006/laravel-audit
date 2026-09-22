@@ -8,11 +8,6 @@ use Astro2006\LaravelAudit\Contracts\Snapshot;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Illuminate\Filesystem\Filesystem;
 
-/**
- * Writes every snapshot of the preflight: preflight/snapshots/<type>.md (what
- * goes into the prompt) and preflight/details/<type>/<ID>.md (what the agent
- * opens on demand). Rewritten on every run, so a reused preflight gets them too.
- */
 final class SnapshotWriter
 {
     /** @param  list<Snapshot>  $snapshots */
@@ -22,7 +17,6 @@ final class SnapshotWriter
         private readonly Filesystem $files = new Filesystem,
     ) {}
 
-    /** Every snapshot the package has. */
     public static function standard(int $maxRows): self
     {
         return new self([

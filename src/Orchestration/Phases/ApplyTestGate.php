@@ -11,10 +11,6 @@ use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 
-/**
- * Shows failing tests and browser tests of the finished preflight and
- * decides whether the agents start. --force continues without asking.
- */
 final class ApplyTestGate
 {
     public function __construct(private readonly AuditConfig $config) {}
@@ -28,8 +24,6 @@ final class ApplyTestGate
             $console->gateFailures($results);
         }
 
-        // Without agents there is nothing to protect. --reuse-preflight asks
-        // again before agents start.
         if ($context->options->preflightOnly && $failing) {
             return GateDecision::Continued;
         }

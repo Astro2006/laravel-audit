@@ -19,11 +19,6 @@ use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Contracts\Process\ProcessResult;
 
-/**
- * One PHPStan run with the project's own config and level. Baseline
- * entries are read from the config instead of a second run. It needs no
- * database, so it can run in the background next to the tests.
- */
 final class PhpstanStep implements AsyncStep
 {
     public function __construct(private readonly PhpstanGrouper $grouper = new PhpstanGrouper) {}
@@ -113,7 +108,6 @@ final class PhpstanStep implements AsyncStep
         ));
     }
 
-    /** PHPStan resolves includes and "max" itself; ask it first. */
     private function dumpedLevel(PreflightContext $context): ?string
     {
         $result = $context->process()

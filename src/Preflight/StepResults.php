@@ -20,10 +20,6 @@ use Astro2006\LaravelAudit\Data\Steps\TranslationsDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
 
-/**
- * The results of all preflight steps, with typed access to their data.
- * Typed getters only return data of steps that ran successfully.
- */
 final class StepResults
 {
     /** @var list<StepResult> */

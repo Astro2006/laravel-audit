@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Support;
 use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
 use Illuminate\Support\Collection;
 
-/**
- * The project's Composer packages: what composer.json requires, what
- * composer.lock locks and what vendor/ has installed. Files are read once.
- */
 final class ComposerPackages
 {
     /** @var array<mixed>|null */

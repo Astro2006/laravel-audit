@@ -11,9 +11,6 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * preflight/summary.json — the first file every agent reads.
- */
 final readonly class PreflightSummary
 {
     public function __construct(

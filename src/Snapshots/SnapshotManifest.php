@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Snapshots;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Support\MarkdownTable;
 
-/**
- * What a snapshot shows in the prompt: a title, metrics and a table with one
- * row per ID. Rows beyond the limit are only listed in _all.md.
- */
 final readonly class SnapshotManifest
 {
     public const string ALL_FILE = '_all';

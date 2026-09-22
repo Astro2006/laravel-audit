@@ -7,9 +7,6 @@ namespace Astro2006\LaravelAudit\Support;
 use Illuminate\Support\Collection;
 use SimpleXMLElement;
 
-/**
- * The project's PHPUnit config (phpunit.xml and its .dist variants).
- */
 final class PhpunitConfig
 {
     private SimpleXMLElement|false|null $xml = null;
@@ -46,7 +43,6 @@ final class PhpunitConfig
         )));
     }
 
-    /** The first directory of a test suite, relative to the project. */
     public function suiteDirectory(string $suite): ?string
     {
         $xml = $this->xml();

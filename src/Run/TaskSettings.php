@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Support\AuditConfig;
 
-/**
- * How the audits split into agent jobs.
- */
 final readonly class TaskSettings
 {
     public const string SUMMARY_GENERATED = 'generated';
