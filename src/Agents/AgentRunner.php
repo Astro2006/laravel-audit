@@ -13,6 +13,8 @@ use Closure;
 /**
  * Runs the agent jobs in parallel (up to the concurrency limit). A job
  * starts once the jobs it depends on have finished, whatever their status.
+ * Of the jobs that are ready, those with the longest chain of jobs waiting
+ * on them start first, so the run does not end on a long tail.
  * Every answer is validated, and each job gets one repair pass in the same
  * session.
  */
@@ -49,7 +51,7 @@ final class AgentRunner
     public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null): array
     {
         $keys = array_map(fn (AgentJob $job): string => $job->key, $jobs);
-        $pending = $jobs;
+        $pending = self::criticalFirst($jobs);
         $running = [];
         $finished = [];
         $outcomes = [];
@@ -127,6 +129,45 @@ final class AgentRunner
         }
 
         return $outcomes;
+    }
+
+    /**
+     * The jobs ordered by the length of the longest chain that waits on them,
+     * longest first; jobs with equal chains keep their order.
+     *
+     * @param  list<AgentJob>  $jobs
+     * @return list<AgentJob>
+     */
+    private static function criticalFirst(array $jobs): array
+    {
+        $dependents = [];
+
+        foreach ($jobs as $job) {
+            foreach ($job->dependsOn as $dependency) {
+                $dependents[$dependency][] = $job->key;
+            }
+        }
+
+        $chains = [];
+        $chain = function (string $key, array $seen = []) use (&$chain, &$chains, $dependents): int {
+            if (isset($chains[$key])) {
+                return $chains[$key];
+            }
+
+            $longest = 0;
+
+            foreach ($dependents[$key] ?? [] as $dependent) {
+                // A cycle never finishes anyway; the run loop reports it.
+                $longest = in_array($dependent, $seen, true) ? $longest : max($longest, $chain($dependent, [...$seen, $key]));
+            }
+
+            return $chains[$key] = $longest + 1;
+        };
+
+        $order = array_keys($jobs);
+        usort($order, fn (int $a, int $b): int => [$chain($jobs[$b]->key), $a] <=> [$chain($jobs[$a]->key), $b]);
+
+        return array_map(fn (int $index): AgentJob => $jobs[$index], $order);
     }
 
     /**

@@ -22,6 +22,9 @@ class ProjectInspector
 
     private string|false|null $herdCoverageIni = null;
 
+    /** @var array<string, list<string>> directory and excludes => PHP files */
+    private array $phpFiles = [];
+
     public function __construct(public readonly string $basePath) {}
 
     /** The app this package is installed in; `base_path` in the config points elsewhere (tests). */
@@ -169,6 +172,15 @@ class ProjectInspector
      * @return list<string>
      */
     public function phpFiles(string $directory, array $excludeDirs = []): array
+    {
+        return $this->phpFiles[$directory."\0".implode("\0", $excludeDirs)] ??= $this->scanPhpFiles($directory, $excludeDirs);
+    }
+
+    /**
+     * @param  list<string>  $excludeDirs
+     * @return list<string>
+     */
+    private function scanPhpFiles(string $directory, array $excludeDirs): array
     {
         $root = $this->path($directory);
 

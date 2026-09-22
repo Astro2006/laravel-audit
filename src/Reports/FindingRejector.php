@@ -11,6 +11,9 @@ namespace Astro2006\LaravelAudit\Reports;
  */
 final class FindingRejector
 {
+    /** @var array<string, string> path => content; agents cannot write, so files do not change during a run */
+    private array $files = [];
+
     public function __construct(
         private readonly string $basePath,
         private readonly EvidenceChecker $evidence = new EvidenceChecker,
@@ -40,7 +43,7 @@ final class FindingRejector
                 return sprintf('location `%s` does not exist in the project (possibly hallucinated).', $location->file);
             }
 
-            $contents[] = (string) file_get_contents($path);
+            $contents[] = $this->files[$path] ??= (string) file_get_contents($path);
         }
 
         if ($this->evidence->matches($finding->evidence, $contents) === false) {
