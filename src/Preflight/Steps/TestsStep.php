@@ -7,7 +7,6 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
 use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
-use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
@@ -71,7 +70,7 @@ final class TestsStep implements AsyncStep
 
         $driver = $project->coverageDriver();
         $this->coverage = $context->config->bool('preflight.tests.coverage')
-            && ! $context->selection->skips(OptionalStep::Coverage)
+            && $context->selection->wantsCoverage()
             && $driver !== null;
         $this->parallel = $context->config->bool('preflight.tests.parallel') && $project->canRunParallel();
         $this->suites = $this->suitesWithoutBrowser($context);

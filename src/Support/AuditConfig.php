@@ -65,6 +65,7 @@ final readonly class AuditConfig
                 'stub_level' => 5,      // only for a phpstan.neon created by audit:install
                 'memory_limit' => '2G',
                 'timeout' => 1800,
+                'parallel' => true,     // runs next to the tests; false = after them
             ],
             'composer' => [
                 'outdated' => true,

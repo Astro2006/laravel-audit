@@ -127,6 +127,12 @@ final readonly class RunSelection
         return in_array($step, $this->without, true);
     }
 
+    /** Only the tests audit reads coverage; measuring it slows the test run down a lot. */
+    public function wantsCoverage(): bool
+    {
+        return $this->includes(AuditType::Tests) && ! $this->skips(OptionalStep::Coverage);
+    }
+
     /**
      * Preflight steps the selected audits list in their config, in execution
      * order. Nothing else runs. Steps left out with --without are still

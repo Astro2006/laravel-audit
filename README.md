@@ -270,7 +270,7 @@ The details of an ID (the message, the failing tests, examples, usage) are in a 
 | Browser | Pest browser tests (Playwright) | tests, frontend |
 | PHPStan | Larastan with your `phpstan.neon` and baseline | tests |
 
-Light steps run in parallel. Heavy steps run one after another: tests, browser tests, then PHPStan. The test gate follows once every step is done.
+Tests and PHPStan start in the background first (`preflight.phpstan.parallel => false` runs PHPStan after the tests); the light steps run meanwhile. Browser tests follow the tests, because they share the test database. Coverage is only measured when the tests audit runs. The test gate follows once every step is done.
 
 ### Browser tests
 
@@ -407,7 +407,7 @@ return [
 | `preflight.allow_shared_database` | `false`, only if you know what you do |
 | `preflight.tests.command` / `timeout` | `null` (php artisan test) / `1800` |
 | `preflight.browser.*` | `testsuite` `Browser`, `path` `tests/Browser`, `build_assets` `if-missing`, `timeout` `1200`, `max_artifacts` `10` |
-| `preflight.phpstan.*` | `level` `null` (from phpstan.neon), `stub_level` `5`, `memory_limit` `2G`, `timeout` `1800` |
+| `preflight.phpstan.*` | `level` `null` (from phpstan.neon), `stub_level` `5`, `memory_limit` `2G`, `timeout` `1800`, `parallel` `true` (next to the tests) |
 | `preflight.composer.*` / `preflight.license_allowlist` | `outdated` and `licenses` on / common open-source licenses |
 | `max_findings_per_task` / `max_files_per_task` | `5` / `25` |
 | `snapshot_rows` | `15` |

@@ -23,10 +23,9 @@ use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * Runs the preflight in two strands: the heavy steps (tests → browser →
- * phpstan) one after another, the light steps meanwhile. Tests start in the
- * background first, so the light steps run while they do. The test gate
- * comes afterwards, once every step has a result.
+ * Runs the preflight: tests and PHPStan start in the background first, the
+ * light steps run meanwhile, the browser tests follow the tests (they share
+ * the database). The test gate comes afterwards, once every step has a result.
  */
 final class PreflightRunner
 {
@@ -64,26 +63,33 @@ final class PreflightRunner
     {
         $required = $context->selection->requiredSteps();
         $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && $this->steps->has($step->value);
+        $background = [PreflightStep::Tests, ...($context->config->bool('preflight.phpstan.parallel') ? [PreflightStep::Phpstan] : [])];
 
-        $testsRunning = null;
-        $testsStarted = 0.0;
+        /** @var array<string, array{AsyncStep, InvokedProcess, float}> $running */
+        $running = [];
 
-        $tests = $this->step(PreflightStep::Tests);
+        foreach ($background as $step) {
+            if (! $has($step)) {
+                continue;
+            }
 
-        if ($has(PreflightStep::Tests) && $tests !== null) {
-            $onStart?->__invoke(PreflightStep::Tests);
-            $testsStarted = microtime(true);
+            $async = $this->step($step);
 
-            if ($tests instanceof AsyncStep) {
-                $started = $this->attempt(PreflightStep::Tests, fn () => $tests->start($context));
-
-                if ($started instanceof InvokedProcess) {
-                    $testsRunning = $started;
-                } else {
-                    $this->record($context, $started->withDuration(microtime(true) - $testsStarted), $onResult);
+            if (! $async instanceof AsyncStep) {
+                // Tests always come first, even when they cannot run in the background.
+                if ($step === PreflightStep::Tests) {
+                    $onStart?->__invoke($step);
+                    $this->runStep($context, $async, $onResult);
                 }
-            } else {
-                $this->runStep($context, $tests, $onResult);
+
+                continue;
+            }
+
+            $onStart?->__invoke($step);
+            $started = $this->startInBackground($context, $async, $onResult);
+
+            if ($started !== null) {
+                $running[$step->value] = $started;
             }
         }
 
@@ -96,12 +102,16 @@ final class PreflightRunner
             $this->runStep($context, $this->step($step), $onResult);
         }
 
-        if ($testsRunning !== null && $tests instanceof AsyncStep) {
-            $result = $this->attempt(PreflightStep::Tests, fn () => $tests->finish($context, $testsRunning->wait()));
-            $this->record($context, $result->withDuration(microtime(true) - $testsStarted), $onResult);
-        }
+        // Browser tests share the database with the tests: they wait.
+        foreach ([PreflightStep::Tests, PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
+            if (isset($running[$step->value])) {
+                [$async, $process, $startedAt] = $running[$step->value];
+                $result = $this->attempt($step, fn () => $async->finish($context, $process->wait()));
+                $this->record($context, $result->withDuration(microtime(true) - $startedAt), $onResult);
 
-        foreach ([PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
+                continue;
+            }
+
             if (! $has($step) || $context->results->get($step) !== null) {
                 continue;
             }
@@ -109,6 +119,27 @@ final class PreflightRunner
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
         }
+    }
+
+    /**
+     * Starts an async step in the background. Returns null when it finished
+     * right away (skipped, crashed).
+     *
+     * @param  Closure(StepResult): void  $onResult
+     * @return array{AsyncStep, InvokedProcess, float}|null
+     */
+    private function startInBackground(PreflightContext $context, AsyncStep $async, Closure $onResult): ?array
+    {
+        $startedAt = microtime(true);
+        $started = $this->attempt($async->step(), fn () => $async->start($context));
+
+        if ($started instanceof InvokedProcess) {
+            return [$async, $started, $startedAt];
+        }
+
+        $this->record($context, $started->withDuration(microtime(true) - $startedAt), $onResult);
+
+        return null;
     }
 
     private function step(PreflightStep $step): ?Step

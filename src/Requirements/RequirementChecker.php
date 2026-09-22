@@ -67,7 +67,7 @@ final class RequirementChecker
         }
 
         if ($tests) {
-            if ($this->config->bool('preflight.tests.coverage') && ! $selection->skips(OptionalStep::Coverage)) {
+            if ($this->config->bool('preflight.tests.coverage') && $selection->wantsCoverage()) {
                 $driver = $this->project->coverageDriver();
                 $checks[] = $driver !== null
                     ? Check::ok($this->messages->get('requirements.coverage', ['driver' => $driver]))

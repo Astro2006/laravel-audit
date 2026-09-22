@@ -185,6 +185,24 @@ it('starts the test run without the variables the audit process loaded from .env
         && $process->environment['APP_ENV'] === false && $process->environment['CLAUDECODE'] === false);
 });
 
+it('measures coverage only when the tests audit runs', function () {
+    Process::fake(['*artisan*test*' => Process::result('')]);
+    $dir = tempDir('steps');
+    $project = new class(fixture('project')) extends ProjectInspector
+    {
+        public function coverageDriver(): ?string
+        {
+            return 'pcov';
+        }
+    };
+    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', auditConfig(), RunSelection::resolve(auditsConfig(['backend']), [], []));
+
+    (new TestsStep(safeGuard($project)))->start($context)->wait();
+
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'artisan')
+        && ! str_contains(implode(' ', (array) $process->command), '--coverage-clover'));
+});
+
 it('runs coverage through Herd\'s Xdebug ini so the processes the test runner starts load it too', function () {
     Process::fake(['*artisan*test*' => Process::result('')]);
     $dir = tempDir('steps');

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
-use Astro2006\LaravelAudit\Contracts\Step;
+use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
 use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
@@ -16,12 +16,15 @@ use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Contracts\Process\ProcessResult;
 
 /**
  * One PHPStan run with the project's own config and level. Baseline
- * entries are read from the config instead of a second run.
+ * entries are read from the config instead of a second run. It needs no
+ * database, so it can run in the background next to the tests.
  */
-final class PhpstanStep implements Step
+final class PhpstanStep implements AsyncStep
 {
     public function __construct(private readonly PhpstanGrouper $grouper = new PhpstanGrouper) {}
 
@@ -31,6 +34,13 @@ final class PhpstanStep implements Step
     }
 
     public function run(PreflightContext $context): StepResult
+    {
+        $started = $this->start($context);
+
+        return $started instanceof StepResult ? $started : $this->finish($context, $started->wait());
+    }
+
+    public function start(PreflightContext $context): InvokedProcess|StepResult
     {
         $project = $context->project;
 
@@ -61,9 +71,16 @@ final class PhpstanStep implements Step
             $arguments[] = '--level='.$override;
         }
 
-        $result = $context->process()
+        return $context->process()
             ->timeout($context->config->int('preflight.phpstan.timeout'))
-            ->run($context->vendorBinary('phpstan', $arguments));
+            ->start($context->vendorBinary('phpstan', $arguments));
+    }
+
+    public function finish(PreflightContext $context, ProcessResult $result): StepResult
+    {
+        $project = $context->project;
+        $configPath = (string) $project->phpstanConfigPath();
+        $override = $context->config->nullableString('preflight.phpstan.level');
 
         file_put_contents($context->logPath('phpstan.log'), $result->errorOutput());
 
