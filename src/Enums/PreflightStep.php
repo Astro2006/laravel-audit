@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
-use Astro2006\LaravelAudit\Contracts\StepData;
-use Astro2006\LaravelAudit\Data\Steps\AboutData;
-use Astro2006\LaravelAudit\Data\Steps\BrowserData;
-use Astro2006\LaravelAudit\Data\Steps\ComposerData;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
-use Astro2006\LaravelAudit\Data\Steps\PintData;
-use Astro2006\LaravelAudit\Data\Steps\RoutesData;
-use Astro2006\LaravelAudit\Data\Steps\StackData;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
-use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
+use Astro2006\LaravelAudit\Contracts\StepDTO;
+use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
+use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
+use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
+use Astro2006\LaravelAudit\Data\Steps\PintDTO;
+use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
+use Astro2006\LaravelAudit\Data\Steps\StackDTO;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
+use Astro2006\LaravelAudit\Data\Steps\TranslationsDTO;
 
 enum PreflightStep: string
 {
@@ -35,23 +35,27 @@ enum PreflightStep: string
      */
     public function isHeavy(): bool
     {
-        return in_array($this, [self::Tests, self::Browser, self::Phpstan], true);
+        return in_array($this, [
+            self::Tests,
+            self::Browser,
+            self::Phpstan,
+        ], true);
     }
 
-    /** @return class-string<StepData> */
-    public function dataClass(): string
+    /** @return class-string<StepDTO> */
+    public function dtoClass(): string
     {
         return match ($this) {
-            self::About => AboutData::class,
-            self::Stack => StackData::class,
-            self::LinesOfCode => LinesOfCodeData::class,
-            self::Pint => PintData::class,
-            self::Routes => RoutesData::class,
-            self::Translations => TranslationsData::class,
-            self::Composer => ComposerData::class,
-            self::Tests => TestsData::class,
-            self::Browser => BrowserData::class,
-            self::Phpstan => PhpstanData::class,
+            self::About => AboutDTO::class,
+            self::Stack => StackDTO::class,
+            self::LinesOfCode => LinesOfCodeDTO::class,
+            self::Pint => PintDTO::class,
+            self::Routes => RoutesDTO::class,
+            self::Translations => TranslationsDTO::class,
+            self::Composer => ComposerDTO::class,
+            self::Tests => TestsDTO::class,
+            self::Browser => BrowserDTO::class,
+            self::Phpstan => PhpstanDTO::class,
         };
     }
 }

@@ -1,10 +1,10 @@
 <?php
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
-use Astro2006\LaravelAudit\Agents\CodexDriver;
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
-use Astro2006\LaravelAudit\Agents\OpenCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\CodexDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 

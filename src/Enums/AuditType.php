@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
-use Astro2006\LaravelAudit\Audits\BackendAudit;
-use Astro2006\LaravelAudit\Audits\DependenciesAudit;
-use Astro2006\LaravelAudit\Audits\FrontendAudit;
-use Astro2006\LaravelAudit\Audits\TestsAudit;
+use Astro2006\LaravelAudit\Agents\BackendAgent;
+use Astro2006\LaravelAudit\Agents\DependenciesAgent;
+use Astro2006\LaravelAudit\Agents\FrontendAgent;
+use Astro2006\LaravelAudit\Agents\TestsAgent;
 use Astro2006\LaravelAudit\Contracts\Audit;
 
 enum AuditType: string
@@ -17,13 +17,14 @@ enum AuditType: string
     case Backend = 'backend';
     case Dependencies = 'dependencies';
 
-    public function audit(): Audit
+    /** @param  string|null  $overridePath  published prompts; only matters when actually rendering prompts */
+    public function audit(?string $overridePath = null): Audit
     {
         return match ($this) {
-            self::Tests => new TestsAudit,
-            self::Frontend => new FrontendAudit,
-            self::Backend => new BackendAudit,
-            self::Dependencies => new DependenciesAudit,
+            self::Tests => new TestsAgent($overridePath),
+            self::Frontend => new FrontendAgent($overridePath),
+            self::Backend => new BackendAgent($overridePath),
+            self::Dependencies => new DependenciesAgent($overridePath),
         };
     }
 

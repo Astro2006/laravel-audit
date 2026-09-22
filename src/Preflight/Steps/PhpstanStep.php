@@ -6,7 +6,7 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
+use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
@@ -92,7 +92,7 @@ final class PhpstanStep implements Step
 
         $context->writeJson('phpstan/phpstan-grouped.json', $report);
 
-        return StepResult::ok($this->step(), new PhpstanData(
+        return StepResult::ok($this->step(), new PhpstanDTO(
             level: $level,
             levelSource: $override !== null ? 'config/audit.php' : basename($configPath),
             errors: $report->errors,

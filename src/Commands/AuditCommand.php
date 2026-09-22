@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
+use Astro2006\LaravelAudit\Agents\Agent;
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
@@ -13,7 +14,7 @@ use Astro2006\LaravelAudit\Console\LiveOutput;
 use Astro2006\LaravelAudit\Console\StepFormatter;
 use Astro2006\LaravelAudit\Console\TaskBoard;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\AgentMode;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
@@ -115,7 +116,7 @@ class AuditCommand extends Command
 
         $checks = (new RequirementChecker($project, $factory->allConfig(), $guard, $driver, $this->messages))
             ->check($selection, ! $preflightOnly, app()->environment('production'));
-        $outdated = $factory->promptRenderer()->outdatedOverrides();
+        $outdated = Agent::outdatedOverrides($factory->promptOverridePath());
 
         if ($outdated !== [] && ! $preflightOnly) {
             $checks[] = Check::warning($this->messages->get('requirements.prompts_outdated', ['files' => implode(', ', $outdated)]));
@@ -170,7 +171,7 @@ class AuditCommand extends Command
             return self::OK;
         }
 
-        $outcomes = $this->runAgents($driver, $run, $selection, $project, $summary);
+        $outcomes = $this->runAgents($driver, $run, $selection, $project, $summary, $manifest);
 
         $riskPoints = new RiskPoints(
             Read::array($factory->allConfig(), 'risk_points.weights'),
@@ -283,23 +284,24 @@ class AuditCommand extends Command
             GateMode::tryFrom((string) $this->factory->config('preflight.tests.gate', 'ask')) ?? GateMode::Ask,
             (bool) $this->option('force'),
             $this->input->isInteractive(),
-            fn (TestsData $data): bool => $this->confirm($this->messages->get('gate.question'), false),
+            fn (TestsDTO $data): bool => $this->confirm($this->messages->get('gate.question'), false),
         );
     }
 
     /** @return list<AuditOutcome> */
-    private function runAgents(AgentDriver $driver, AuditRun $run, RunSelection $selection, ProjectInspector $project, PreflightSummary $summary): array
+    private function runAgents(AgentDriver $driver, AuditRun $run, RunSelection $selection, ProjectInspector $project, PreflightSummary $summary, RunManifest $manifest): array
     {
         $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
         $config = $driver->writeConfig($run->logsDir(), $extra);
-        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote());
+        $snapshots = $this->factory->snapshotWriter()->write($summary, $project->relative($run->preflightDir()));
+        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $this->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote(), $snapshots);
         $validator = $this->factory->validator($project);
 
         $tasks = new AuditTasks(
             $selection->audits,
             $summary,
             $context,
-            $this->factory->promptRenderer(),
+            $this->factory->promptOverridePath(),
             $validator,
             $run,
             $project->basePath,
@@ -345,7 +347,7 @@ class AuditCommand extends Command
 
         $draw(true);
 
-        $outcomes = $tasks->outcomes($runner->run(
+        $raw = $runner->run(
             $jobs,
             function (AgentJob $job) use ($board, $draw): void {
                 $board->started($job, microtime(true));
@@ -366,7 +368,10 @@ class AuditCommand extends Command
                 $board->repairing($job);
                 $draw(true);
             },
-        ));
+        );
+
+        $outcomes = $tasks->outcomes($raw);
+        $manifest->overview = $tasks->resultsSummary($raw);
 
         $this->live->release();
         $this->newLine();

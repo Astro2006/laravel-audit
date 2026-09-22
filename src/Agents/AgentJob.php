@@ -22,7 +22,7 @@ final readonly class AgentJob
      */
     public function __construct(
         public string $key,
-        public AuditType $audit,
+        public ?AuditType $audit,
         public ReportSpec $spec,
         public AgentRequest|Closure $request,
         public string $promptHash,

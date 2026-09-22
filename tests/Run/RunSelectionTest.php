@@ -39,8 +39,12 @@ it('rejects invalid combinations', function (array $explicit, array $without, st
 
 it('lists the preflight steps the audits need, in order', function () use ($all) {
     expect(RunSelection::resolve($all, ['dependencies'], [])->requiredSteps())
-        ->toBe([PreflightStep::About, PreflightStep::Stack, PreflightStep::LinesOfCode, PreflightStep::Composer])
+        ->toBe([PreflightStep::About, PreflightStep::Stack, PreflightStep::LinesOfCode, PreflightStep::Composer, PreflightStep::Tests])
         ->and(RunSelection::resolve($all, ['frontend'], [])->requiredSteps())
         ->toContain(PreflightStep::Browser)
-        ->not->toContain(PreflightStep::Tests);
+        ->not->toContain(PreflightStep::Phpstan);
 });
+
+it('always runs the test suite', function (string $audit) use ($all) {
+    expect(RunSelection::resolve($all, [$audit], [])->requiredSteps())->toContain(PreflightStep::Tests);
+})->with(['tests', 'frontend', 'backend', 'dependencies']);

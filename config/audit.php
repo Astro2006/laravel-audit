@@ -181,6 +181,11 @@ return [
     // context small, which matters most for local models.
     'max_files_per_task' => 25,
 
+    // Preflight results reach the agent as a compact snapshot in its prompt
+    // (metrics and one row per ID); details sit in one small file per ID.
+    // Rows per snapshot in the prompt; the rest are listed in _all.md.
+    'snapshot_rows' => 15,
+
     // generated: the harness writes each audit's summary from the findings
     // (no agent call). agent: a summary task per audit writes it. The tests
     // audit always runs its summary task for "Top 10 missing tests".

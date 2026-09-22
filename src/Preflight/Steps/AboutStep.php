@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\AboutData;
+use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
@@ -28,7 +28,7 @@ final class AboutStep implements Step
         $about = Json::decode($result->output());
 
         // The running app knows the basics even if "about" fails.
-        $fallback = new AboutData((string) config('app.name'), app()->version(), PHP_VERSION, (string) app()->environment());
+        $fallback = new AboutDTO((string) config('app.name'), app()->version(), PHP_VERSION, (string) app()->environment());
 
         if ($about === []) {
             return StepResult::error(
@@ -40,7 +40,7 @@ final class AboutStep implements Step
 
         $context->writeJson('about.json', $about);
 
-        return StepResult::ok($this->step(), new AboutData(
+        return StepResult::ok($this->step(), new AboutDTO(
             name: Read::nullableString($about, 'environment.application_name') ?? $fallback->name,
             laravel: Read::nullableString($about, 'environment.laravel_version') ?? $fallback->laravel,
             php: Read::nullableString($about, 'environment.php_version') ?? $fallback->php,

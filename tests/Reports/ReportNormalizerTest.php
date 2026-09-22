@@ -1,6 +1,6 @@
 <?php
 
-use Astro2006\LaravelAudit\Audits\BackendAudit;
+use Astro2006\LaravelAudit\Agents\BackendAgent;
 use Astro2006\LaravelAudit\Reports\ReportExtractor;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportNormalizer;
@@ -33,7 +33,7 @@ it('normalizes heading separators, id padding, enum casing and labels', function
 it('turns a sloppy but complete answer into a valid report', function () {
     $body = (new ReportNormalizer)->normalize((new ReportExtractor)->extract(file_get_contents(fixture('reports/backend-sloppy-answer.md'))));
 
-    $result = (new ReportLinter(fixture('project')))->lint((new ReportParser)->parse($body), ReportSpec::forAudit(new BackendAudit));
+    $result = (new ReportLinter(fixture('project')))->lint((new ReportParser)->parse($body), ReportSpec::forAudit(new BackendAgent));
 
     expect($result->errors)->toBe([])
         ->and($result->findings)->toHaveCount(1);

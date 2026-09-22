@@ -98,12 +98,13 @@ final readonly class RunSelection
     /**
      * Preflight steps the selected audits need, in execution order.
      * Steps left out with --without are still listed; they report "skipped".
+     * The test suite always runs: its result gates the agents of every audit.
      *
      * @return list<PreflightStep>
      */
     public function requiredSteps(): array
     {
-        $needed = [];
+        $needed = [PreflightStep::Tests];
 
         foreach ($this->audits as $audit) {
             array_push($needed, ...$audit->audit()->preflightSteps());

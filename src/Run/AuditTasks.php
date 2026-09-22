@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
+use Astro2006\LaravelAudit\Agents\Agent;
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\ResultsAgent;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
@@ -14,7 +16,6 @@ use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
-use Astro2006\LaravelAudit\Prompts\PromptRenderer;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
 use Astro2006\LaravelAudit\Reports\Finding;
@@ -40,6 +41,9 @@ final class AuditTasks
 
     public const string SUMMARY_AGENT = 'agent';
 
+    /** Key of the job that writes the run's overview once every selected audit is done. */
+    public const string RESULTS_KEY = 'results';
+
     private const string VERDICT_ROW = '/^\|\s*([A-Z]{2,4}-\d{3})\s*\|\s*`?(keep|drop|downgrade)`?\s*\|\s*(.*?)\s*\|\s*$/i';
 
     /** @var array<string, list<AuditTask>> audit key => tasks */
@@ -62,7 +66,7 @@ final class AuditTasks
         private readonly array $audits,
         private readonly PreflightSummary $preflight,
         private readonly PromptContext $context,
-        private readonly PromptRenderer $renderer,
+        private readonly ?string $overridePath,
         private readonly ReportValidator $validator,
         private readonly AuditRun $run,
         private readonly string $workingDirectory,
@@ -81,16 +85,18 @@ final class AuditTasks
     public function jobs(): array
     {
         $jobs = [];
+        $auditKeys = [];
 
         $project = new ProjectInspector($this->workingDirectory);
 
         foreach ($this->audits as $type) {
-            $audit = $type->audit();
+            $audit = $type->audit($this->overridePath);
             $tasks = $audit->tasks($this->context->customChecksFor($type->value) !== []);
             $this->tasks[$type->value] = $tasks;
             $this->required[$type->value] = $audit->requiredFindings($this->preflight);
             $this->guards[$type->value] = $guard = $audit->findingGuard($this->preflight, $project);
             $verifyKeys = [];
+            $before = count($jobs);
 
             foreach ($tasks as $task) {
                 if ($task->isSummary() && $this->summaryMode === self::SUMMARY_GENERATED && $task->sections === []) {
@@ -112,7 +118,7 @@ final class AuditTasks
                     audit: $type,
                     spec: ReportSpec::forTask($audit, $task, max($this->maxFindingsPerTask, count($required) + 2), $guard),
                     request: fn (array $finished): AgentRequest => $this->request($audit, $task, $finished),
-                    promptHash: $this->renderer->taskHash($audit, $task),
+                    promptHash: $audit->taskHash($task),
                     required: $required,
                     // The summary reads the findings after the verify pass.
                     dependsOn: $task->isSummary() ? [...$task->dependencyKeys(), ...$verifyKeys] : $task->dependencyKeys(),
@@ -126,14 +132,39 @@ final class AuditTasks
                         audit: $type,
                         spec: new ReportSpec($key, $audit->idPrefix(), [], ['Verdicts']),
                         request: fn (array $finished): ?AgentRequest => $this->verifyRequest($audit, $task, $finished),
-                        promptHash: $this->renderer->verifyHash(),
+                        promptHash: $audit->verifyHash(),
                         dependsOn: [$task->key()],
                     );
                 }
             }
+
+            $auditKeys = [...$auditKeys, ...array_map(fn (AgentJob $job): string => $job->key, array_slice($jobs, $before))];
+        }
+
+        if ($this->audits !== []) {
+            $jobs[] = $this->resultsJob($auditKeys);
         }
 
         return $jobs;
+    }
+
+    /**
+     * Runs once every job of every selected audit has finished, whatever their status.
+     *
+     * @param  list<string>  $dependsOn
+     */
+    private function resultsJob(array $dependsOn): AgentJob
+    {
+        $agent = new ResultsAgent($this->overridePath);
+
+        return new AgentJob(
+            key: self::RESULTS_KEY,
+            audit: null,
+            spec: new ReportSpec(self::RESULTS_KEY, 'RES', [], ['Summary']),
+            request: fn (array $finished): AgentRequest => $this->resultsRequest($finished),
+            promptHash: $agent->hash(),
+            dependsOn: $dependsOn,
+        );
     }
 
     /** @return array<string, string> task key => why it was skipped */
@@ -158,7 +189,7 @@ final class AuditTasks
         $result = [];
 
         foreach ($this->audits as $type) {
-            $audit = $type->audit();
+            $audit = $type->audit($this->overridePath);
             $tasks = $this->tasks[$type->value] ?? $audit->tasks();
             $summaryTask = $tasks[count($tasks) - 1];
             $summary = $byKey[$summaryTask->key()] ?? null;
@@ -181,12 +212,63 @@ final class AuditTasks
                 }
             }
 
-            $hash = PromptRenderer::auditHash(array_map(fn (AuditTask $task): string => $this->renderer->taskHash($audit, $task), $tasks));
+            $hash = Agent::auditHash(array_map(fn (AuditTask $task): string => $audit->taskHash($task), $tasks));
 
             $result[] = AuditOutcome::fromTasks($type, $taskOutcomes, $report, $validated->body, $validated->lint, $hash);
         }
 
         return $result;
+    }
+
+    /**
+     * The run's overview, written by the results job once every selected
+     * audit is done. Null when it did not run or did not complete.
+     *
+     * @param  list<TaskOutcome>  $outcomes  the raw outcomes AgentRunner::run() returned
+     */
+    public function resultsSummary(array $outcomes): ?string
+    {
+        foreach ($outcomes as $outcome) {
+            if ($outcome->key === self::RESULTS_KEY && $outcome->completed() && $outcome->body !== null) {
+                return trim($this->parser->parse($outcome->body)->summary()) ?: null;
+            }
+        }
+
+        return null;
+    }
+
+    /** @param array<string, TaskOutcome> $finished */
+    private function resultsRequest(array $finished): AgentRequest
+    {
+        $digests = [];
+
+        foreach ($this->audits as $type) {
+            $audit = $type->audit($this->overridePath);
+            $tasks = $this->tasks[$type->value] ?? $audit->tasks();
+            $report = $this->assembler->assemble($audit, $tasks, $this->applyVerdicts($finished), skipped: $this->skipped);
+            $parsed = $this->parser->parse($report->body);
+
+            $counts = [];
+
+            foreach ($parsed->findings as $finding) {
+                $severity = $finding->field('severity') ?? 'unknown';
+                $counts[$severity] = ($counts[$severity] ?? 0) + 1;
+            }
+
+            $digests[] = sprintf(
+                "### %s (%s)\n\n%s\n\n%d findings (%s).",
+                $audit->title(),
+                $audit->idPrefix(),
+                $parsed->summary() ?: 'No summary.',
+                count($parsed->findings),
+                $counts === [] ? 'none' : implode(', ', array_map(fn (string $severity, int $count): string => "{$count} {$severity}", array_keys($counts), $counts)),
+            );
+        }
+
+        $prompt = (new ResultsAgent($this->overridePath))->render($this->context, $digests);
+        file_put_contents($this->run->logsDir().'/'.self::RESULTS_KEY.'.prompt.md', $prompt->text);
+
+        return new AgentRequest(self::RESULTS_KEY, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories);
     }
 
     /** @param array<string, TaskOutcome> $finished */
@@ -196,7 +278,7 @@ final class AuditTasks
             $prompt = $this->summaryPrompt($audit, $task, $finished);
         } else {
             [$sections, $missing] = $this->dependencyContext($audit, $task, $finished);
-            $prompt = $this->renderer->renderTask($audit, $task, $this->context, $sections, $missing);
+            $prompt = $audit->renderTask($task, $this->context, $sections, $missing);
         }
 
         file_put_contents($this->run->logsDir().'/'.$task->key().'.prompt.md', $prompt->text);
@@ -266,7 +348,7 @@ final class AuditTasks
             return null;
         }
 
-        $prompt = $this->renderer->renderVerify($audit, $task, $this->context, $this->editor->blocks($outcome->body, array_values($ids)));
+        $prompt = $audit->renderVerify($task, $this->context, $this->editor->blocks($outcome->body, array_values($ids)));
         $key = $task->key().TaskOutcome::VERIFY_SUFFIX;
         file_put_contents($this->run->logsDir().'/'.$key.'.prompt.md', $prompt->text);
 
@@ -342,7 +424,7 @@ final class AuditTasks
             );
         }
 
-        return $this->renderer->renderSummary($audit, $task, $this->context, implode("\n", $lines), $report->failedTasks);
+        return $audit->renderSummary($task, $this->context, implode("\n", $lines), $report->failedTasks);
     }
 
     /**

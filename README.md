@@ -219,6 +219,8 @@ Small models get lost in long sessions with dozens of checks. So every audit is 
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
+Once every selected audit is done, one more agent call writes the run's overview: it reads each audit's own summary and finding counts and calls out patterns a single audit could not see on its own (the same root cause showing up in more than one audit, for example). It always runs, at no extra config, and its answer becomes the `## Overview` at the top of `run.md`.
+
 ## The four audits
 
 Every audit owns a fixed list of checks, and every check belongs to exactly one audit and one task, so the same problem is not reported several times.
@@ -242,7 +244,20 @@ Add project-specific rules per audit with `custom_checks`:
 
 ## The preflight
 
-Tools run once, before any agent starts. Agents never run tools themselves; they only read the condensed results.
+Tools run once, before any agent starts. Agents never run tools themselves, and they do not read the tool output either. Each task gets a compact **snapshot** in its prompt: metrics and one row per ID (a failure group, a PHPStan identifier, an advisory …), without messages, stack traces or code. For example:
+
+```
+### Tests — 🔴 FAILED
+Total 2450 · Passed 2442 · Failed 8 · Skipped 0 · 312.4 s
+
+| ID | Tests | Exception | Files |
+|---|---|---|---|
+| T-01 | 5 | QueryException | tests/Feature/OrderTest.php |
+
+Details per ID: `storage/audit/<run>/preflight/details/tests/<ID>.md`
+```
+
+The details of an ID (the message, the failing tests, examples, usage) are in a small file of their own, which the agent opens only for the IDs it judges. Every task sees the status of all preflight steps, plus only the snapshots its checks need. `snapshot_rows` (default 15) limits the rows per snapshot in the prompt; the rest are listed in `_all.md`.
 
 | Step | Tool | Used by |
 |---|---|---|
@@ -275,13 +290,15 @@ Every run gets its own folder:
 storage/audit/
 ├── .gitignore
 └── 2026-09-11_14-02-11/
-    ├── run.md               # overview: preflight, metrics, audits, tasks, findings, possible duplicates
+    ├── run.md               # overview: cross-audit summary, preflight, metrics, audits, tasks, findings, possible duplicates
     ├── run.json             # the same, machine-readable
     ├── tests.md
     ├── frontend.md
     ├── backend.md
     ├── dependencies.md
     ├── preflight/           # condensed tool results (summary.json, route-facts.json, tests/, phpstan/, composer/ …)
+    │   ├── snapshots/       # what each prompt shows: metrics and IDs per data source
+    │   └── details/         # one small file per ID, opened by the agent on demand
     └── logs/                # per task: rendered prompt, raw agent output, reports that failed validation; tool logs
 ```
 
@@ -397,7 +414,7 @@ The prompts are plain Markdown. Publish them to change wording or focus:
 php artisan vendor:publish --tag="audit-prompts"
 ```
 
-They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `_task.md` holds the shared rules and output format, `tasks/<audit>/<task>.md` the instructions of one task, `tasks/_summary.md` the summary. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
+They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `agents/_task.md` holds the shared rules and output format, `agents/<audit>/<task>.md` the instructions of one task, `agents/_summary.md` the summary. Each audit is a single self-contained class in `Astro2006\LaravelAudit\Agents` (`BackendAgent`, `FrontendAgent`, `DependenciesAgent`, `TestsAgent`): it owns its checks, tasks and sections, and generates its own prompts. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
 
 To change the console texts, publish the translations with `php artisan vendor:publish --tag="audit-translations"`.
 

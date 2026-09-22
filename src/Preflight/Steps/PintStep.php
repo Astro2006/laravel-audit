@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\PintData;
+use Astro2006\LaravelAudit\Data\Steps\PintDTO;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
@@ -74,6 +74,6 @@ final class PintStep implements Step
         $filesWithIssues = count(Read::arrays($report, 'files'));
         $context->writeJson('pint-grouped.json', ['files_with_issues' => $filesWithIssues, 'rules' => $rules]);
 
-        return StepResult::ok($this->step(), new PintData($filesWithIssues, count($rules)));
+        return StepResult::ok($this->step(), new PintDTO($filesWithIssues, count($rules)));
     }
 }

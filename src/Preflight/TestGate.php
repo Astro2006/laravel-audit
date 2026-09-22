@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Closure;
@@ -16,7 +16,7 @@ use Closure;
 final class TestGate
 {
     /**
-     * @param  Closure(TestsData): bool  $ask  asks the user; only called in "ask" mode with interaction
+     * @param  Closure(TestsDTO): bool  $ask  asks the user; only called in "ask" mode with interaction
      */
     public function decide(?StepResult $tests, GateMode $mode, bool $force, bool $interactive, Closure $ask): GateDecision
     {
@@ -39,8 +39,8 @@ final class TestGate
     }
 
     /** Test data of a successful test step, or null. */
-    public static function data(?StepResult $tests): ?TestsData
+    public static function data(?StepResult $tests): ?TestsDTO
     {
-        return $tests !== null && $tests->isOk() && $tests->data instanceof TestsData ? $tests->data : null;
+        return $tests !== null && $tests->isOk() && $tests->data instanceof TestsDTO ? $tests->data : null;
     }
 }

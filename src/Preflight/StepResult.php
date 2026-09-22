@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
-use Astro2006\LaravelAudit\Contracts\StepData;
+use Astro2006\LaravelAudit\Contracts\StepDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Enums\StepStatus;
@@ -13,32 +13,32 @@ use Astro2006\LaravelAudit\Support\Read;
 final readonly class StepResult
 {
     /**
-     * @param  StepData|null  $data  goes into summary.json below steps.{step}
+     * @param  StepDTO|null  $data  goes into summary.json below steps.{step}
      * @param  list<string>  $warnings  warning codes, shown in the console and kept in summary.json
      */
     public function __construct(
         public PreflightStep $step,
         public StepStatus $status,
         public ?SkipReason $reason = null,
-        public ?StepData $data = null,
+        public ?StepDTO $data = null,
         public array $warnings = [],
         public ?string $error = null,
         public float $duration = 0.0,
     ) {}
 
     /** @param list<string> $warnings */
-    public static function ok(PreflightStep $step, StepData $data, array $warnings = []): self
+    public static function ok(PreflightStep $step, StepDTO $data, array $warnings = []): self
     {
         return new self($step, StepStatus::Ok, data: $data, warnings: $warnings);
     }
 
-    public static function error(PreflightStep $step, string $error, ?StepData $data = null): self
+    public static function error(PreflightStep $step, string $error, ?StepDTO $data = null): self
     {
         return new self($step, StepStatus::Error, data: $data, error: $error);
     }
 
     /** @param list<string> $warnings */
-    public static function skipped(PreflightStep $step, SkipReason $reason, ?StepData $data = null, array $warnings = []): self
+    public static function skipped(PreflightStep $step, SkipReason $reason, ?StepDTO $data = null, array $warnings = []): self
     {
         return new self($step, StepStatus::Skipped, $reason, $data, $warnings);
     }
@@ -50,7 +50,7 @@ final readonly class StepResult
      */
     public static function fromArray(PreflightStep $step, array $data): self
     {
-        $class = $step->dataClass();
+        $class = $step->dtoClass();
 
         return new self(
             $step,

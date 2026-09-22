@@ -31,8 +31,18 @@ function fakeTools(array $extra = []): void
         '*composer*show*' => Process::result('{"installed": []}'),
         '*composer*validate*' => Process::result('./composer.json is valid'),
         '*composer*why*' => Process::result('laravel/framework v13.2.0 requires guzzlehttp/psr7 (^2.0)'),
+        '*artisan*test*' => fn ($process) => greenTestRun($process->command),
         '*git*' => Process::result('', exitCode: 1),
     ]);
+}
+
+/** Writes a passing JUnit report where the test step asked for it. */
+function greenTestRun(array|string $command): mixed
+{
+    preg_match('/--log-junit=(\S+)/', implode(' ', (array) $command), $match);
+    file_put_contents($match[1], '<?xml version="1.0"?><testsuites><testsuite name="Feature" tests="1" assertions="1" errors="0" failures="0" skipped="0" time="0.1"><testcase name="it works" file="/app/tests/Feature/HomeTest.php" class="Tests\Feature\HomeTest" assertions="1" time="0.1"/></testsuite></testsuites>');
+
+    return Process::result('');
 }
 
 /** @return array<string, string> task key => answer */
@@ -43,6 +53,8 @@ function dependencyAnswers(): array
     foreach (['security', 'necessity', 'freshness', 'hygiene', 'summary'] as $task) {
         $answers['dependencies.'.$task] = file_get_contents(fixture('reports/tasks/dependencies-'.$task.'.md'));
     }
+
+    $answers['results'] = "## Summary\nOne medium advisory (DEP-001) is the only issue worth fixing soon; the rest is housekeeping.\n";
 
     return $answers;
 }
@@ -123,6 +135,46 @@ it('runs an audit end to end with a validated report', function () {
 
     Process::assertRan(fn ($process) => in_array('--restricted', (array) $process->command, true)
         && str_contains(implode(' ', (array) $process->command), 'Read(./.env)'));
+});
+
+it('writes the run overview once every selected audit is done', function () {
+    $project = auditProject();
+    fakeAgent(dependencyAnswers());
+
+    $this->artisan('audit', ['--dependencies' => true])->assertExitCode(0);
+
+    $run = latestRun($project);
+
+    expect($run.'/logs/results.prompt.md')->toBeFile()
+        ->and(file_get_contents($run.'/logs/results.prompt.md'))->toContain('### Dependencies Audit (DEP)')
+        ->and(file_get_contents($run.'/run.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001) is the only issue worth fixing soon; the rest is housekeeping.");
+});
+
+it('gives each task a snapshot of the preflight instead of the raw files', function () {
+    $project = auditProject();
+    fakeAgent(dependencyAnswers());
+
+    $this->artisan('audit', ['--dependencies' => true])->assertExitCode(0);
+
+    $run = latestRun($project);
+    $prompt = file_get_contents($run.'/logs/dependencies.security.prompt.md');
+
+    expect($run.'/preflight/snapshots/composer.md')->toBeFile()
+        ->and($run.'/preflight/snapshots/status.md')->toBeFile()
+        ->and(glob($run.'/preflight/details/composer/D-*.md'))->not->toBeEmpty()
+        ->and($prompt)->toContain('## Preflight snapshot')
+        ->toContain('### Composer — ')
+        ->toContain('| D-01 | advisories | guzzlehttp/psr7 |')
+        ->toContain('/preflight/details/composer/<ID>.md`')
+        ->not->toContain('dependency-facts.json')
+        ->not->toContain('summary.json');
+
+    // A reused preflight gets fresh snapshots with the new run's paths.
+    $this->artisan('audit', ['--dependencies' => true, '--reuse-preflight' => basename($run)])->assertExitCode(0);
+    $reused = latestRun($project);
+
+    expect($reused)->not->toBe($run)
+        ->and(file_get_contents($reused.'/preflight/snapshots/composer.md'))->toContain(basename($reused).'/preflight/details/composer/');
 });
 
 it('fails the run when a report misses required findings after the repair pass', function () {

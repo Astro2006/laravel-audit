@@ -1,8 +1,8 @@
 <?php
 
+use Astro2006\LaravelAudit\Agents\DependenciesAgent;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Agents\Telemetry;
-use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
@@ -15,7 +15,7 @@ function taskOutcome(string $name, ?string $body, AuditStatus $status = AuditSta
     $findings = [];
 
     if ($body !== null && $status === AuditStatus::Completed) {
-        $audit = new DependenciesAudit;
+        $audit = new DependenciesAgent;
         $task = collect($audit->tasks())->firstWhere('name', $name);
         $findings = (new ReportLinter(fixture('project')))->lint((new ReportParser)->parse($body), ReportSpec::forTask($audit, $task))->findings;
     }
@@ -29,7 +29,7 @@ function finding(string $id, string $check, string $package, string $related = '
 }
 
 it('renumbers findings across tasks and remaps related ids', function () {
-    $audit = new DependenciesAudit;
+    $audit = new DependenciesAgent;
     $outcomes = [
         'dependencies.security' => taskOutcome('security', "## Findings\n\n".finding('DEP-001', 'vulnerable-dependency', 'a/one').finding('DEP-002', 'abandoned-package', 'a/two', 'DEP-001')."\n## Limitations\nNone.\n"),
         'dependencies.hygiene' => taskOutcome('hygiene', "## Findings\n\n".finding('DEP-001', 'loose-constraint', 'a/three')."\n## Limitations\nNo lock file history.\n"),
@@ -47,7 +47,7 @@ it('renumbers findings across tasks and remaps related ids', function () {
 });
 
 it('lists failed tasks, keeps their sections visible and passes the audit linter', function () {
-    $audit = new DependenciesAudit;
+    $audit = new DependenciesAgent;
     $outcomes = [
         'dependencies.security' => taskOutcome('security', "## Findings\n\nNo findings.\n\n## Limitations\nNone.\n"),
         'dependencies.necessity' => taskOutcome('necessity', null, AuditStatus::Failed, 'Agent timed out after 900 seconds.'),
@@ -69,7 +69,7 @@ it('lists failed tasks, keeps their sections visible and passes the audit linter
 });
 
 it('writes a short summary itself when the summary task has none', function () {
-    $audit = new DependenciesAudit;
+    $audit = new DependenciesAgent;
     $outcomes = ['dependencies.security' => taskOutcome('security', "## Findings\n\n".finding('DEP-001', 'vulnerable-dependency', 'a/one')."\n## Limitations\nNone.\n")];
 
     expect((new AuditAssembler)->assemble($audit, $audit->tasks(), $outcomes)->body)

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
+use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
@@ -33,6 +33,6 @@ final class LinesOfCodeStep implements Step
             }
         }
 
-        return StepResult::ok($this->step(), new LinesOfCodeData($lines, count($files)));
+        return StepResult::ok($this->step(), new LinesOfCodeDTO($lines, count($files)));
     }
 }

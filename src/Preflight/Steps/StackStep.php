@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\StackData;
+use Astro2006\LaravelAudit\Data\Steps\StackDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
@@ -47,7 +47,7 @@ final class StackStep implements Step
             }
         }
 
-        return StepResult::ok($this->step(), new StackData(
+        return StepResult::ok($this->step(), new StackDTO(
             frontend: $frontend,
             testFramework: match (true) {
                 $project->usesPest() => 'pest',

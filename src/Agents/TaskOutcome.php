@@ -27,7 +27,7 @@ final readonly class TaskOutcome
      */
     public function __construct(
         public string $key,
-        public AuditType $audit,
+        public ?AuditType $audit,
         public AuditStatus $status,
         public ?string $reason,
         public ?string $body,
@@ -74,9 +74,9 @@ final readonly class TaskOutcome
         return $this->status === AuditStatus::Completed;
     }
 
-    /** The name part of the key: backend.injection → injection. */
+    /** The name part of the key: backend.injection → injection. Jobs without an audit (e.g. results) return the key unchanged. */
     public function name(): string
     {
-        return substr($this->key, strlen($this->audit->value) + 1);
+        return $this->audit === null ? $this->key : substr($this->key, strlen($this->audit->value) + 1);
     }
 }

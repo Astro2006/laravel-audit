@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
+use Astro2006\LaravelAudit\Enums\SnapshotType;
 
 /**
  * One small, focused piece of an audit: a few related checks that read the
@@ -22,6 +23,7 @@ final readonly class AuditTask
      * @param  list<string>  $checks  check slugs this task owns
      * @param  list<string>  $sections  audit-specific report sections this task writes
      * @param  list<string>  $dependsOn  names of tasks in the same audit whose output this task needs
+     * @param  list<SnapshotType>  $snapshots  preflight data shown in the prompt (the status of all steps is always shown)
      */
     public function __construct(
         public AuditType $audit,
@@ -30,6 +32,7 @@ final readonly class AuditTask
         public array $checks,
         public array $sections = [],
         public array $dependsOn = [],
+        public array $snapshots = [],
     ) {}
 
     /** Unique across the run, e.g. backend.injection. */
@@ -53,15 +56,15 @@ final readonly class AuditTask
     public function promptFile(): string
     {
         return match ($this->name) {
-            self::SUMMARY => 'tasks/_summary.md',
-            self::CUSTOM => 'tasks/_custom.md',
-            default => 'tasks/'.$this->audit->value.'/'.$this->name.'.md',
+            self::SUMMARY => 'agents/_summary.md',
+            self::CUSTOM => 'agents/_custom.md',
+            default => 'agents/'.$this->audit->value.'/'.$this->name.'.md',
         };
     }
 
-    /** Optional audit-specific addition to a shared template (e.g. tasks/tests/summary.md). */
+    /** Optional audit-specific addition to a shared template (e.g. agents/tests/summary.md). */
     public function extraPromptFile(): ?string
     {
-        return $this->isSummary() ? 'tasks/'.$this->audit->value.'/summary.md' : null;
+        return $this->isSummary() ? 'agents/'.$this->audit->value.'/summary.md' : null;
     }
 }

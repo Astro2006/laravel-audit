@@ -13,8 +13,11 @@ use Astro2006\LaravelAudit\Support\Read;
 
 final class PromptContextBuilder
 {
-    /** @param array<mixed> $config */
-    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable, string $toolsNote = ''): PromptContext
+    /**
+     * @param  array<mixed>  $config
+     * @param  array<string, string>  $snapshots  snapshot type => markdown (SnapshotWriter::write())
+     */
+    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable, string $toolsNote = '', array $snapshots = []): PromptContext
     {
         $steps = $summary->steps;
         $about = $steps->about();
@@ -45,6 +48,7 @@ final class PromptContextBuilder
             boostAvailable: $boostAvailable,
             toolsNote: $toolsNote,
             maxFiles: max(1, Read::int($config, 'max_files_per_task', 25)),
+            snapshots: $snapshots,
         );
     }
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
+use Astro2006\LaravelAudit\Data\Steps\TranslationsDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\Condensers\TranslationDiff;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
@@ -34,6 +34,6 @@ final class TranslationsStep implements Step
 
         $context->writeJson('translations.json', $report);
 
-        return StepResult::ok($this->step(), new TranslationsData($report->locales, $report->missingCount()));
+        return StepResult::ok($this->step(), new TranslationsDTO($report->locales, $report->missingCount()));
     }
 }

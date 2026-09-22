@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Console;
 
-use Astro2006\LaravelAudit\Data\Steps\AboutData;
-use Astro2006\LaravelAudit\Data\Steps\BrowserData;
-use Astro2006\LaravelAudit\Data\Steps\ComposerData;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
-use Astro2006\LaravelAudit\Data\Steps\PintData;
-use Astro2006\LaravelAudit\Data\Steps\RoutesData;
-use Astro2006\LaravelAudit\Data\Steps\StackData;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
-use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
+use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
+use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
+use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
+use Astro2006\LaravelAudit\Data\Steps\PintDTO;
+use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
+use Astro2006\LaravelAudit\Data\Steps\StackDTO;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
+use Astro2006\LaravelAudit\Data\Steps\TranslationsDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\StepResult;
@@ -29,7 +29,7 @@ final class StepFormatter
     public function format(StepResult $result): StepLine
     {
         $data = $result->data;
-        $level = $data instanceof PhpstanData ? $data->level : null;
+        $level = $data instanceof PhpstanDTO ? $data->level : null;
         $label = $result->step === PreflightStep::Phpstan && $level === null
             ? $this->messages->get('steps.phpstan_plain')
             : $this->messages->get('steps.'.$result->step->value, ['level' => $level ?? '?']);
@@ -44,7 +44,7 @@ final class StepFormatter
             return new StepLine('✘', 'red', $label, mb_strimwidth($error, 0, 110, '…'));
         }
 
-        $failed = ($data instanceof TestsData || $data instanceof BrowserData) && $data->failures() > 0;
+        $failed = ($data instanceof TestsDTO || $data instanceof BrowserDTO) && $data->failures() > 0;
 
         return new StepLine($failed ? '✘' : '✔', $failed ? 'red' : 'green', $label, $this->detail($result));
     }
@@ -69,20 +69,20 @@ final class StepFormatter
         $data = $result->data;
 
         return match (true) {
-            $data instanceof AboutData => $m->get('details.about', ['laravel' => $data->laravel ?? '?', 'php' => $data->php ?? '?']),
-            $data instanceof StackData => $m->get('details.stack', ['stack' => implode(', ', array_filter([...$data->frontend, $data->testFramework]))]),
-            $data instanceof LinesOfCodeData => $m->get('details.loc', ['loc' => number_format($data->loc, 0, ',', '.')]),
-            $data instanceof PintData => $m->get('details.pint', ['files' => $data->filesWithIssues, 'rules' => $data->rules]),
-            $data instanceof RoutesData => $m->get('details.routes', ['count' => $data->count, 'flagged' => $data->flagged]),
-            $data instanceof TranslationsData => $data->locales === []
+            $data instanceof AboutDTO => $m->get('details.about', ['laravel' => $data->laravel ?? '?', 'php' => $data->php ?? '?']),
+            $data instanceof StackDTO => $m->get('details.stack', ['stack' => implode(', ', array_filter([...$data->frontend, $data->testFramework]))]),
+            $data instanceof LinesOfCodeDTO => $m->get('details.loc', ['loc' => number_format($data->loc, 0, ',', '.')]),
+            $data instanceof PintDTO => $m->get('details.pint', ['files' => $data->filesWithIssues, 'rules' => $data->rules]),
+            $data instanceof RoutesDTO => $m->get('details.routes', ['count' => $data->count, 'flagged' => $data->flagged]),
+            $data instanceof TranslationsDTO => $data->locales === []
                 ? $m->get('details.translations_none')
                 : $m->get('details.translations', ['locales' => implode(', ', $data->locales), 'missing' => $data->missing]),
-            $data instanceof ComposerData => $m->get('details.composer', ['advisories' => $data->advisories, 'abandoned' => $data->abandoned, 'outdated' => $data->outdatedMajor]),
-            $data instanceof TestsData => $this->testDetail('tests', $data->failures(), $data->total)
+            $data instanceof ComposerDTO => $m->get('details.composer', ['advisories' => $data->advisories, 'abandoned' => $data->abandoned, 'outdated' => $data->outdatedMajor]),
+            $data instanceof TestsDTO => $this->testDetail('tests', $data->failures(), $data->total)
                 .($data->coveragePct !== null ? ' · '.$m->get('details.coverage', ['pct' => $data->coveragePct]) : ''),
-            $data instanceof BrowserData => $this->testDetail('browser', $data->failures(), $data->total)
+            $data instanceof BrowserDTO => $this->testDetail('browser', $data->failures(), $data->total)
                 .($data->artifacts > 0 ? ' · '.$m->get('details.artifacts', ['count' => $data->artifacts]) : ''),
-            $data instanceof PhpstanData => $m->get('details.phpstan', ['errors' => $data->errors, 'baselined' => $data->baselined]),
+            $data instanceof PhpstanDTO => $m->get('details.phpstan', ['errors' => $data->errors, 'baselined' => $data->baselined]),
             default => '',
         };
     }

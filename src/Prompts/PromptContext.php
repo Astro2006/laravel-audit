@@ -14,6 +14,7 @@ final readonly class PromptContext
     /**
      * @param  list<string>  $excludePaths
      * @param  array<string, list<string>>  $customChecks  audit key => rules
+     * @param  array<string, string>  $snapshots  snapshot type => markdown for the prompt
      */
     public function __construct(
         public string $projectName,
@@ -33,6 +34,7 @@ final readonly class PromptContext
         public bool $boostAvailable,
         public string $toolsNote = '',
         public int $maxFiles = 25,
+        public array $snapshots = [],
     ) {}
 
     /** @return list<string> */

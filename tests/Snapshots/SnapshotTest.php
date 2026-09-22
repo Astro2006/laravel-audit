@@ -1,0 +1,127 @@
+<?php
+
+use Astro2006\LaravelAudit\Agents\DependenciesAgent;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
+use Astro2006\LaravelAudit\Enums\GateDecision;
+use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Preflight\StepResults;
+use Astro2006\LaravelAudit\Snapshots\ComposerSnapshot;
+use Astro2006\LaravelAudit\Snapshots\PhpstanSnapshot;
+use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
+use Astro2006\LaravelAudit\Snapshots\StatusSnapshot;
+use Astro2006\LaravelAudit\Snapshots\TestsSnapshot;
+use Astro2006\LaravelAudit\Support\Json;
+
+/** @param array<string, array<mixed>> $files relative path => JSON */
+function snapshotPreflight(array $files, ?StepResults $steps = null): PreflightSummary
+{
+    $dir = tempDir('snapshots');
+
+    foreach ($files as $path => $data) {
+        @mkdir(dirname($dir.'/'.$path), 0777, true);
+        Json::writeFile($dir.'/'.$path, $data);
+    }
+
+    return new PreflightSummary('run', GateDecision::Continued, $steps ?? new StepResults, $dir);
+}
+
+function failureGroups(int $count): array
+{
+    return array_map(fn (int $i): array => [
+        'exception' => 'Illuminate\\Database\\QueryException',
+        'message' => "SQLSTATE[42S02]: table orders_{$i} not found\n#0 app/Services/OrderService.php(12)",
+        'count' => 2,
+        'tests' => ["OrderTest::it stores {$i}"],
+        'files' => ["tests/Feature/OrderTest{$i}.php"],
+    ], range(1, $count));
+}
+
+it('puts metrics, IDs and paths in the prompt and the message only in the detail file', function () {
+    $preflight = snapshotPreflight(['tests/tests-condensed.json' => [
+        'total' => 2450, 'passed' => 2442, 'failed' => 8, 'errors' => 0, 'skipped' => 1, 'duration_s' => 12.3,
+        'failure_groups' => failureGroups(1),
+        'skipped_tests' => [['test' => 'SlowTest::it waits', 'reason' => 'flaky', 'file' => 'tests/SlowTest.php']],
+        'slowest' => [['test' => 'SlowTest::it waits', 'seconds' => 4.2]],
+    ]]);
+
+    $prompt = (new SnapshotWriter([new TestsSnapshot]))->write($preflight, 'storage/audit/run/preflight')['tests'];
+    $details = file_get_contents($preflight->directory.'/details/tests/T-01.md');
+
+    expect($prompt)->toContain('### Tests — 🔴 FAILED')
+        ->toContain('Total 2450 · Passed 2442 · Failed 8 · Skipped 1')
+        ->toContain('| T-01 | 2 | QueryException | tests/Feature/OrderTest1.php |')
+        ->toContain('Details per ID: `storage/audit/run/preflight/details/tests/<ID>.md`')
+        ->toContain('Skipped tests: `storage/audit/run/preflight/details/tests/skipped.md`')
+        ->not->toContain('SQLSTATE')
+        ->and($details)->toContain('SQLSTATE[42S02]: table orders_1 not found')
+        ->toContain('Illuminate\\Database\\QueryException')
+        ->and($preflight->directory.'/snapshots/tests.md')->toBeFile()
+        ->and(file_get_contents($preflight->directory.'/details/tests/skipped.md'))->toContain('flaky');
+});
+
+it('caps the rows in the prompt and lists every row in _all.md', function () {
+    $preflight = snapshotPreflight(['tests/tests-condensed.json' => ['total' => 40, 'failed' => 20, 'failure_groups' => failureGroups(20)]]);
+
+    $prompt = (new SnapshotWriter([new TestsSnapshot], maxRows: 5))->write($preflight, 'pre')['tests'];
+
+    expect($prompt)->toContain('| T-05 |')->not->toContain('| T-06 |')
+        ->toContain('… 15 more rows: `pre/details/tests/_all.md`')
+        ->and(file_get_contents($preflight->directory.'/details/tests/_all.md'))->toContain('| T-20 |')
+        ->and($preflight->directory.'/details/tests/T-20.md')->toBeFile();
+});
+
+it('marks baselined PHPStan identifiers and keeps the examples in the details', function () {
+    $preflight = snapshotPreflight(['phpstan/phpstan-grouped.json' => [
+        'level' => '6', 'errors' => 3, 'baselined' => 12,
+        'identifiers' => [['identifier' => 'argument.type', 'count' => 3, 'file_count' => 2, 'top_files' => [['file' => 'app/A.php', 'count' => 2]], 'examples' => [['file' => 'app/A.php', 'line' => 7, 'message' => 'Parameter #1 expects int.']]]],
+        'baselined_identifiers' => [['identifier' => 'missingType.iterableValue', 'count' => 12, 'file_count' => 4]],
+    ]]);
+
+    $prompt = (new SnapshotWriter([new PhpstanSnapshot]))->write($preflight, 'pre')['phpstan'];
+
+    expect($prompt)->toContain('### PHPStan (level 6) — 🔴 3 errors')
+        ->toContain('| P-01 | argument.type | 3 | 2 | open |')
+        ->toContain('| P-02 | missingType.iterableValue | 12 | 4 | baselined |')
+        ->not->toContain('Parameter #1')
+        ->and(file_get_contents($preflight->directory.'/details/phpstan/P-01.md'))->toContain('`app/A.php:7` — Parameter #1 expects int.');
+});
+
+it('adds the usage map to the details of a composer fact', function () {
+    $preflight = snapshotPreflight([
+        DependenciesAgent::FACTS_FILE => [
+            'advisories' => [['package' => 'guzzlehttp/psr7', 'severity' => 'medium', 'cve' => 'CVE-2023-29197', 'title' => 'Header injection']],
+            'unused_candidates' => [['package' => 'acme/unused-lib', 'section' => 'require']],
+            'validate' => ['ok' => true, 'lock_in_sync' => false, 'output' => 'The lock file is not up to date.'],
+        ],
+        'composer/usage-map.json' => ['packages' => ['acme/unused-lib' => ['namespaces' => ['Acme\\Unused\\'], 'prod_refs' => 0]]],
+    ]);
+
+    $prompt = (new SnapshotWriter([new ComposerSnapshot]))->write($preflight, 'pre')['composer'];
+
+    expect($prompt)->toContain('| D-01 | advisories | guzzlehttp/psr7 | medium CVE-2023-29197 |')
+        ->toContain('| D-02 | unused_candidates | acme/unused-lib | require |')
+        ->toContain('lock in sync no')
+        ->not->toContain('Header injection')
+        ->and(file_get_contents($preflight->directory.'/details/composer/D-02.md'))->toContain('**Usage**')->toContain('Acme\\Unused\\')
+        ->and(file_get_contents($preflight->directory.'/details/composer/composer.md'))->toContain('The lock file is not up to date.');
+});
+
+it('lists the preflight steps and skips sources without data', function () {
+    $preflight = snapshotPreflight([], new StepResults([
+        StepResult::ok(PreflightStep::Tests, new TestsDTO(total: 3, passed: 3)),
+        StepResult::skipped(PreflightStep::Browser, SkipReason::NoBrowserTests),
+        StepResult::error(PreflightStep::Phpstan, "PHPStan crashed:\nmemory exhausted"),
+    ]));
+
+    $rendered = (new SnapshotWriter([new StatusSnapshot, new TestsSnapshot]))->write($preflight, 'pre');
+
+    expect($rendered)->toHaveKeys(['status'])->not->toHaveKey('tests')
+        ->and($rendered['status'])->toContain('| S-02 | browser | skipped | no-browser-tests |')
+        ->toContain('| S-03 | phpstan | error | see details |')
+        ->not->toContain('memory exhausted')
+        ->and(file_get_contents($preflight->directory.'/details/status/S-03.md'))->toContain('memory exhausted')
+        ->and((new SnapshotWriter([new StatusSnapshot]))->write(new PreflightSummary('run', GateDecision::NotRun, new StepResults), 'pre'))->toBe([]);
+});

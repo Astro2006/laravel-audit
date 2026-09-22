@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\BrowserData;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\AssetBuildMode;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
@@ -55,14 +55,14 @@ final class BrowserStep implements Step
         }
 
         if (! $project->hasBrowserPlugin() || ! $project->hasNodeModule('playwright')) {
-            return StepResult::skipped($this->step(), SkipReason::PluginMissing, new BrowserData(path: $location->path));
+            return StepResult::skipped($this->step(), SkipReason::PluginMissing, new BrowserDTO(path: $location->path));
         }
 
         $testsData = $context->results->get(PreflightStep::Tests)?->data;
-        $database = ($testsData instanceof TestsData ? $testsData->database : null) ?? $this->guard->check();
+        $database = ($testsData instanceof TestsDTO ? $testsData->database : null) ?? $this->guard->check();
 
         if (! $database->safe && ! $context->config('preflight.allow_shared_database', false)) {
-            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new BrowserData(path: $location->path, database: $database));
+            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new BrowserDTO(path: $location->path, database: $database));
         }
 
         $warnings = $this->prepareAssets($context);
@@ -89,7 +89,7 @@ final class BrowserStep implements Step
             return StepResult::error(
                 $this->step(),
                 'The browser test run produced no JUnit report (see logs/browser.log): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8),
-                new BrowserData(path: $location->path),
+                new BrowserDTO(path: $location->path),
             );
         }
 
@@ -102,7 +102,7 @@ final class BrowserStep implements Step
             'artifacts' => $artifacts,
         ]);
 
-        return StepResult::ok($this->step(), BrowserData::fromReport($report, $location->path, $location->type, count($artifacts)), $warnings);
+        return StepResult::ok($this->step(), BrowserDTO::fromReport($report, $location->path, $location->type, count($artifacts)), $warnings);
     }
 
     /** @return list<string> warning codes */

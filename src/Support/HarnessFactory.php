@@ -18,9 +18,19 @@ use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
 use Astro2006\LaravelAudit\Preflight\Steps\StackStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
-use Astro2006\LaravelAudit\Prompts\PromptRenderer;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
+use Astro2006\LaravelAudit\Snapshots\BrowserSnapshot;
+use Astro2006\LaravelAudit\Snapshots\ComposerSnapshot;
+use Astro2006\LaravelAudit\Snapshots\CoverageSnapshot;
+use Astro2006\LaravelAudit\Snapshots\PhpstanSnapshot;
+use Astro2006\LaravelAudit\Snapshots\PintSnapshot;
+use Astro2006\LaravelAudit\Snapshots\RoutesSnapshot;
+use Astro2006\LaravelAudit\Snapshots\RouteTestsSnapshot;
+use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
+use Astro2006\LaravelAudit\Snapshots\StatusSnapshot;
+use Astro2006\LaravelAudit\Snapshots\TestsSnapshot;
+use Astro2006\LaravelAudit\Snapshots\TranslationsSnapshot;
 use Illuminate\Support\Arr;
 
 /**
@@ -79,6 +89,22 @@ class HarnessFactory
         ];
     }
 
+    public function snapshotWriter(): SnapshotWriter
+    {
+        return new SnapshotWriter([
+            new StatusSnapshot,
+            new TestsSnapshot,
+            new BrowserSnapshot,
+            new PhpstanSnapshot,
+            new CoverageSnapshot,
+            new RouteTestsSnapshot,
+            new RoutesSnapshot,
+            new PintSnapshot,
+            new TranslationsSnapshot,
+            new ComposerSnapshot,
+        ], max(1, (int) $this->config('snapshot_rows', 15)));
+    }
+
     /**
      * @param  string|null  $name  driver name or `auto`; null = agent.driver
      * @param  string|null  $model  overrides the configured model
@@ -88,12 +114,10 @@ class HarnessFactory
         return (new DriverRegistry($this->config, $project))->resolve($name, $model);
     }
 
-    public function promptRenderer(): PromptRenderer
+    /** Published prompts (vendor:publish --tag=audit-prompts); files there win over the package's own. */
+    public function promptOverridePath(): ?string
     {
-        return new PromptRenderer(
-            dirname(__DIR__, 2).'/resources/prompts',
-            function_exists('resource_path') ? resource_path('prompts/vendor/laravel-audit') : null,
-        );
+        return function_exists('resource_path') ? resource_path('prompts/vendor/laravel-audit') : null;
     }
 
     public function validator(ProjectInspector $project): ReportValidator

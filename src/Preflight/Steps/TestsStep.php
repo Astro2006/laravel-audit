@@ -6,7 +6,7 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
+use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
@@ -61,7 +61,7 @@ final class TestsStep implements AsyncStep
         $this->database = $this->guard->check();
 
         if (! $this->database->safe && ! $context->config('preflight.allow_shared_database', false)) {
-            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsData(database: $this->database));
+            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsDTO(database: $this->database));
         }
 
         $junit = $context->path('tests/junit.xml');
@@ -106,7 +106,7 @@ final class TestsStep implements AsyncStep
             return StepResult::error(
                 $this->step(),
                 'The test run produced no JUnit report (see logs/tests.log): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8),
-                new TestsData(database: $this->database),
+                new TestsDTO(database: $this->database),
             );
         }
 
@@ -122,7 +122,7 @@ final class TestsStep implements AsyncStep
 
         $this->writeRouteTestMap($context);
 
-        return StepResult::ok($this->step(), TestsData::fromReport($report, $coverage?->linesPct, $this->parallel, $this->suites, $this->database));
+        return StepResult::ok($this->step(), TestsDTO::fromReport($report, $coverage?->linesPct, $this->parallel, $this->suites, $this->database));
     }
 
     /**

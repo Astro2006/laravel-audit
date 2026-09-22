@@ -6,7 +6,7 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Steps\RoutesData;
+use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteFacts;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
@@ -40,6 +40,6 @@ final class RoutesStep implements Step
         $facts = $this->facts->facts($routes);
         $context->writeJson('route-facts.json', $facts);
 
-        return StepResult::ok($this->step(), new RoutesData(count($routes), $facts->flagged()));
+        return StepResult::ok($this->step(), new RoutesDTO(count($routes), $facts->flagged()));
     }
 }

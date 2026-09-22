@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents;
 
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\CodexDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Support\Json;

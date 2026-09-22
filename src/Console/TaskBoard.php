@@ -59,7 +59,8 @@ final class TaskBoard
         $tasks = [];
 
         foreach ($this->jobs as $job) {
-            $tasks[$job->audit->value][] = substr($job->key, strlen($job->audit->value) + 1);
+            $group = $job->audit === null ? $job->key : $job->audit->value;
+            $tasks[$group][] = $job->audit === null ? $job->key : substr($job->key, strlen($group) + 1);
         }
 
         $lines = [];

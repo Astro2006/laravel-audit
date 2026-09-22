@@ -37,6 +37,9 @@ final class RunManifest
 
     public ?string $model = null;
 
+    /** The run's overview, written by the results agent once every selected audit is done. */
+    public ?string $overview = null;
+
     public StepResults $steps;
 
     /** @var list<Metric> */
@@ -86,6 +89,7 @@ final class RunManifest
             'gate' => $this->gate->value,
             'agent' => $this->agent,
             'model' => $this->model,
+            'overview' => $this->overview,
             'git' => ['branch' => $this->git->branch, 'commit' => $this->git->commit, 'dirty' => $this->git->dirty],
             'outcomes' => array_map(fn (AuditOutcome $outcome): array => [
                 'audit' => $outcome->audit->value,
@@ -152,6 +156,7 @@ final class RunManifest
 
         array_push(
             $lines,
+            ...$this->overviewSection(),
             ...$this->preflightSection(),
             ...$this->metricsSection(),
             ...$this->auditsSection(),
@@ -174,6 +179,12 @@ final class RunManifest
         $count = fn (string $severity): int => count(array_filter($findings, fn (Finding $finding): bool => $finding->severity->value === $severity));
 
         return ['critical' => $count('critical'), 'high' => $count('high'), 'medium' => $count('medium'), 'low' => $count('low'), 'info' => $count('info')];
+    }
+
+    /** @return list<string> */
+    private function overviewSection(): array
+    {
+        return $this->overview === null ? [] : ['## Overview', '', $this->overview, ''];
     }
 
     /** @return list<string> */

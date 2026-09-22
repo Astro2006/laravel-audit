@@ -1,8 +1,8 @@
 <?php
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Agents\DeniedFiles;
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\McpServer;
