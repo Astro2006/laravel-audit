@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Preflight;
 use Astro2006\LaravelAudit\Contracts\StepDTO;
 use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Data\Steps\CandidatesDTO;
 use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
 use Astro2006\LaravelAudit\Data\Steps\MigrationsDTO;
@@ -131,6 +132,11 @@ final class StepResults
     public function migrations(): ?MigrationsDTO
     {
         return $this->typed(PreflightStep::Migrations, MigrationsDTO::class);
+    }
+
+    public function candidates(): ?CandidatesDTO
+    {
+        return $this->typed(PreflightStep::Candidates, CandidatesDTO::class);
     }
 
     public function composer(): ?ComposerDTO

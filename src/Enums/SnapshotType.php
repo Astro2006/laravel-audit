@@ -21,6 +21,7 @@ enum SnapshotType: string
     case Translations = 'translations';
     case Composer = 'composer';
     case DatabaseSchema = 'database-schema';
+    case CodeCandidates = 'code-candidates';
 
     public function label(): string
     {
@@ -36,6 +37,7 @@ enum SnapshotType: string
             self::Translations => 'Translations',
             self::Composer => 'Composer',
             self::DatabaseSchema => 'Database schema',
+            self::CodeCandidates => 'Code candidates',
         };
     }
 
@@ -54,6 +56,7 @@ enum SnapshotType: string
             self::Translations => 'L',
             self::Composer => 'D',
             self::DatabaseSchema => 'Y',
+            self::CodeCandidates => 'K',
         };
     }
 }

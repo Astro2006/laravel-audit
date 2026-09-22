@@ -7,7 +7,7 @@ Find injection vectors in rendering and data that leaks to the client.
 ## Inputs
 
 - `resources/views`, `resources/js`, `app/Livewire`, Inertia pages and `HandleInertiaRequests`, upload and download controllers, `.env.example` (`VITE_*`), Vite config
-- Search for `{!!`, `v-html`, `x-html`, `innerHTML`, `dangerouslySetInnerHTML`, `redirect()->to(`, `away(`, `->store(`
+- The Code candidates snapshot above — unescaped output (`{!!`, `v-html`, `x-html`, `innerHTML`, `dangerouslySetInnerHTML`), redirects with request data and stored uploads, with file and line. Open those lines instead of searching
 
 ## Checklist
 

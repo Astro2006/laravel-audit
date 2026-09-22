@@ -7,6 +7,7 @@ Check the Eloquent models and how model data flows in and out: casts, relationsh
 ## Inputs
 
 - The conventions baseline (below, from another task)
+- The Code candidates snapshot above — the lines that match your checks, with file and line; open its rows for your checks instead of searching the codebase (`request->all()`)
 - `app/Models`, Form Requests, controllers and services that call `create()`, `update()`, `fill()`, API Resources, `toArray()`
 
 ## Checklist

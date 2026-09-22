@@ -37,6 +37,7 @@ final class SnapshotWriter
             new TranslationsSnapshot,
             new ComposerSnapshot,
             new DatabaseSchemaSnapshot,
+            new CodeCandidatesSnapshot,
         ], max(1, $maxRows));
     }
 

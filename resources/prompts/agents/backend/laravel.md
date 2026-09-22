@@ -8,6 +8,7 @@ Find places where the backend breaks the project's own conventions or Laravel be
 
 - The conventions baseline (below, from another task) — judge against it
 - The Routes snapshot above and its `all-routes` file — which controllers are reachable
+- The Code candidates snapshot above — the lines that match your checks, with file and line; open its rows for your checks instead of searching the codebase (`env()` calls, inline validation)
 
 ## Scope
 

@@ -267,6 +267,7 @@ The details of an ID (the message, the failing tests, examples, usage) are in a 
 | Translations | `lang/` diff between locales | frontend |
 | Composer | `composer audit`, `outdated`, `licenses`, `validate`, `why` | dependencies |
 | Migrations | static read of `database/migrations`: tables, columns, indexes, foreign keys, risky migrations (no database needed) | backend |
+| Code candidates | one search over `app/`, `routes/`, `database/`, `resources/` for risky patterns (raw SQL, shell calls, `unserialize`, `env()` outside config, `{!!`, broad `catch`, …) with file and line, so agents open those lines instead of searching | backend, frontend |
 | Tests | `artisan test` with JUnit and Clover (parallel if paratest is installed) | tests |
 | Browser | Pest browser tests (Playwright) | tests, frontend |
 | PHPStan | Larastan with your `phpstan.neon` and baseline | tests |

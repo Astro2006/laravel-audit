@@ -9,6 +9,7 @@ Check authorization inside the application logic, the authentication configurati
 - The Routes snapshot above and its `all-routes` file — entry points and middleware (web, API, MCP)
 - `app/Policies`, gates in service providers, actions/services called from several entry points
 - `config/auth.php`, `config/session.php`, `config/sanctum.php`, profile/password controllers, `.env.example`
+- The Code candidates snapshot above — the lines that match your checks, with file and line; open its rows for your checks instead of searching the codebase (weak hashes and random values)
 
 ## Checklist
 

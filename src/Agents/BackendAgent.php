@@ -75,12 +75,12 @@ final class BackendAgent extends Agent
     {
         return [
             $this->task('conventions', 'Conventions baseline', ['naming-structure', 'code-style'], sections: ['Conventions baseline', 'Convention scorecard'], snapshots: [SnapshotType::Pint]),
-            $this->task('laravel', 'Laravel conventions', ['env-outside-config', 'inline-validation', 'fat-controller', 'magic-values'], dependsOn: ['conventions'], snapshots: [SnapshotType::Routes]),
-            $this->task('data', 'Models and data exposure', ['eloquent-hygiene', 'mass-assignment', 'data-exposure'], dependsOn: ['conventions']),
+            $this->task('laravel', 'Laravel conventions', ['env-outside-config', 'inline-validation', 'fat-controller', 'magic-values'], dependsOn: ['conventions'], snapshots: [SnapshotType::Routes, SnapshotType::CodeCandidates]),
+            $this->task('data', 'Models and data exposure', ['eloquent-hygiene', 'mass-assignment', 'data-exposure'], dependsOn: ['conventions'], snapshots: [SnapshotType::CodeCandidates]),
             $this->task('jobs', 'Queues and scheduler', ['queue-robustness', 'scheduler-overlap']),
-            $this->task('errors', 'Error handling and logging', ['swallowed-exception', 'exception-leak', 'sensitive-logging']),
-            $this->task('injection', 'Injection', ['sql-injection', 'command-injection', 'unsafe-deserialization', 'ssrf', 'path-traversal'], snapshots: [SnapshotType::Routes]),
-            $this->task('auth', 'Authorization, auth and secrets', ['authorization-gap', 'auth-config', 'tenant-isolation', 'weak-crypto', 'hardcoded-secret'], snapshots: [SnapshotType::Routes]),
+            $this->task('errors', 'Error handling and logging', ['swallowed-exception', 'exception-leak', 'sensitive-logging'], snapshots: [SnapshotType::CodeCandidates]),
+            $this->task('injection', 'Injection', ['sql-injection', 'command-injection', 'unsafe-deserialization', 'ssrf', 'path-traversal'], snapshots: [SnapshotType::Routes, SnapshotType::CodeCandidates]),
+            $this->task('auth', 'Authorization, auth and secrets', ['authorization-gap', 'auth-config', 'tenant-isolation', 'weak-crypto', 'hardcoded-secret'], snapshots: [SnapshotType::Routes, SnapshotType::CodeCandidates]),
             $this->task('logic', 'Logic and transactions', ['logic-bug', 'transaction-safety'], snapshots: [SnapshotType::Routes]),
             $this->task('performance', 'Performance', ['n-plus-one', 'inefficient-query', 'missing-cache']),
             $this->task('dead-code', 'Dead code', ['dead-code'], sections: ['Dead code candidates'], snapshots: [SnapshotType::Routes, SnapshotType::Phpstan]),

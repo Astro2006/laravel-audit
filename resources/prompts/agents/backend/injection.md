@@ -7,7 +7,7 @@ Find input that reaches a dangerous sink: SQL, shell, deserialization, outgoing 
 ## Inputs
 
 - The Routes snapshot above and its `all-routes` file — entry points
-- Search `app/`, `routes/`, `database/` for the sinks below, then follow the data back to its source
+- The Code candidates snapshot above — the sinks below with file and line (raw SQL, shell calls, `unserialize`, outgoing HTTP, file access with request data). Open those lines and follow the data back to its source; search yourself only for sinks the snapshot cannot see
 
 ## Checklist
 

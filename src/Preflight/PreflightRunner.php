@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\Steps\AboutStep;
 use Astro2006\LaravelAudit\Preflight\Steps\BrowserStep;
+use Astro2006\LaravelAudit\Preflight\Steps\CandidatesStep;
 use Astro2006\LaravelAudit\Preflight\Steps\ComposerStep;
 use Astro2006\LaravelAudit\Preflight\Steps\LinesOfCodeStep;
 use Astro2006\LaravelAudit\Preflight\Steps\MigrationsStep;
@@ -51,6 +52,7 @@ final class PreflightRunner
             new TranslationsStep($locale),
             new ComposerStep,
             new MigrationsStep,
+            new CandidatesStep,
             new TestsStep($guard),
             new BrowserStep($guard),
             new PhpstanStep,

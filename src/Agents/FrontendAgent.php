@@ -70,7 +70,7 @@ final class FrontendAgent extends Agent
             $this->task('map', 'Frontend map', [], sections: ['Frontend map'], snapshots: [SnapshotType::Routes]),
             $this->task('access', 'Route access control', ['route-authorization', 'idor', 'signed-url', 'webhook-signature'], sections: ['Route risk table'], snapshots: [SnapshotType::Routes]),
             $this->task('routes', 'Route hygiene', ['state-changing-get', 'missing-throttle', 'csrf-exclusion', 'debug-route', 'broken-route'], snapshots: [SnapshotType::Routes]),
-            $this->task('injection', 'Rendering and client-side security', ['xss', 'livewire-security', 'inertia-props-leak', 'open-redirect', 'file-upload', 'client-secret']),
+            $this->task('injection', 'Rendering and client-side security', ['xss', 'livewire-security', 'inertia-props-leak', 'open-redirect', 'file-upload', 'client-secret'], snapshots: [SnapshotType::CodeCandidates]),
             $this->task('config', 'Headers, session and CORS', ['security-headers', 'session-cookie-config', 'cors-config']),
             $this->task('errors', 'Error and state handling', ['error-handling-ui', 'error-pages'], snapshots: [SnapshotType::Browser]),
             $this->task('ui', 'UI consistency', ['ui-inconsistency', 'design-tokens', 'i18n', 'responsiveness'], sections: ['UI consistency matrix'], dependsOn: ['map'], snapshots: [SnapshotType::Translations]),

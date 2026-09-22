@@ -31,7 +31,7 @@ it('replaces lists instead of merging them', function () {
 it('reads the short forms for audits and verify', function () {
     $config = AuditConfig::load(['audits' => ['frontend' => false], 'agent' => ['verify' => false]]);
 
-    expect($config->array('audits.frontend'))->toBe(['enabled' => false, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'tests', 'browser']])
+    expect($config->array('audits.frontend'))->toBe(['enabled' => false, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'candidates', 'tests', 'browser']])
         ->and($config->bool('audits.backend.enabled'))->toBeTrue()
         ->and($config->bool('agent.verify.enabled'))->toBeFalse();
 });

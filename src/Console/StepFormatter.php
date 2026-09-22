@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Console;
 
 use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Data\Steps\CandidatesDTO;
 use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
 use Astro2006\LaravelAudit\Data\Steps\MigrationsDTO;
@@ -78,6 +79,7 @@ final class StepFormatter
             $data instanceof TranslationsDTO => $data->locales === []
                 ? $m->get('details.translations_none')
                 : $m->get('details.translations', ['locales' => implode(', ', $data->locales), 'missing' => $data->missing]),
+            $data instanceof CandidatesDTO => $m->get('details.candidates', ['hits' => $data->hits, 'patterns' => $data->patterns]),
             $data instanceof MigrationsDTO => $m->get('details.migrations', ['tables' => $data->tables, 'migrations' => $data->migrations, 'flagged' => $data->flagged]),
             $data instanceof ComposerDTO => $m->get('details.composer', ['advisories' => $data->advisories, 'abandoned' => $data->abandoned, 'outdated' => $data->outdatedMajor]),
             $data instanceof TestsDTO => $this->testDetail('tests', $data->failures(), $data->total)

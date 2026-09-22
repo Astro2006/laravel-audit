@@ -7,7 +7,7 @@ Find exceptions that disappear, exception details that reach users, and sensitiv
 ## Inputs
 
 - `bootstrap/app.php` (`withExceptions`), `app/Exceptions`, `config/logging.php`
-- Search `app/` for `catch`, `report(`, `Log::`, `logger(`, `->getMessage()`
+- The Code candidates snapshot above — broad `catch` blocks with file and line; for logging, open the classes that call `Log::`, `logger(`, `report(` or `->getMessage()`
 
 ## Checklist
 

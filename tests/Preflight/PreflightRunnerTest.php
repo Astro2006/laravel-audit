@@ -72,7 +72,7 @@ it('runs tests first (async in real runs), light steps, then browser and phpstan
         },
     );
 
-    expect($order)->toBe(['tests', 'about', 'stack', 'loc', 'pint', 'routes', 'translations', 'composer', 'migrations', 'browser', 'phpstan']);
+    expect($order)->toBe(['tests', 'about', 'stack', 'loc', 'pint', 'routes', 'translations', 'composer', 'migrations', 'candidates', 'browser', 'phpstan']);
 });
 
 it('runs browser tests and phpstan even when tests fail', function () {
