@@ -75,7 +75,8 @@ final class BackendAgent extends Agent
     {
         return [
             $this->task('conventions', 'Conventions baseline', ['naming-structure', 'code-style'], sections: ['Conventions baseline', 'Convention scorecard'], snapshots: [SnapshotType::Pint]),
-            $this->task('laravel', 'Laravel conventions', ['env-outside-config', 'inline-validation', 'fat-controller', 'magic-values'], dependsOn: ['conventions'], snapshots: [SnapshotType::Routes, SnapshotType::CodeCandidates]),
+            $this->task('laravel', 'Laravel conventions', ['env-outside-config', 'inline-validation'], dependsOn: ['conventions'], snapshots: [SnapshotType::CodeCandidates]),
+            $this->task('structure', 'Structure and responsibilities', ['fat-controller', 'magic-values'], dependsOn: ['conventions'], snapshots: [SnapshotType::Routes]),
             $this->task('data', 'Models and data exposure', ['eloquent-hygiene', 'mass-assignment', 'data-exposure'], dependsOn: ['conventions'], snapshots: [SnapshotType::CodeCandidates]),
             $this->task('jobs', 'Queues and scheduler', ['queue-robustness', 'scheduler-overlap']),
             $this->task('errors', 'Error handling and logging', ['swallowed-exception', 'exception-leak', 'sensitive-logging'], snapshots: [SnapshotType::CodeCandidates]),

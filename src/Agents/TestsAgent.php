@@ -66,7 +66,8 @@ final class TestsAgent extends Agent
             $this->task('results', 'Test results', ['test-failure', 'skipped-test', 'slow-test'], sections: ['Test results'], snapshots: [SnapshotType::Tests, SnapshotType::Browser]),
             $this->task('coverage', 'Coverage map', ['untested-critical-path', 'browser-coverage'], sections: ['Coverage map'], snapshots: [SnapshotType::Coverage, SnapshotType::RouteTests, SnapshotType::Browser]),
             $this->task('gaps', 'Missing security and edge-case tests', ['missing-authz-test', 'missing-validation-test', 'missing-security-test', 'missing-edge-case'], snapshots: [SnapshotType::RouteTests, SnapshotType::Routes]),
-            $this->task('quality', 'Test quality', ['weak-assertion', 'implementation-coupling', 'missing-fake', 'flaky-test', 'factory-quality', 'duplicate-test', 'test-structure']),
+            $this->task('quality', 'Test quality', ['weak-assertion', 'implementation-coupling', 'missing-fake', 'flaky-test']),
+            $this->task('suite', 'Test suite structure', ['factory-quality', 'duplicate-test', 'test-structure']),
             $this->task('phpstan', 'PHPStan', ['phpstan-bug', 'phpstan-debt', 'phpstan-baseline', 'phpstan-config'], sections: ['PHPStan overview'], snapshots: [SnapshotType::Phpstan]),
             $this->task('tooling', 'Tooling and CI', ['ci-quality-gate']),
         ];
