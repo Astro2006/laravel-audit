@@ -7,6 +7,8 @@ namespace Astro2006\LaravelAudit\Agents;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
+use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Closure;
@@ -26,6 +28,8 @@ final class AgentRunner
 
         Errors:
         TEXT;
+
+    private const string OPEN_FILES_MESSAGE = 'You reported findings about project files without opening a single file. Open the files you cite now, check every finding against the code, drop the ones you cannot confirm, and return the complete report, starting with the `## %s` line.';
 
     private const string ANSWER_NOW_MESSAGE = 'You reached the turn limit. Stop investigating and write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
 
@@ -135,6 +139,28 @@ final class AgentRunner
     }
 
     /**
+     * Findings about project files from an answer that took a single turn,
+     * so the agent never opened a file. Small models do this; the harness
+     * cannot tell a guess from a finding by the excerpt alone.
+     *
+     * @param  list<Finding>  $findings
+     */
+    private static function unread(AgentResult $result, array $findings): bool
+    {
+        if ($result->telemetry->turns !== 1) {
+            return false;
+        }
+
+        foreach ($findings as $finding) {
+            if (! str_starts_with(trim($finding->evidence), 'preflight:') && array_filter($finding->locations, fn (Location $location): bool => $location->isFile()) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The jobs ordered by the length of the longest chain that waits on them,
      * longest first; jobs with equal chains keep their order.
      *
@@ -207,6 +233,12 @@ final class AgentRunner
         }
 
         $validated = $this->validator->validate($result->answer, $job->spec, $job->required);
+
+        if ($validated->lint->isValid() && ! $attempt->repair && $result->sessionId !== null && self::unread($result, $validated->lint->findings)) {
+            $message = sprintf(self::OPEN_FILES_MESSAGE, $job->spec->firstSection());
+
+            return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
+        }
 
         if ($validated->lint->isValid()) {
             return TaskOutcome::fromAttempt($attempt, AuditStatus::Completed, null, $validated, $telemetry, $result);

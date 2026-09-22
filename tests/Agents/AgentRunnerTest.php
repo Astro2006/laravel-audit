@@ -99,6 +99,21 @@ it('asks for the report once the turn limit is reached', function () {
         && str_contains($process->input, 'You reached the turn limit.'));
 });
 
+it('asks an agent that never opened a file to check its findings once', function () {
+    $valid = file_get_contents(fixture('reports/backend-valid.md'));
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['result' => $valid, 'num_turns' => 1])))
+        ->push(Process::result(claudeJson(['result' => $valid, 'num_turns' => 4])))]);
+
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed)
+        ->and($outcome->repaired)->toBeTrue();
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'without opening a single file'));
+});
+
 it('fails after an unsuccessful repair pass', function () {
     $broken = str_replace('## Summary', '## Overview', file_get_contents(fixture('reports/backend-valid.md')));
     Process::fake(['*' => Process::result(claudeJson(['result' => $broken]))]);
