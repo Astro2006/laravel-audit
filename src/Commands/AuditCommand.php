@@ -33,7 +33,7 @@ class AuditCommand extends Command
         {--agent= : Agent CLI for this run: claude_code, opencode, codex or auto}
         {--model= : Model for this run, in the format the agent CLI expects}
         {--mode= : single (one task at a time) or parallel (up to agent.concurrency tasks at once); default agent.mode}
-        {--orchestrate : Let an agent decide which preflight steps and tasks run (OpenCode for now)}';
+        {--orchestrate : Let an agent decide which preflight steps and tasks run, like orchestrator = agent in the config (OpenCode for now)}';
 
     protected $description = 'Audit this app: a deterministic preflight, then headless agents (Claude Code, OpenCode or Codex) for tests, frontend, backend and dependencies';
 

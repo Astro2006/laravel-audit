@@ -1,6 +1,9 @@
 <?php
 
+use Astro2006\LaravelAudit\Contracts\Orchestrator;
 use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
+use Astro2006\LaravelAudit\Orchestration\AgentOrchestrator;
+use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
 use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
 use Astro2006\LaravelAudit\Orchestration\OrchestrationState;
 use Astro2006\LaravelAudit\Orchestration\Tools\Catalog;
@@ -165,6 +168,16 @@ it('lets the orchestrator agent pick the steps and tasks, then writes the report
         && $process->environment['AUDIT_RUN'] === basename($run)
         && str_ends_with($process->environment['OPENCODE_CONFIG'], 'logs/opencode-orchestrator.json'));
     Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'artisan test'));
+});
+
+it('picks the orchestrator from the config', function () {
+    orchestratedProject();
+
+    expect(app(Orchestrator::class))->toBeInstanceOf(AuditOrchestrator::class);
+
+    config()->set('audit.orchestrator', 'agent');
+
+    expect(app(Orchestrator::class))->toBeInstanceOf(AgentOrchestrator::class);
 });
 
 it('only orchestrates with OpenCode for now', function () {

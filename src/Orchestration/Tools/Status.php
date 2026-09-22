@@ -46,7 +46,7 @@ final class Status
                 'items' => Arr::get($lock, 'items'),
                 'running_for_s' => time() - Arr::get($lock, 'started_at'),
             ],
-            'gate' => ($preflight?->gate ?? GateDecision::NotRun)->value,
+            'gate' => $preflight === null ? GateDecision::NotRun->value : $preflight->gate->value,
             'preflight' => $steps,
             'tasks' => $tasks,
         ];

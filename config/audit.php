@@ -25,6 +25,10 @@ return [
     // null = app.locale. Language for report prose and console output.
     'report_language' => env('AUDIT_LANGUAGE'),
 
+    // class: the fixed flow (every configured preflight step, then every task).
+    // agent: an agent picks the preflight steps and tasks (OpenCode for now).
+    'orchestrator' => env('AUDIT_ORCHESTRATOR', 'class'),
+
     'agent' => [
         // claude_code, opencode, codex or auto (the first agent from
         // boost.json that is installed, then Claude Code, OpenCode, Codex).
