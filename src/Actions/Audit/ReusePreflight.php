@@ -21,7 +21,7 @@ final class ReusePreflight
 {
     /**
      * @param  string|null  $runId  null = the latest run with a preflight
-     * @return StepResults|null  null when there is no usable preflight
+     * @return StepResults|null null when there is no usable preflight
      */
     public function handle(AuditRun $run, RunManifest $manifest, RunSelection $selection, ProjectInspector $project, ?string $runId, AuditConsole $console): ?StepResults
     {

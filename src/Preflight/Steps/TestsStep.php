@@ -54,7 +54,7 @@ final class TestsStep implements AsyncStep
     {
         $project = $context->project;
 
-        if ($project->phpunitConfigPath() === null && ! is_dir($project->path('tests'))) {
+        if ($project->phpunit()->path() === null && ! is_dir($project->path('tests'))) {
             return StepResult::skipped($this->step(), SkipReason::NoConfig);
         }
 
@@ -140,7 +140,7 @@ final class TestsStep implements AsyncStep
      */
     private function suitesWithoutBrowser(PreflightContext $context): array
     {
-        $suites = $context->project->testSuites();
+        $suites = $context->project->phpunit()->testSuites();
         $browser = (string) $context->config('preflight.browser.testsuite', 'Browser');
 
         if (! in_array($browser, $suites, true)) {

@@ -10,7 +10,6 @@ use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\ValidatedReport;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
-use Astro2006\LaravelAudit\Support\Json;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Facades\Process;
@@ -29,15 +28,19 @@ final class AgentRunner
         Errors:
         TEXT;
 
+    private readonly TaskLog $logs;
+
     public function __construct(
         private readonly AgentDriver $driver,
         private readonly ReportValidator $validator,
-        private readonly string $logsDir,
+        string $logsDir,
         private readonly int $concurrency = 4,
         private readonly int $timeout = 1800,
         private readonly int $pollMicroseconds = 250_000,
         private readonly ChildEnvironment $environment = new ChildEnvironment,
-    ) {}
+    ) {
+        $this->logs = new TaskLog($logsDir);
+    }
 
     /**
      * @param  list<AgentJob>  $jobs  in the order they should start
@@ -168,13 +171,13 @@ final class AgentRunner
             }
 
             $this->stop($attempt->process);
-            $this->log($attempt, $attempt->process->output(), $attempt->process->errorOutput());
+            $this->logs->write($this->logName($attempt), $attempt->process->output(), $attempt->process->errorOutput());
 
             return AgentResult::failed(AgentExit::Timeout, sprintf('Agent timed out after %d seconds.', $this->timeout), (int) ($elapsed * 1000));
         }
 
         $result = $attempt->process->wait();
-        $this->log($attempt, $result->output(), $result->errorOutput());
+        $this->logs->write($this->logName($attempt), $result->output(), $result->errorOutput());
 
         $parsed = $this->driver->parse($result->output(), (int) $result->exitCode());
 
@@ -255,50 +258,8 @@ final class AgentRunner
         }
     }
 
-    private function log(Attempt $attempt, string $output, string $errorOutput): void
+    private function logName(Attempt $attempt): string
     {
-        if (! is_dir($this->logsDir)) {
-            mkdir($this->logsDir, 0777, true);
-        }
-
-        $name = $attempt->job->key.($attempt->repair ? '.repair' : '');
-
-        if (trim($output) === '') {
-            file_put_contents($this->logsDir.'/'.$name.'.json', $output);
-        } else {
-            Json::writeFile($this->logsDir.'/'.$name.'.json', $this->readable($output));
-        }
-
-        if (trim($errorOutput) !== '') {
-            file_put_contents($this->logsDir.'/'.$name.'.stderr.log', $errorOutput);
-        }
-    }
-
-    /**
-     * Turns the agent output into one JSON document, so the log can be read
-     * and formatted like any JSON file. A JSON Lines stream (OpenCode, Codex)
-     * becomes a list of its events; a line that is not valid JSON stays in
-     * the list as a string.
-     */
-    private function readable(string $output): mixed
-    {
-        $document = json_decode($output, true);
-
-        if (json_last_error() === JSON_ERROR_NONE) {
-            return $document;
-        }
-
-        $events = [];
-
-        foreach (explode("\n", $output) as $line) {
-            if (trim($line) === '') {
-                continue;
-            }
-
-            $event = json_decode($line, true);
-            $events[] = json_last_error() === JSON_ERROR_NONE ? $event : $line;
-        }
-
-        return $events;
+        return $attempt->job->key.($attempt->repair ? '.repair' : '');
     }
 }

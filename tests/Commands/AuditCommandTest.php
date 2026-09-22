@@ -377,4 +377,3 @@ it('starts the agents without asking with --force', function () {
 
     expect(file_get_contents(latestRun($project).'/run.md'))->toContain('gate: forced');
 });
-

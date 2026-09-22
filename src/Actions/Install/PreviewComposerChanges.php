@@ -6,8 +6,8 @@ namespace Astro2006\LaravelAudit\Actions\Install;
 
 use Astro2006\LaravelAudit\Install\ComposerPreview;
 use Astro2006\LaravelAudit\Install\InstallPlan;
-use Astro2006\LaravelAudit\Install\PlannedPackage;
 use Astro2006\LaravelAudit\Install\PlanExecutor;
+use Astro2006\LaravelAudit\Install\PlannedPackage;
 
 /**
  * Runs the composer command as a dry run and lists what it would change

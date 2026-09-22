@@ -19,10 +19,14 @@ final class ReportLinter
 
     private const array BODY_LABELS = ['Evidence', 'Impact', 'Recommendation'];
 
+    private readonly FindingRejector $rejector;
+
     public function __construct(
         private readonly string $basePath,
-        private readonly EvidenceChecker $evidence = new EvidenceChecker,
-    ) {}
+        EvidenceChecker $evidence = new EvidenceChecker,
+    ) {
+        $this->rejector = new FindingRejector($basePath, $evidence);
+    }
 
     /** @param list<RequiredFinding> $required */
     public function lint(ParsedReport $report, ReportSpec $spec, array $required = []): LintResult
@@ -67,7 +71,7 @@ final class ReportLinter
                 continue;
             }
 
-            $reason = $this->rejectionReason($finding, $spec);
+            $reason = $this->rejector->reason($finding, $spec);
 
             if ($reason === null) {
                 $findings[] = $finding;
@@ -96,47 +100,6 @@ final class ReportLinter
         }
 
         return new LintResult($errors, [...$warnings, ...$this->summaryWarnings($report)], Finding::withUniqueKeys($findings), $rejected);
-    }
-
-    /**
-     * Findings the harness drops without a repair pass: a file that does not
-     * exist, a `missing:` file that does exist, a code quote that is not in
-     * the files, or a contradiction with the preflight facts.
-     */
-    private function rejectionReason(Finding $finding, ReportSpec $spec): ?string
-    {
-        $contents = [];
-
-        foreach ($finding->locations as $location) {
-            if ($location->isMissing()) {
-                if (file_exists($this->basePath.'/'.$location->missing)) {
-                    return sprintf('`%s` is reported as missing, but it exists.', $location->missing);
-                }
-
-                continue;
-            }
-
-            if (! $location->isFile()) {
-                continue;
-            }
-
-            $path = $this->basePath.'/'.$location->file;
-
-            if (! is_file($path)) {
-                return sprintf('location `%s` does not exist in the project (possibly hallucinated).', $location->file);
-            }
-
-            $contents[] = (string) file_get_contents($path);
-        }
-
-        if ($this->evidence->matches($finding->evidence, $contents) === false) {
-            return 'the code in Evidence does not appear in '.implode(', ', array_map(
-                fn (Location $location): string => '`'.$location->file.'`',
-                array_values(array_filter($finding->locations, fn (Location $location): bool => $location->isFile())),
-            )).'.';
-        }
-
-        return $spec->guard?->reject($finding);
     }
 
     /** @return list<string> */
@@ -296,7 +259,7 @@ final class ReportLinter
         $path = $this->basePath.'/'.$location->file;
 
         if (! is_file($path)) {
-            return; // rejected in rejectionReason()
+            return; // FindingRejector drops the finding
         }
 
         if ($location->lastLine() !== null) {

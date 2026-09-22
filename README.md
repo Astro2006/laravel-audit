@@ -178,7 +178,7 @@ Other options:
 
 | Option | Effect |
 |---|---|
-| `--force` | Start the agents even if tests fail, without asking |
+| `--force` | Start the agents even if tests or browser tests fail, without asking |
 | `--preflight-only` | Run the tools only, no agents, no cost. Useful to check the setup |
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
 | `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
@@ -187,7 +187,7 @@ Other options:
 
 ### The test gate
 
-The agents audit code, not a broken environment. If tests fail, you see the first failures and are asked whether to continue. If almost every test fails for the same reason (a missing driver, a missing table), the harness says so explicitly. Configure the behaviour with `preflight.tests.gate` (`ask`, `abort`, `continue`). Without interaction, `ask` aborts unless you pass `--force`. With `--preflight-only` the gate never stops the run, because no agents follow.
+The agents audit code, not a broken environment. The gate comes once the whole preflight is done, right before the agents start. If tests or browser tests fail, you see the failures and are asked whether to continue. If almost every test fails for the same reason (a missing driver, a missing table), the harness says so explicitly. Configure the behaviour with `preflight.tests.gate` (`ask`, `abort`, `continue`). `--force` always continues without asking, whatever the setting. Without interaction, `ask` aborts unless you pass `--force`. With `--preflight-only` the gate never stops the run, because no agents follow.
 
 ### Exit codes
 
@@ -270,7 +270,7 @@ The details of an ID (the message, the failing tests, examples, usage) are in a 
 | Browser | Pest browser tests (Playwright) | tests, frontend |
 | PHPStan | Larastan with your `phpstan.neon` and baseline | tests |
 
-Light steps run in parallel. Heavy steps run one after another: tests, then the gate, then browser tests, then PHPStan.
+Light steps run in parallel. Heavy steps run one after another: tests, browser tests, then PHPStan. The test gate follows once every step is done.
 
 ### Browser tests
 

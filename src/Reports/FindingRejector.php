@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Astro2006\LaravelAudit\Reports;
+
+/**
+ * Findings the harness drops without a repair pass: a file that does not
+ * exist, a `missing:` file that does exist, a code quote that is not in the
+ * files, or a contradiction with the preflight facts.
+ */
+final class FindingRejector
+{
+    public function __construct(
+        private readonly string $basePath,
+        private readonly EvidenceChecker $evidence = new EvidenceChecker,
+    ) {}
+
+    /** Why the finding is dropped, or null when it stays. */
+    public function reason(Finding $finding, ReportSpec $spec): ?string
+    {
+        $contents = [];
+
+        foreach ($finding->locations as $location) {
+            if ($location->isMissing()) {
+                if (file_exists($this->basePath.'/'.$location->missing)) {
+                    return sprintf('`%s` is reported as missing, but it exists.', $location->missing);
+                }
+
+                continue;
+            }
+
+            if (! $location->isFile()) {
+                continue;
+            }
+
+            $path = $this->basePath.'/'.$location->file;
+
+            if (! is_file($path)) {
+                return sprintf('location `%s` does not exist in the project (possibly hallucinated).', $location->file);
+            }
+
+            $contents[] = (string) file_get_contents($path);
+        }
+
+        if ($this->evidence->matches($finding->evidence, $contents) === false) {
+            return 'the code in Evidence does not appear in '.implode(', ', array_map(
+                fn (Location $location): string => '`'.$location->file.'`',
+                array_values(array_filter($finding->locations, fn (Location $location): bool => $location->isFile())),
+            )).'.';
+        }
+
+        return $spec->guard?->reject($finding);
+    }
+}

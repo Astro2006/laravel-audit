@@ -10,7 +10,6 @@ use Astro2006\LaravelAudit\Actions\Audit\ReusePreflight;
 use Astro2006\LaravelAudit\Actions\Audit\RunAgents;
 use Astro2006\LaravelAudit\Actions\Audit\RunPreflight;
 use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Enums\AgentMode;
 use Astro2006\LaravelAudit\Enums\PreflightStep;

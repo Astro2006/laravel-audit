@@ -1,0 +1,194 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Astro2006\LaravelAudit\Run;
+
+use Astro2006\LaravelAudit\Agents\AgentRequest;
+use Astro2006\LaravelAudit\Agents\ResultsAgent;
+use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Audits\AuditTask;
+use Astro2006\LaravelAudit\Contracts\Audit;
+use Astro2006\LaravelAudit\Enums\Severity;
+use Astro2006\LaravelAudit\Prompts\PromptContext;
+use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
+use Astro2006\LaravelAudit\Reports\AuditAssembler;
+use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Reports\FindingEditor;
+use Astro2006\LaravelAudit\Reports\Location;
+use Astro2006\LaravelAudit\Reports\ReportParser;
+use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Astro2006\LaravelAudit\Reports\VerdictApplier;
+
+/**
+ * Builds the agent request of a task, a verify job or the results job from
+ * what the jobs before it produced, and keeps each prompt in the logs.
+ */
+final class TaskRequests
+{
+    /** @param list<string> $extraDirectories */
+    public function __construct(
+        private readonly PromptContext $context,
+        private readonly ?string $overridePath,
+        private readonly AuditRun $run,
+        private readonly string $workingDirectory,
+        private readonly ?string $configFile,
+        private readonly array $extraDirectories,
+        private readonly Severity $verifyMinSeverity,
+        private readonly AuditAssembler $assembler,
+        private readonly ReportParser $parser,
+        private readonly FindingEditor $editor,
+        private readonly VerdictApplier $verdicts,
+    ) {}
+
+    /**
+     * @param  list<AuditTask>  $tasks  every task of the audit
+     * @param  array<string, string>  $skipped  task key => why it was skipped
+     * @param  array<string, TaskOutcome>  $finished
+     */
+    public function task(Audit $audit, AuditTask $task, array $tasks, array $skipped, array $finished): AgentRequest
+    {
+        if ($task->isSummary()) {
+            $prompt = $this->summaryPrompt($audit, $task, $tasks, $skipped, $finished);
+        } else {
+            [$sections, $missing] = $this->dependencyContext($task, $tasks, $finished);
+            $prompt = $audit->renderTask($task, $this->context, $sections, $missing);
+        }
+
+        return $this->request($task->key(), $prompt);
+    }
+
+    /**
+     * The verify prompt with the task's findings at or above the minimum
+     * severity that no preflight fact backs; null when there is nothing to
+     * verify.
+     *
+     * @param  list<RequiredFinding>  $required
+     * @param  array<string, TaskOutcome>  $finished
+     */
+    public function verify(Audit $audit, AuditTask $task, array $required, array $finished): ?AgentRequest
+    {
+        $outcome = $finished[$task->key()] ?? null;
+
+        if ($outcome === null || ! $outcome->completed() || $outcome->body === null) {
+            return null;
+        }
+
+        // Findings that cover a preflight fact (advisory, failing test, …) are facts, not claims.
+        $ids = array_map(
+            fn (Finding $finding): string => $finding->id,
+            array_filter($outcome->findings, fn (Finding $finding): bool => $finding->severity->rank() >= $this->verifyMinSeverity->rank()
+                && array_filter($required, fn (RequiredFinding $requirement): bool => $requirement->isCoveredBy([$finding])) === []),
+        );
+
+        if ($ids === []) {
+            return null;
+        }
+
+        return $this->request(
+            $task->key().TaskOutcome::VERIFY_SUFFIX,
+            $audit->renderVerify($task, $this->context, $this->editor->blocks($outcome->body, array_values($ids))),
+        );
+    }
+
+    /**
+     * @param  array<string, array{Audit, list<AuditTask>}>  $audits  audit key => audit and its tasks
+     * @param  array<string, string>  $skipped
+     * @param  array<string, TaskOutcome>  $finished
+     */
+    public function results(array $audits, array $skipped, array $finished): AgentRequest
+    {
+        $digests = [];
+
+        foreach ($audits as [$audit, $tasks]) {
+            $report = $this->assembler->assemble($audit, $tasks, $this->verdicts->apply($finished), skipped: $skipped);
+            $parsed = $this->parser->parse($report->body);
+
+            $counts = [];
+
+            foreach ($parsed->findings as $finding) {
+                $severity = $finding->field('severity') ?? 'unknown';
+                $counts[$severity] = ($counts[$severity] ?? 0) + 1;
+            }
+
+            $digests[] = sprintf(
+                "### %s (%s)\n\n%s\n\n%d findings (%s).",
+                $audit->title(),
+                $audit->idPrefix(),
+                $parsed->summary() ?: 'No summary.',
+                count($parsed->findings),
+                $counts === [] ? 'none' : implode(', ', array_map(fn (string $severity, int $count): string => "{$count} {$severity}", array_keys($counts), $counts)),
+            );
+        }
+
+        return $this->request(AuditTasks::RESULTS_KEY, (new ResultsAgent($this->overridePath))->render($this->context, $digests));
+    }
+
+    private function request(string $key, RenderedPrompt $prompt): AgentRequest
+    {
+        file_put_contents($this->run->logsDir().'/'.$key.'.prompt.md', $prompt->text);
+
+        return new AgentRequest($key, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories);
+    }
+
+    /**
+     * The sections of the tasks this one depends on, and the dependencies
+     * that did not complete.
+     *
+     * @param  list<AuditTask>  $tasks
+     * @param  array<string, TaskOutcome>  $finished
+     * @return array{array<string, string>, list<string>}
+     */
+    private function dependencyContext(AuditTask $task, array $tasks, array $finished): array
+    {
+        $sections = [];
+        $missing = [];
+
+        foreach ($tasks as $dependency) {
+            if (! in_array($dependency->name, $task->dependsOn, true)) {
+                continue;
+            }
+
+            $outcome = $finished[$dependency->key()] ?? null;
+
+            if ($outcome === null || ! $outcome->completed() || $outcome->body === null) {
+                $missing[] = $dependency->key();
+
+                continue;
+            }
+
+            $report = $this->parser->parse($outcome->body);
+
+            foreach ($dependency->sections as $title) {
+                $sections[$title] = (string) $report->section($title);
+            }
+        }
+
+        return [$sections, $missing];
+    }
+
+    /**
+     * @param  list<AuditTask>  $tasks
+     * @param  array<string, string>  $skipped
+     * @param  array<string, TaskOutcome>  $finished
+     */
+    private function summaryPrompt(Audit $audit, AuditTask $task, array $tasks, array $skipped, array $finished): RenderedPrompt
+    {
+        $report = $this->assembler->assemble($audit, $tasks, $this->verdicts->apply($finished), skipped: $skipped);
+        $lines = [];
+
+        foreach ($this->parser->parse($report->body)->findings as $finding) {
+            $lines[] = sprintf(
+                '- %s · %s · %s · `%s` — %s (%s)',
+                $finding->id,
+                $finding->field('severity') ?? '?',
+                $finding->field('confidence') ?? '?',
+                $finding->field('check') ?? '?',
+                $finding->title,
+                implode(', ', array_map(fn (Location $location): string => (string) $location, Location::parseList((string) $finding->field('locations')))),
+            );
+        }
+
+        return $audit->renderSummary($task, $this->context, implode("\n", $lines), $report->failedTasks);
+    }
+}

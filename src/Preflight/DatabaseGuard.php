@@ -85,7 +85,7 @@ final class DatabaseGuard
             ? $this->fileEnv('.env.testing')
             : $this->fileEnv('.env');
 
-        return [...$env, ...$this->project->phpunitEnv(), ...$this->inherited, ...$this->project->phpunitEnv(forcedOnly: true)];
+        return [...$env, ...$this->project->phpunit()->env(), ...$this->inherited, ...$this->project->phpunit()->env(forcedOnly: true)];
     }
 
     /** @return array<string, string> */

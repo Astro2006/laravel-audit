@@ -111,8 +111,8 @@ return [
     | Per audit: whether it runs and which preflight steps it needs. Only the
     | steps listed here run; an audit without steps gets no preflight data.
     | Steps: about, stack, loc, pint, routes, translations, composer, tests,
-    | browser, phpstan. The tests step also feeds the gate: without it,
-    | agents run without checking the test suite first.
+    | browser, phpstan. The tests and browser steps feed the test gate:
+    | without them, agents run without checking the test suites first.
     */
 
     'audits' => [

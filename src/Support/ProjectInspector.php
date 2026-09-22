@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
 use Astro2006\LaravelAudit\Enums\PackageManager;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Process;
-use SimpleXMLElement;
 use Symfony\Component\Process\ExecutableFinder;
 
 /**
@@ -31,7 +30,7 @@ class ProjectInspector
     /** @var Collection<string, string>|null package => version */
     private ?Collection $locked = null;
 
-    private SimpleXMLElement|false|null $phpunitXml = null;
+    private ?PhpunitConfig $phpunit = null;
 
     private string|false|null $herdCoverageIni = null;
 
@@ -162,54 +161,9 @@ class ProjectInspector
         return $this->usesPest() || $this->hasParatest();
     }
 
-    public function phpunitConfigPath(): ?string
+    public function phpunit(): PhpunitConfig
     {
-        foreach (['phpunit.xml', 'phpunit.xml.dist', 'phpunit.dist.xml'] as $file) {
-            if (is_file($this->path($file))) {
-                return $this->path($file);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Test suite names from the PHPUnit config.
-     *
-     * @return list<string>
-     */
-    public function testSuites(): array
-    {
-        $xml = $this->phpunitXml();
-
-        if ($xml === null) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map(
-            fn (SimpleXMLElement $suite): string => Xml::attr($suite, 'name'),
-            Xml::xpath($xml, '//testsuite'),
-        )));
-    }
-
-    /**
-     * <env> and <server> values from the PHPUnit config.
-     *
-     * @return array<string, string>
-     */
-    public function phpunitEnv(bool $forcedOnly = false): array
-    {
-        $xml = $this->phpunitXml();
-
-        if ($xml === null) {
-            return [];
-        }
-
-        return (new Collection(Xml::xpath($xml, '//php/env | //php/server')))
-            ->filter(fn (SimpleXMLElement $node): bool => Xml::attr($node, 'name') !== '')
-            ->filter(fn (SimpleXMLElement $node): bool => ! $forcedOnly || in_array(strtolower(Xml::attr($node, 'force')), ['true', '1'], true))
-            ->mapWithKeys(fn (SimpleXMLElement $node): array => [Xml::attr($node, 'name') => Xml::attr($node, 'value')])
-            ->all();
+        return $this->phpunit ??= new PhpunitConfig($this);
     }
 
     public function coverageDriver(): ?string
@@ -302,8 +256,8 @@ class ProjectInspector
     {
         $path = trim($path, '/');
 
-        if (in_array($suite, $this->testSuites(), true)) {
-            return new BrowserTestLocation('suite', $suite, $this->suiteDirectory($suite) ?? $path);
+        if (in_array($suite, $this->phpunit()->testSuites(), true)) {
+            return new BrowserTestLocation('suite', $suite, $this->phpunit()->suiteDirectory($suite) ?? $path);
         }
 
         if (is_dir($this->path($path)) && $this->phpFiles($path) !== []) {
@@ -356,30 +310,5 @@ class ProjectInspector
         sort($files);
 
         return $files;
-    }
-
-    private function suiteDirectory(string $suite): ?string
-    {
-        $xml = $this->phpunitXml();
-
-        foreach ($xml === null ? [] : Xml::xpath($xml, '//testsuite') as $node) {
-            $directory = Xml::child($node, 'directory');
-
-            if (Xml::attr($node, 'name') === $suite && $directory !== null) {
-                return trim((string) $directory, './');
-            }
-        }
-
-        return null;
-    }
-
-    private function phpunitXml(): ?SimpleXMLElement
-    {
-        if ($this->phpunitXml === null) {
-            $path = $this->phpunitConfigPath();
-            $this->phpunitXml = ($path === null ? null : Xml::load($path)) ?? false;
-        }
-
-        return $this->phpunitXml ?: null;
     }
 }
