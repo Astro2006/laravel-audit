@@ -348,3 +348,8 @@ it('never points task prompts at the raw preflight JSON files', function () {
             ->not->toContain('summary.json');
     }
 });
+
+it('shows the task its own finding limit', function () {
+    expect((new BackendAgent)->renderTask(backendTask('injection'), promptContext(), maxFindings: 11)->text)->toContain('At most 11 findings.')
+        ->and((new BackendAgent)->renderTask(backendTask('injection'), promptContext())->text)->toContain('At most 8 findings.');
+});

@@ -69,8 +69,9 @@ interface Audit
     /**
      * @param  array<string, string>  $dependencyContext  section title => content, from the tasks this one depends on
      * @param  list<string>  $missingDependencies  keys of dependencies that did not complete
+     * @param  int|null  $maxFindings  the task's own limit, when it differs from the run's
      */
-    public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = []): RenderedPrompt;
+    public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = [], ?int $maxFindings = null): RenderedPrompt;
 
     /**
      * @param  string  $findings  the merged findings as a compact list

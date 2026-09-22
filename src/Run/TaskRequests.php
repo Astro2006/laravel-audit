@@ -44,14 +44,15 @@ final class TaskRequests
      * @param  list<AuditTask>  $tasks  every task of the audit
      * @param  array<string, string>  $skipped  task key => why it was skipped
      * @param  array<string, TaskOutcome>  $finished
+     * @param  int|null  $maxFindings  the limit the task's report is validated against
      */
-    public function task(Audit $audit, AuditTask $task, array $tasks, array $skipped, array $finished): AgentRequest
+    public function task(Audit $audit, AuditTask $task, array $tasks, array $skipped, array $finished, ?int $maxFindings = null): AgentRequest
     {
         if ($task->isSummary()) {
             $prompt = $this->summaryPrompt($audit, $task, $tasks, $skipped, $finished);
         } else {
             [$sections, $missing] = $this->dependencyContext($task, $tasks, $finished);
-            $prompt = $audit->renderTask($task, $this->context, $sections, $missing);
+            $prompt = $audit->renderTask($task, $this->context, $sections, $missing, $maxFindings);
         }
 
         return $this->request($task->key(), $prompt);

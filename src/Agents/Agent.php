@@ -73,11 +73,13 @@ abstract class Agent implements Audit
     /**
      * @param  array<string, string>  $dependencyContext  section title => content, from the tasks this one depends on
      * @param  list<string>  $missingDependencies  keys of dependencies that did not complete
+     * @param  int|null  $maxFindings  the task's own limit when it differs from the run's (tasks with many required findings)
      */
-    public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = []): RenderedPrompt
+    public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = [], ?int $maxFindings = null): RenderedPrompt
     {
         $text = strtr($this->templates->get(self::BASE_TEMPLATE)."\n\n".$this->templates->get($task->promptFile()), [
             ...TaskPlaceholders::for($this, $task, $context),
+            ...($maxFindings === null ? [] : ['{{max_findings}}' => (string) $maxFindings]),
             '{{snapshot}}' => TaskPlaceholders::snapshots($task, $context),
             '{{dependency_context}}' => TaskPlaceholders::dependencyContext($dependencyContext, $missingDependencies),
             '{{sections_template}}' => implode('', array_map(fn (string $title): string => "## {$title}\n<see your task instructions>\n\n", $task->sections)),

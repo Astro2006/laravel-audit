@@ -86,13 +86,14 @@ final class JobPlanner
     private function taskJob(AuditType $type, PlannedAudit $planned, AuditTask $task, array $extraDependencies, array &$skipped): AgentJob
     {
         $required = $planned->requiredFor($task);
+        $maxFindings = max($this->settings->maxFindingsPerTask, count($required) + 2);
 
         return new AgentJob(
             key: $task->key(),
             audit: $type,
-            spec: ReportSpec::forTask($planned->audit, $task, max($this->settings->maxFindingsPerTask, count($required) + 2), $planned->guard),
-            request: function (array $finished) use ($planned, $task, &$skipped): AgentRequest {
-                return $this->requests->task($planned->audit, $task, $planned->tasks, $skipped, $finished);
+            spec: ReportSpec::forTask($planned->audit, $task, $maxFindings, $planned->guard),
+            request: function (array $finished) use ($planned, $task, $maxFindings, &$skipped): AgentRequest {
+                return $this->requests->task($planned->audit, $task, $planned->tasks, $skipped, $finished, $maxFindings);
             },
             promptHash: $planned->audit->taskHash($task),
             required: $required,
