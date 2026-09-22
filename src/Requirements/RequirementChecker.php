@@ -171,7 +171,9 @@ final class RequirementChecker
         $checks = [];
 
         foreach ($this->config->legacyKeys() as $old => $new) {
-            $checks[] = Check::warning($this->messages->get('requirements.legacy_key', ['old' => $old, 'new' => $new]));
+            $checks[] = Check::warning($new === null
+                ? $this->messages->get('requirements.legacy_key_removed', ['old' => $old])
+                : $this->messages->get('requirements.legacy_key', ['old' => $old, 'new' => $new]));
         }
 
         return $checks;

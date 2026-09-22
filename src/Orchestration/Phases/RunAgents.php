@@ -85,7 +85,7 @@ final class RunAgents
         $snapshots = SnapshotWriter::standard($this->config->int('snapshot_rows'))->write($summary, $project->relative($run->preflightDir()));
         $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $context->console->messages->locale, McpServer::forProject($project) !== null, $driver->toolsNote(), $snapshots);
         $overridePath = PromptTemplates::publishedPath();
-        $requests = new TaskRequests($prompt, $overridePath, $run, $project->basePath, $driverConfig, $extra, $settings->verifyMinSeverity);
+        $requests = new TaskRequests($prompt, $overridePath, $run, $project->basePath, $driverConfig, $extra);
 
         return (new JobPlanner($requests, $settings, $overridePath))->plan($context->plan->selection->audits, $summary, $prompt, $project);
     }

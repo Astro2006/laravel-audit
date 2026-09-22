@@ -10,6 +10,16 @@ enum Confidence: string
     case Likely = 'likely';
     case Suspected = 'suspected';
 
+    /** How sure the agent is; higher is surer. */
+    public function rank(): int
+    {
+        return match ($this) {
+            self::Confirmed => 2,
+            self::Likely => 1,
+            self::Suspected => 0,
+        };
+    }
+
     /** @return list<string> */
     public static function values(): array
     {

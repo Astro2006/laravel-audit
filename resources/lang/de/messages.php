@@ -22,6 +22,7 @@ return [
         'composer_missing' => 'Composer nicht gefunden — das Dependencies-Audit braucht es.',
         'output' => 'Output-Ordner :path',
         'legacy_key' => 'config/audit.php setzt :old, das nicht mehr gelesen wird. Nutze stattdessen :new.',
+        'legacy_key_removed' => 'config/audit.php setzt :old, das nicht mehr gelesen wird. Du kannst es entfernen.',
         'output_not_writable' => 'Output-Ordner :path ist nicht beschreibbar.',
         'boost' => 'Boost-MCP (:count Tools freigegeben)',
         'boost_missing' => 'Laravel Boost nicht installiert — Agents arbeiten nur mit den Dateien → php artisan audit:install',

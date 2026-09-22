@@ -18,7 +18,6 @@ final readonly class AuditConfig
     /** Settings that rarely change. Any of them can still be set in config/audit.php. */
     public const array DEFAULTS = [
         'agent' => [
-            'verify' => ['min_severity' => 'medium'],
             'drivers' => [
                 'codex' => ['config' => []],   // extra -c overrides, e.g. 'model_provider="ollama"'
             ],
@@ -90,8 +89,9 @@ final readonly class AuditConfig
         ],
     ];
 
-    /** Keys that are no longer read => the key that replaces them. */
+    /** Keys that are no longer read => the key that replaces them, or null when nothing does. */
     public const array LEGACY_KEYS = [
+        'agent.verify.min_severity' => null,
         'agent.binary' => 'agent.drivers.claude_code.binary',
         'agent.effort' => 'agent.drivers.claude_code.effort',
         'agent.max_budget_usd' => 'agent.drivers.claude_code.max_budget_usd',
@@ -102,7 +102,7 @@ final readonly class AuditConfig
 
     /**
      * @param  array<string, mixed>  $values  the merged config
-     * @param  array<string, string>  $legacy  legacy key => replacement, for keys the project still sets
+     * @param  array<string, string|null>  $legacy  legacy key => replacement, for keys the project still sets
      */
     private function __construct(
         private array $values,
@@ -117,8 +117,8 @@ final readonly class AuditConfig
 
         $legacy = array_filter(
             self::LEGACY_KEYS,
-            fn (string $new, string $old): bool => Arr::get($config, $old) !== null,
-            ARRAY_FILTER_USE_BOTH,
+            fn (string $old): bool => Arr::get($config, $old) !== null,
+            ARRAY_FILTER_USE_KEY,
         );
 
         return new self($values, $legacy);
@@ -169,7 +169,7 @@ final readonly class AuditConfig
         return Read::array($this->values, $key);
     }
 
-    /** @return array<string, string> legacy key => the key that replaces it */
+    /** @return array<string, string|null> legacy key => the key that replaces it, null = none */
     public function legacyKeys(): array
     {
         return $this->legacy;

@@ -9,7 +9,6 @@ use Astro2006\LaravelAudit\Agents\ResultsAgent;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Contracts\Audit;
-use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
@@ -19,6 +18,7 @@ use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportParser;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Astro2006\LaravelAudit\Reports\VerdictApplier;
+use Astro2006\LaravelAudit\Reports\VerifyPolicy;
 
 /**
  * Builds the agent request of a task, a verify job or the results job from
@@ -34,7 +34,6 @@ final class TaskRequests
         private readonly string $workingDirectory,
         private readonly ?string $configFile,
         private readonly array $extraDirectories,
-        private readonly Severity $verifyMinSeverity = Severity::Medium,
         private readonly AuditAssembler $assembler = new AuditAssembler,
         private readonly ReportParser $parser = new ReportParser,
         private readonly FindingEditor $editor = new FindingEditor,
@@ -59,9 +58,8 @@ final class TaskRequests
     }
 
     /**
-     * The verify prompt with the task's findings at or above the minimum
-     * severity that no preflight fact backs; null when there is nothing to
-     * verify.
+     * The verify prompt with the task's findings the verify policy picks and
+     * no preflight fact backs; null when there is nothing to verify.
      *
      * @param  list<RequiredFinding>  $required
      * @param  array<string, TaskOutcome>  $finished
@@ -77,7 +75,7 @@ final class TaskRequests
         // Findings that cover a preflight fact (advisory, failing test, …) are facts, not claims.
         $ids = array_map(
             fn (Finding $finding): string => $finding->id,
-            array_filter($outcome->findings, fn (Finding $finding): bool => $finding->severity->rank() >= $this->verifyMinSeverity->rank()
+            array_filter($outcome->findings, fn (Finding $finding): bool => VerifyPolicy::needsVerify($finding)
                 && array_filter($required, fn (RequiredFinding $requirement): bool => $requirement->isCoveredBy([$finding])) === []),
         );
 

@@ -215,7 +215,7 @@ php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
 
 ### Tasks
 
-Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings of medium severity and above (`keep`, `downgrade` or `drop`); findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
+Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 2–7 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings (`keep`, `downgrade` or `drop`). Which ones depends on severity and confidence: critical findings always, high ones unless confirmed, medium ones only when suspected, low and info never. Findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
@@ -401,7 +401,6 @@ return [
 | Key | Default |
 |---|---|
 | `audits.<audit>.preflight` | the preflight steps each audit needs; without `tests` there is no test gate |
-| `agent.verify.min_severity` | `medium` |
 | `agent.boost_tools` | the read-only Boost tools |
 | `agent.drivers.codex.config` | `[]`, extra `-c` overrides |
 | `preflight.allow_shared_database` | `false`, only if you know what you do |
@@ -425,6 +424,7 @@ Lists replace the default, they are not merged: `'exclude_paths' => ['vendor']` 
 | `agent.effort` | `agent.drivers.claude_code.effort` |
 | `agent.max_budget_usd` | `agent.drivers.claude_code.max_budget_usd` |
 | `agent.drivers.<driver>.model` | `agent.model` |
+| `agent.verify.min_severity` | none: severity and confidence decide together which findings are verified |
 
 ### Customizing prompts
 

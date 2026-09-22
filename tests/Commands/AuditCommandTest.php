@@ -324,9 +324,10 @@ it('rejects unknown agents', function () {
         ->assertExitCode(3);
 });
 
+/** Medium and suspected, so the verify pass checks it. */
 function hygieneFinding(string $id, string $title, string $constraint): string
 {
-    return "### {$id} — {$title}\n\n| Field | Value |\n|---|---|\n| Severity | medium |\n| Confidence | confirmed |\n| Category | dependency |\n| Check | loose-constraint |\n| Effort | S |\n| Locations | `composer.json:8` |\n\n**Evidence**\n```json\n{$constraint}\n```\n\n**Impact**\nAny version can be installed.\n\n**Recommendation**\nPin a range.\n\n---\n";
+    return "### {$id} — {$title}\n\n| Field | Value |\n|---|---|\n| Severity | medium |\n| Confidence | suspected |\n| Category | dependency |\n| Check | loose-constraint |\n| Effort | S |\n| Locations | `composer.json:8` |\n\n**Evidence**\n```json\n{$constraint}\n```\n\n**Impact**\nAny version can be installed.\n\n**Recommendation**\nPin a range.\n\n---\n";
 }
 
 it('writes the summary itself and applies the verify pass', function () {

@@ -13,7 +13,6 @@ it('fills every key a published config leaves out from the package defaults', fu
         ->and($config->int('agent.timeout'))->toBe(900)
         ->and($config->string('agent.mode'))->toBe('single')
         ->and($config->bool('agent.verify.enabled'))->toBeTrue()
-        ->and($config->string('agent.verify.min_severity'))->toBe('medium')
         ->and($config->string('preflight.tests.gate'))->toBe('abort')
         ->and($config->bool('preflight.tests.coverage'))->toBeTrue()
         ->and($config->int('preflight.tests.timeout'))->toBe(1800)
@@ -55,4 +54,8 @@ it('treats empty strings as not set', function () {
 
     expect($config->nullableString('agent.model'))->toBeNull()
         ->and($config->nullableString('preflight.phpstan.level'))->toBeNull();
+});
+
+it('names removed keys without a replacement', function () {
+    expect(AuditConfig::load(['agent' => ['verify' => ['min_severity' => 'high']]])->legacyKeys())->toBe(['agent.verify.min_severity' => null]);
 });
