@@ -23,6 +23,30 @@ final readonly class McpServer
         public array $config,
     ) {}
 
+    /**
+     * The Laravel Boost MCP server, if Boost is installed: the entry from
+     * .mcp.json when there is one (it may use Sail or an absolute PHP), else
+     * the default `php artisan boost:mcp`. Independent of the agent CLI.
+     */
+    public static function forProject(ProjectInspector $project): ?self
+    {
+        if (! $project->isInstalled('laravel/boost')) {
+            return null;
+        }
+
+        foreach (Read::array(Json::readFile($project->path('.mcp.json')), 'mcpServers') as $name => $config) {
+            if (! is_array($config)) {
+                continue;
+            }
+
+            if ($name === McpServer::NAME || str_contains(implode(' ', Read::strings($config, 'args')), 'boost:mcp')) {
+                return new self((string) $name, $config);
+            }
+        }
+
+        return self::default();
+    }
+
     /** The default entry Boost itself writes: php artisan boost:mcp. */
     public static function default(): self
     {

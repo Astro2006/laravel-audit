@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 
@@ -89,7 +90,7 @@ final class DriverRegistry
     private function make(string $name, ?string $model): AgentDriver
     {
         $model = $this->filled($model) ?? $this->config->nullableString('agent.model');
-        $boost = $this->project->boostMcpServer();
+        $boost = McpServer::forProject($this->project);
         $boostTools = $this->config->strings('agent.boost_tools');
         $deniedFiles = DeniedFiles::resolve(
             $this->project->basePath,

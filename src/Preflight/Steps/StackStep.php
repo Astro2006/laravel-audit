@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Data\Steps\StackDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 
 final class StackStep implements Step
@@ -54,9 +55,9 @@ final class StackStep implements Step
                 $project->isInstalled('phpunit/phpunit') => 'phpunit',
                 default => 'none',
             },
-            pestVersion: $project->majorVersion('pestphp/pest'),
+            pestVersion: $project->composer()->majorVersion('pestphp/pest'),
             browserPlugin: $project->hasBrowserPlugin(),
-            boost: $project->boostMcpServer() !== null,
+            boost: McpServer::forProject($project) !== null,
             packageManager: $project->packageManager()->value,
         ));
     }

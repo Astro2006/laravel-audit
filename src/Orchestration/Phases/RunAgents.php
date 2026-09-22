@@ -20,6 +20,7 @@ use Astro2006\LaravelAudit\Run\TaskSettings;
 use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
+use Astro2006\LaravelAudit\Support\McpServer;
 
 /**
  * Runs the agent tasks of the selected audits on top of the preflight and
@@ -82,7 +83,7 @@ final class RunAgents
         $extra = str_starts_with($run->dir(), rtrim($project->basePath, '/').'/') ? [] : [$run->outputRoot];
         $driverConfig = $driver->writeConfig($run->logsDir(), $extra);
         $snapshots = SnapshotWriter::standard($this->config->int('snapshot_rows'))->write($summary, $project->relative($run->preflightDir()));
-        $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $context->console->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote(), $snapshots);
+        $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $context->console->messages->locale, McpServer::forProject($project) !== null, $driver->toolsNote(), $snapshots);
         $overridePath = PromptTemplates::publishedPath();
         $requests = new TaskRequests($prompt, $overridePath, $run, $project->basePath, $driverConfig, $extra, $settings->verifyMinSeverity);
 

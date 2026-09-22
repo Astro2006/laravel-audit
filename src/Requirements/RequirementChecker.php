@@ -12,6 +12,7 @@ use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Messages;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
@@ -53,7 +54,7 @@ final class RequirementChecker
         $checks[] = $this->outputDirectory();
 
         if ($agents) {
-            $checks[] = $this->project->boostMcpServer() !== null
+            $checks[] = McpServer::forProject($this->project) !== null
                 ? Check::ok($this->messages->get('requirements.boost', ['count' => count($this->config->strings('agent.boost_tools'))]))
                 : Check::info($this->messages->get('requirements.boost_missing'));
         }

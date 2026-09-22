@@ -70,7 +70,7 @@ final class DependencyFacts
      */
     public static function packagesNeedingWhy(array $audit, ProjectInspector $project): array
     {
-        $direct = $project->directPackages();
+        $direct = $project->composer()->directPackages();
         $packages = array_map('strtolower', [...Read::keys($audit, 'advisories'), ...Read::keys($audit, 'abandoned')]);
 
         return array_values(array_unique(array_filter(
@@ -86,7 +86,7 @@ final class DependencyFacts
      */
     private function advisories(ProjectInspector $project, array $audit, array $why): array
     {
-        $direct = new Collection($project->directPackages());
+        $direct = new Collection($project->composer()->directPackages());
         $whyLines = new Collection($why);
         $result = [];
 
@@ -96,7 +96,7 @@ final class DependencyFacts
             foreach (array_values(array_filter(is_array($advisories) ? $advisories : [], 'is_array')) as $advisory) {
                 $result[] = new Advisory(
                     package: $package,
-                    installed: $project->installedVersion($package),
+                    installed: $project->composer()->installedVersion($package),
                     advisory: Read::nullableString($advisory, 'advisoryId'),
                     cve: Read::nullableString($advisory, 'cve'),
                     title: Read::nullableString($advisory, 'title'),
@@ -220,7 +220,7 @@ final class DependencyFacts
      */
     private function licenses(ProjectInspector $project, array $licenses, array $allowlist): array
     {
-        $root = data_get($project->composerJson(), 'license');
+        $root = data_get($project->composer()->composerJson(), 'license');
         $rootLicense = match (true) {
             is_array($root) => implode(' OR ', array_map('strval', $root)),
             is_string($root) => $root,
@@ -248,7 +248,7 @@ final class DependencyFacts
     /** @return list<FlaggedConstraint> */
     private function constraints(ProjectInspector $project): array
     {
-        $composer = $project->composerJson();
+        $composer = $project->composer()->composerJson();
         $result = [];
 
         foreach (['require', 'require-dev'] as $section) {
@@ -272,7 +272,7 @@ final class DependencyFacts
     /** @return list<string> */
     private function composerConfig(ProjectInspector $project): array
     {
-        $composer = $project->composerJson();
+        $composer = $project->composer()->composerJson();
         $issues = [];
 
         if (Read::string($composer, 'minimum-stability', 'stable') === 'dev' && data_get($composer, 'prefer-stable') !== true) {

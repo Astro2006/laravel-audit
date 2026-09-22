@@ -68,7 +68,7 @@ final class InstallPlanner
     private function planBrowser(InstallPlan $plan): void
     {
         $project = $this->project;
-        $pestMajor = $project->majorVersion('pestphp/pest');
+        $pestMajor = $project->composer()->majorVersion('pestphp/pest');
         $pestPlanned = false;
 
         if (! $project->usesPest()) {

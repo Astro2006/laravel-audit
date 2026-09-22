@@ -89,7 +89,7 @@ final class DependenciesAgent extends Agent
     {
         $facts = $preflight->dependencyFacts();
 
-        return $facts === null ? null : new DependencyGuard($facts, $project->lockedPackages()->keys()->values()->all());
+        return $facts === null ? null : new DependencyGuard($facts, $project->composer()->lockedPackages()->keys()->values()->all());
     }
 
     public function requiredFindings(PreflightSummary $preflight): array

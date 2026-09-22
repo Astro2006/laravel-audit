@@ -94,7 +94,7 @@ final class ComposerStep implements Step
         $context->writeJson(DependenciesAgent::FACTS_FILE, $facts);
 
         return StepResult::ok($this->step(), new ComposerDTO(
-            direct: count($project->directPackages()),
+            direct: count($project->composer()->directPackages()),
             advisories: count($facts->advisories),
             advisoryPackages: count($facts->advisoryPackages()),
             abandoned: count($facts->abandoned),

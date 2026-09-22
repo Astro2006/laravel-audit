@@ -97,7 +97,7 @@ it('writes an mcp config with only the boost server', function () {
         'github' => ['command' => 'gh-mcp'],
     ]]));
 
-    $path = (new ClaudeCodeDriver(boost: (new ProjectInspector($dir))->boostMcpServer()))->writeConfig($dir);
+    $path = (new ClaudeCodeDriver(boost: McpServer::forProject(new ProjectInspector($dir))))->writeConfig($dir);
 
     expect(json_decode(file_get_contents($path), true))->toBe(['mcpServers' => ['laravel-boost' => ['command' => 'php', 'args' => ['artisan', 'boost:mcp']]]])
         ->and((new ClaudeCodeDriver)->writeConfig($dir))->toBeNull();
@@ -107,6 +107,6 @@ it('falls back to the default boost command without an .mcp.json entry', functio
     $dir = tempDir('boost');
     file_put_contents($dir.'/composer.lock', json_encode(['packages-dev' => [['name' => 'laravel/boost', 'version' => '2.8.0']]]));
 
-    expect((new ProjectInspector($dir))->boostMcpServer())->toEqual(McpServer::default())
-        ->and((new ProjectInspector(tempDir('noboost')))->boostMcpServer())->toBeNull();
+    expect(McpServer::forProject(new ProjectInspector($dir)))->toEqual(McpServer::default())
+        ->and(McpServer::forProject(new ProjectInspector(tempDir('noboost'))))->toBeNull();
 });

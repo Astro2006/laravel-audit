@@ -46,12 +46,12 @@ final class UsageMapBuilder
 
     public function build(): UsageMap
     {
-        $installed = $this->project->installedPackages();
+        $installed = $this->project->composer()->installedPackages();
         $this->indexNamespaces($installed);
 
         $references = new Collection($this->references());
-        $direct = $this->project->directPackages();
-        $dontDiscover = array_map('strtolower', Read::strings($this->project->composerJson(), 'extra.laravel.dont-discover'));
+        $direct = $this->project->composer()->directPackages();
+        $dontDiscover = array_map('strtolower', Read::strings($this->project->composer()->composerJson(), 'extra.laravel.dont-discover'));
         $scripts = $this->scriptText();
 
         $packages = [];
@@ -259,7 +259,7 @@ final class UsageMapBuilder
 
     private function scriptText(): string
     {
-        $text = json_encode(Read::array($this->project->composerJson(), 'scripts')).json_encode(Read::array($this->project->packageJson(), 'scripts'));
+        $text = json_encode(Read::array($this->project->composer()->composerJson(), 'scripts')).json_encode(Read::array($this->project->packageJson(), 'scripts'));
 
         foreach (glob($this->project->path('.github/workflows').'/*.{yml,yaml}', GLOB_BRACE) ?: [] as $workflow) {
             $text .= (string) file_get_contents($workflow);
