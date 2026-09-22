@@ -144,7 +144,7 @@ it('validates checks against the audit it belongs to', function () {
 
 function taskFinding(string $check): string
 {
-    return "### BE-001 — Raw SQL with input\n\n| Field | Value |\n|---|---|\n| Severity | high |\n| Confidence | confirmed |\n| Category | security |\n| Check | {$check} |\n| Effort | S |\n| Locations | `app/Services/OrderService.php:7` |\n\n**Evidence**\nx\n\n**Impact**\ny\n\n**Recommendation**\nz\n\n---\n";
+    return "### BE-001 — Raw SQL with input\n\n| Field | Value |\n|---|---|\n| Severity | high |\n| Confidence | confirmed |\n| Category | security |\n| Check | {$check} |\n| Effort | S |\n| Locations | `app/Services/OrderService.php:7` |\n\n**Evidence**\n```php\n\$order->fill(\$data)->save();\n```\n\n**Impact**\ny\n\n**Recommendation**\nz\n\n---\n";
 }
 
 it('accepts a task report without summary and audit sections', function () {

@@ -40,6 +40,12 @@ final class FindingRejector
             $contents[] = $this->files[$path] ??= (string) file_get_contents($path);
         }
 
+        $pointsAtLines = array_filter($finding->locations, fn (Location $location): bool => $location->isFile() && $location->line !== null) !== [];
+
+        if ($pointsAtLines && EvidenceChecker::code($finding->evidence) === null && ! EvidenceChecker::isPreflightReference($finding->evidence)) {
+            return 'the location names lines, but the Evidence quotes no code from them and is no preflight reference.';
+        }
+
         if ($this->evidence->matches($finding->evidence, $contents) === false) {
             return 'the code in Evidence does not appear in '.implode(', ', array_map(
                 fn (Location $location): string => '`'.$location->file.'`',
