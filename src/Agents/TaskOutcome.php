@@ -8,6 +8,7 @@ use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Rejection;
+use Astro2006\LaravelAudit\Reports\ValidatedReport;
 
 /**
  * The result of one task: its validated report body and findings (with the
@@ -42,6 +43,38 @@ final readonly class TaskOutcome
         public float $finishedAt = 0.0,
         public array $rejected = [],
     ) {}
+
+    /** A job that ends without an agent call, e.g. nothing to verify. */
+    public static function immediate(AgentJob $job, AuditStatus $status, string $reason): self
+    {
+        $now = microtime(true);
+
+        return new self($job->key, $job->audit, $status, $reason, null, [], [], [], new Telemetry, false, $job->promptHash, null, $now, $now);
+    }
+
+    /** The outcome of a job's last attempt, with the telemetry of all its attempts. */
+    public static function fromAttempt(Attempt $attempt, AuditStatus $status, ?string $reason, ?ValidatedReport $report, Telemetry $telemetry, AgentResult $result): self
+    {
+        $job = $attempt->job;
+
+        return new self(
+            key: $job->key,
+            audit: $job->audit,
+            status: $status,
+            reason: $reason,
+            body: $report?->body,
+            findings: $report === null ? [] : $report->lint->findings,
+            errors: $report === null ? [] : $report->lint->errors,
+            warnings: $report === null ? [] : $report->lint->warnings,
+            telemetry: $telemetry,
+            repaired: $attempt->repair,
+            promptHash: $job->promptHash,
+            model: $result->model,
+            startedAt: $attempt->jobStartedAt,
+            finishedAt: microtime(true),
+            rejected: $report === null ? [] : $report->lint->rejected,
+        );
+    }
 
     /**
      * The outcome after the verify pass: dropped findings leave the body and
