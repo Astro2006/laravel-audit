@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Snapshots;
 
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Support\MarkdownTable;
 
 /**
  * What a snapshot shows in the prompt: a title, metrics and a table with one
@@ -77,20 +78,12 @@ final readonly class SnapshotManifest
     /** @return list<string> */
     public function table(?int $limit = null): array
     {
-        $lines = [
-            '| '.implode(' | ', ['ID', ...$this->columns]).' |',
-            '|'.str_repeat('---|', count($this->columns) + 1),
-        ];
+        $rows = [];
 
         foreach (array_slice($this->rows, 0, $limit) as $index => $row) {
-            $lines[] = '| '.implode(' | ', array_map(self::cell(...), [$this->id($index), ...$row->cells])).' |';
+            $rows[] = [$this->id($index), ...$row->cells];
         }
 
-        return $lines;
-    }
-
-    private static function cell(string $value): string
-    {
-        return str_replace(["\r", "\n", '|'], ['', ' ', '\\|'], trim($value));
+        return MarkdownTable::lines(['ID', ...$this->columns], $rows);
     }
 }

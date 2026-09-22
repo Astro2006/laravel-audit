@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
+use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\Telemetry;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Reports\Location;
+use Astro2006\LaravelAudit\Reports\Overlap;
+use Astro2006\LaravelAudit\Support\MarkdownTable;
 
 /**
  * run.md: frontmatter plus one table per part of the run, for people.
  */
 final class RunMarkdown
 {
+    private const array TELEMETRY_HEADERS = ['Turns', 'Input', 'Output', 'Cache read', 'Cost USD', 'Duration'];
+
     public function __construct(private readonly RunManifest $manifest) {}
 
     public function render(): string
@@ -69,82 +75,38 @@ final class RunMarkdown
     /** @return list<string> */
     private function preflightSection(): array
     {
-        $lines = ['## Preflight', '', '| Step | Status | Duration | Notes |', '|---|---|---|---|'];
+        $rows = array_map(fn (StepResult $result): array => [
+            $result->step->value,
+            $result->status->value,
+            round($result->duration, 2).'s',
+            $result->reason->value ?? $result->error ?? implode('; ', $result->warnings),
+        ], $this->manifest->steps->all());
 
-        foreach ($this->manifest->steps->all() as $result) {
-            $lines[] = sprintf(
-                '| %s | %s | %ss | %s |',
-                $result->step->value,
-                $result->status->value,
-                round($result->duration, 2),
-                $this->cell($this->notes($result)),
-            );
-        }
-
-        $lines[] = '';
-
-        return $lines;
-    }
-
-    private function notes(StepResult $result): string
-    {
-        return $result->reason->value ?? $result->error ?? implode('; ', $result->warnings);
+        return $this->section('Preflight', ['Step', 'Status', 'Duration', 'Notes'], $rows, always: true);
     }
 
     /** @return list<string> */
     private function metricsSection(): array
     {
-        if ($this->manifest->metrics === []) {
-            return [];
-        }
+        $rows = array_map(fn (Metric $metric): array => [$metric->label, $metric->value], $this->manifest->metrics);
 
-        $lines = ['## Metrics', '', '| Metric | Value |', '|---|---|'];
-
-        foreach ($this->manifest->metrics as $metric) {
-            $lines[] = sprintf('| %s | %s |', $metric->label, $metric->value);
-        }
-
-        $lines[] = '';
-
-        return $lines;
+        return $this->section('Metrics', ['Metric', 'Value'], $rows);
     }
 
     /** @return list<string> */
     private function auditsSection(): array
     {
-        if ($this->manifest->outcomes === []) {
-            return [];
-        }
+        $rows = array_map(fn (AuditOutcome $outcome): array => [
+            $outcome->audit->value,
+            $outcome->status->value.($outcome->reason === null ? '' : ': '.$outcome->reason),
+            count($outcome->findings),
+            implode('/', RunManifest::severityCounts($outcome->findings)),
+            $outcome->repaired ? 'yes' : 'no',
+            ...$this->telemetryCells($outcome->telemetry),
+            $outcome->promptHash,
+        ], $this->manifest->outcomes);
 
-        $lines = [
-            '## Audits',
-            '',
-            '| Audit | Status | Findings | C/H/M/L/I | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Prompt |',
-            '|---|---|---|---|---|---|---|---|---|---|---|---|',
-        ];
-
-        foreach ($this->manifest->outcomes as $outcome) {
-            $t = $outcome->telemetry;
-            $lines[] = sprintf(
-                '| %s | %s | %d | %s | %s | %d | %d | %d | %d | %s | %ss | %s |',
-                $outcome->audit->value,
-                $outcome->status->value.($outcome->reason === null ? '' : ': '.$this->cell($outcome->reason)),
-                count($outcome->findings),
-                implode('/', RunManifest::severityCounts($outcome->findings)),
-                $outcome->repaired ? 'yes' : 'no',
-                $t->turns,
-                $t->inputTokens,
-                $t->outputTokens,
-                $t->cacheReadTokens,
-                $t->costUsd === null ? '–' : number_format($t->costUsd, 2),
-                round($t->durationMs / 1000, 1),
-                $outcome->promptHash,
-            );
-        }
-
-        $lines[] = '';
-
-        return $lines;
+        return $this->section('Audits', ['Audit', 'Status', 'Findings', 'C/H/M/L/I', 'Repair', ...self::TELEMETRY_HEADERS, 'Prompt'], $rows);
     }
 
     /** @return list<string> */
@@ -154,33 +116,19 @@ final class RunMarkdown
 
         foreach ($this->manifest->outcomes as $outcome) {
             foreach ($outcome->tasks as $task) {
-                $t = $task->telemetry;
-                $rows[] = sprintf(
-                    '| %s | %s | %d | %s | %d | %d | %d | %d | %s | %ss | %ss | %s |',
+                $rows[] = [
                     $task->key,
-                    $task->status->value.($task->reason === null ? '' : ': '.$this->cell($task->reason)),
+                    $task->status->value.($task->reason === null ? '' : ': '.$task->reason),
                     count($task->findings),
                     $task->repaired ? 'yes' : 'no',
-                    $t->turns,
-                    $t->inputTokens,
-                    $t->outputTokens,
-                    $t->cacheReadTokens,
-                    $t->costUsd === null ? '–' : number_format($t->costUsd, 2),
-                    round($t->durationMs / 1000, 1),
-                    RunManifest::wallClock($task),
+                    ...$this->telemetryCells($task->telemetry),
+                    RunManifest::wallClock($task).'s',
                     $task->promptHash,
-                );
+                ];
             }
         }
 
-        return $rows === [] ? [] : [
-            '## Tasks',
-            '',
-            '| Task | Status | Findings | Repair | Turns | Input | Output | Cache read | Cost USD | Duration | Wall clock | Prompt |',
-            '|---|---|---|---|---|---|---|---|---|---|---|---|',
-            ...$rows,
-            '',
-        ];
+        return $this->section('Tasks', ['Task', 'Status', 'Findings', 'Repair', ...self::TELEMETRY_HEADERS, 'Wall clock', 'Prompt'], $rows);
     }
 
     /** @return list<string> */
@@ -190,26 +138,18 @@ final class RunMarkdown
 
         foreach ($this->manifest->outcomes as $outcome) {
             foreach ($outcome->findings as $finding) {
-                $rows[] = sprintf(
-                    '| %s | %s | %s | %s | %s | %s |',
+                $rows[] = [
                     $finding->key($outcome->audit->value),
                     $finding->id,
                     $finding->check,
                     $finding->severity->value,
                     $finding->confidence->value,
-                    $this->cell(implode(', ', array_map(fn (Location $location): string => '`'.$location.'`', $finding->locations))),
-                );
+                    implode(', ', array_map(fn (Location $location): string => '`'.$location.'`', $finding->locations)),
+                ];
             }
         }
 
-        return $rows === [] ? [] : [
-            '## Findings',
-            '',
-            '| Key | ID | Check | Severity | Confidence | Locations |',
-            '|---|---|---|---|---|---|',
-            ...$rows,
-            '',
-        ];
+        return $this->section('Findings', ['Key', 'ID', 'Check', 'Severity', 'Confidence', 'Locations'], $rows);
     }
 
     /** @return list<string> */
@@ -220,46 +160,24 @@ final class RunMarkdown
         foreach ($this->manifest->outcomes as $outcome) {
             foreach ($outcome->tasks as $task) {
                 foreach ($task->rejected as $rejection) {
-                    $rows[] = sprintf('| %s | %s | %s | %s |', $task->key, $rejection->id, $this->cell($rejection->title), $this->cell($rejection->reason));
+                    $rows[] = [$task->key, $rejection->id, $rejection->title, $rejection->reason];
                 }
             }
         }
 
-        return $rows === [] ? [] : [
-            '## Rejected findings',
-            '',
-            'Dropped by the harness; they are not in the audit reports. IDs are the task\'s own.',
-            '',
-            '| Task | ID | Title | Reason |',
-            '|---|---|---|---|',
-            ...$rows,
-            '',
-        ];
+        return $this->section('Rejected findings', ['Task', 'ID', 'Title', 'Reason'], $rows, intro: 'Dropped by the harness; they are not in the audit reports. IDs are the task\'s own.');
     }
 
     /** @return list<string> */
     private function duplicatesSection(): array
     {
-        if ($this->manifest->overlaps === []) {
-            return [];
-        }
+        $rows = array_map(fn (Overlap $overlap): array => [
+            $overlap->findingA->key($overlap->auditA).', '.$overlap->findingB->key($overlap->auditB),
+            $overlap->findingA->id.', '.$overlap->findingB->id,
+            '`'.$overlap->location.'`',
+        ], $this->manifest->overlaps);
 
-        $lines = ['## Possible duplicates', '', '| Keys | IDs | Shared location |', '|---|---|---|'];
-
-        foreach ($this->manifest->overlaps as $overlap) {
-            $lines[] = sprintf(
-                '| %s, %s | %s, %s | `%s` |',
-                $overlap->findingA->key($overlap->auditA),
-                $overlap->findingB->key($overlap->auditB),
-                $overlap->findingA->id,
-                $overlap->findingB->id,
-                $overlap->location,
-            );
-        }
-
-        $lines[] = '';
-
-        return $lines;
+        return $this->section('Possible duplicates', ['Keys', 'IDs', 'Shared location'], $rows);
     }
 
     /** @return list<string> */
@@ -283,8 +201,32 @@ final class RunMarkdown
         return $warnings === [] ? [] : ['## Linter warnings', '', ...$warnings, ''];
     }
 
-    private function cell(string $value): string
+    /**
+     * A level-2 section with one table; nothing when there are no rows.
+     *
+     * @param  list<string>  $headers
+     * @param  list<list<string|int|float>>  $rows
+     * @return list<string>
+     */
+    private function section(string $title, array $headers, array $rows, bool $always = false, ?string $intro = null): array
     {
-        return str_replace(["\n", '|'], [' ', '\\|'], $value);
+        if ($rows === [] && ! $always) {
+            return [];
+        }
+
+        return ['## '.$title, '', ...($intro === null ? [] : [$intro, '']), ...MarkdownTable::lines($headers, $rows), ''];
+    }
+
+    /** @return list<string|int> turns, tokens, cost and duration, in TELEMETRY_HEADERS order */
+    private function telemetryCells(Telemetry $telemetry): array
+    {
+        return [
+            $telemetry->turns,
+            $telemetry->inputTokens,
+            $telemetry->outputTokens,
+            $telemetry->cacheReadTokens,
+            $telemetry->costUsd === null ? '–' : number_format($telemetry->costUsd, 2),
+            round($telemetry->durationMs / 1000, 1).'s',
+        ];
     }
 }
