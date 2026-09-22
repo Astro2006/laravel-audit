@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Snapshots\ComposerSnapshot;
+use Astro2006\LaravelAudit\Snapshots\DatabaseSchemaSnapshot;
 use Astro2006\LaravelAudit\Snapshots\PhpstanSnapshot;
 use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Snapshots\StatusSnapshot;
@@ -124,4 +125,25 @@ it('lists the preflight steps and skips sources without data', function () {
         ->not->toContain('memory exhausted')
         ->and(file_get_contents($preflight->directory.'/details/status/S-03.md'))->toContain('memory exhausted')
         ->and((new SnapshotWriter([new StatusSnapshot]))->write(new PreflightSummary('run', GateDecision::NotRun, new StepResults), 'pre'))->toBe([]);
+});
+
+it('lists flagged tables first and keeps the columns in the detail file', function () {
+    $preflight = snapshotPreflight(['database/schema.json' => [
+        'migrations' => [
+            ['file' => 'database/migrations/2024_01_01_create_users.php', 'tables' => ['users'], 'flags' => []],
+            ['file' => 'database/migrations/2024_01_02_create_orders.php', 'tables' => ['orders'], 'flags' => ['no down()']],
+        ],
+        'tables' => [
+            'users' => ['migrations' => ['database/migrations/2024_01_01_create_users.php'], 'columns' => ['id' => 'id', 'email' => 'string'], 'indexed' => ['id'], 'foreign' => [], 'unique' => ['email'], 'flags' => []],
+            'orders' => ['migrations' => ['database/migrations/2024_01_02_create_orders.php'], 'columns' => ['id' => 'id', 'shop_id' => 'unsignedBigInteger'], 'indexed' => ['id'], 'foreign' => [], 'unique' => [], 'flags' => ['`shop_id` has no foreign key constraint']],
+        ],
+    ]]);
+
+    $prompt = (new SnapshotWriter([new DatabaseSchemaSnapshot]))->write($preflight, 'pre')['database-schema'];
+
+    expect($prompt)->toContain('### Database schema — 2 tables from 2 migrations (static read)')
+        ->toContain('`database/migrations/2024_01_02_create_orders.php`: no down()')
+        ->toContain('| Y-01 | `orders` | 2 | 1 | 0 | `shop_id` has no foreign key constraint |')
+        ->toContain('| Y-02 | `users` | 2 | 2 | 0 | – |')
+        ->and(file_get_contents($preflight->directory.'/details/database-schema/Y-01.md'))->toContain('`shop_id` unsignedBigInteger');
 });

@@ -36,11 +36,11 @@ final readonly class AuditConfig
         ],
 
         // The preflight steps each audit needs: about, stack, loc, pint,
-        // routes, translations, composer, tests, browser, phpstan.
+        // routes, translations, composer, migrations, tests, browser, phpstan.
         'audits' => [
             'tests' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'tests', 'browser', 'phpstan']],
             'frontend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'tests', 'browser']],
-            'backend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'pint', 'routes', 'tests', 'phpstan']],
+            'backend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'pint', 'routes', 'migrations', 'tests', 'phpstan']],
             'dependencies' => ['enabled' => true, 'preflight' => ['about', 'stack', 'composer']],
         ],
 

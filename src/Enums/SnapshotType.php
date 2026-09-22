@@ -53,7 +53,7 @@ enum SnapshotType: string
             self::Pint => 'X',
             self::Translations => 'L',
             self::Composer => 'D',
-            self::DatabaseSchema => 'S',
+            self::DatabaseSchema => 'Y',
         };
     }
 }

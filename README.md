@@ -229,7 +229,7 @@ Every audit owns a fixed list of checks, and every check belongs to exactly one 
 |---|---|---|---|
 | **Tests** | `TST` | Failing and skipped tests, untested critical paths, weak assertions, missing fakes, flakiness, factories, missing authorization/validation/security tests, browser test coverage, PHPStan bugs and typing debt, the PHPStan baseline, CI quality gates | JUnit and coverage summaries, route → test map, browser test results and screenshots, grouped PHPStan errors |
 | **Frontend** | `FE` | Route authorization, IDOR, state-changing GETs, throttling, CSRF exclusions, signed URLs, webhooks, XSS, Livewire and Inertia specifics, open redirects, uploads, client-side secrets, security headers, sessions and CORS, error states, UI consistency, design tokens, i18n, responsiveness, accessibility, asset performance, dead frontend code | Route facts (unauthenticated writes, missing throttling, debug routes, broken routes), translation diff, browser-visited URLs |
-| **Backend** | `BE` | `env()` outside config, validation, fat controllers, Eloquent hygiene, transactions, queues, scheduler, exceptions and logging, conventions, Pint rules, SQL/command injection, deserialization, SSRF, path traversal, authorization gaps, mass assignment, crypto, secrets, data exposure, tenant isolation, logic bugs, N+1 and query performance, indexes, caching, dead code | Pint rule groups, routes, stack |
+| **Backend** | `BE` | `env()` outside config, validation, fat controllers, Eloquent hygiene, transactions, queues, scheduler, exceptions and logging, conventions, Pint rules, SQL/command injection, deserialization, SSRF, path traversal, authorization gaps, mass assignment, crypto, secrets, data exposure, tenant isolation, logic bugs, N+1 and query performance, caching, dead code, the database schema (indexes, foreign keys, unique constraints, column types) and migration safety | Pint rule groups, routes, stack, the schema read from the migrations |
 | **Dependencies** | `DEP` | Security advisories, abandoned, unused, misplaced, shadow and redundant packages, outdated majors, unsupported runtimes, loose constraints, lock file sync, Composer config, autoload bloat, licenses | `composer audit/outdated/licenses/validate/why`, a usage map of which package is used where |
 
 Add project-specific rules per audit with `custom_checks`:
@@ -266,6 +266,7 @@ The details of an ID (the message, the failing tests, examples, usage) are in a 
 | Routes | `artisan route:list --json` | frontend, backend, tests |
 | Translations | `lang/` diff between locales | frontend |
 | Composer | `composer audit`, `outdated`, `licenses`, `validate`, `why` | dependencies |
+| Migrations | static read of `database/migrations`: tables, columns, indexes, foreign keys, risky migrations (no database needed) | backend |
 | Tests | `artisan test` with JUnit and Clover (parallel if paratest is installed) | tests |
 | Browser | Pest browser tests (Playwright) | tests, frontend |
 | PHPStan | Larastan with your `phpstan.neon` and baseline | tests |

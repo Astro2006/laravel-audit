@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
 use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Data\Steps\MigrationsDTO;
 use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Data\Steps\PintDTO;
 use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
@@ -125,6 +126,11 @@ final class StepResults
     public function translations(): ?TranslationsDTO
     {
         return $this->typed(PreflightStep::Translations, TranslationsDTO::class);
+    }
+
+    public function migrations(): ?MigrationsDTO
+    {
+        return $this->typed(PreflightStep::Migrations, MigrationsDTO::class);
     }
 
     public function composer(): ?ComposerDTO

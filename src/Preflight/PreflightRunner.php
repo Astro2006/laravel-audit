@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Preflight\Steps\AboutStep;
 use Astro2006\LaravelAudit\Preflight\Steps\BrowserStep;
 use Astro2006\LaravelAudit\Preflight\Steps\ComposerStep;
 use Astro2006\LaravelAudit\Preflight\Steps\LinesOfCodeStep;
+use Astro2006\LaravelAudit\Preflight\Steps\MigrationsStep;
 use Astro2006\LaravelAudit\Preflight\Steps\PhpstanStep;
 use Astro2006\LaravelAudit\Preflight\Steps\PintStep;
 use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
@@ -49,6 +50,7 @@ final class PreflightRunner
             new RoutesStep,
             new TranslationsStep($locale),
             new ComposerStep,
+            new MigrationsStep,
             new TestsStep($guard),
             new BrowserStep($guard),
             new PhpstanStep,

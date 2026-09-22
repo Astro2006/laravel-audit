@@ -8,6 +8,7 @@ use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
 use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Data\Steps\MigrationsDTO;
 use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Data\Steps\PintDTO;
 use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
@@ -77,6 +78,7 @@ final class StepFormatter
             $data instanceof TranslationsDTO => $data->locales === []
                 ? $m->get('details.translations_none')
                 : $m->get('details.translations', ['locales' => implode(', ', $data->locales), 'missing' => $data->missing]),
+            $data instanceof MigrationsDTO => $m->get('details.migrations', ['tables' => $data->tables, 'migrations' => $data->migrations, 'flagged' => $data->flagged]),
             $data instanceof ComposerDTO => $m->get('details.composer', ['advisories' => $data->advisories, 'abandoned' => $data->abandoned, 'outdated' => $data->outdatedMajor]),
             $data instanceof TestsDTO => $this->testDetail('tests', $data->failures(), $data->total)
                 .($data->coveragePct !== null ? ' · '.$m->get('details.coverage', ['pct' => $data->coveragePct]) : ''),
