@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit;
 
-use Astro2006\LaravelAudit\Agents\Agent;
 use Astro2006\LaravelAudit\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Commands\InstallCommand;
 use Astro2006\LaravelAudit\Contracts\Orchestrator;
 use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
+use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -39,7 +39,7 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
     {
         // Prompts can be published for tuning; published copies win.
         $this->publishes([
-            $this->package->basePath('/../resources/prompts') => resource_path(Agent::PUBLISHED_PROMPTS),
+            $this->package->basePath('/../resources/prompts') => resource_path(PromptTemplates::PUBLISHED_PATH),
         ], 'audit-prompts');
     }
 }

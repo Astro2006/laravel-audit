@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Orchestration\Phases;
 
-use Astro2006\LaravelAudit\Agents\Agent;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Console\AgentProgress;
@@ -12,6 +11,7 @@ use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Orchestration\RunContext;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Prompts\PromptContextBuilder;
+use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Run\AuditTasks;
 use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
@@ -84,7 +84,7 @@ final class RunAgents
             $context->plan->selection->audits,
             $summary,
             $prompt,
-            Agent::publishedPromptsPath(),
+            PromptTemplates::publishedPath(),
             $validator,
             $run,
             $project->basePath,

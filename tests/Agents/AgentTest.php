@@ -20,6 +20,7 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
+use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Support\Json;
@@ -312,8 +313,8 @@ it('names published prompts of the single-agent layout', function () {
     $override = tempDir('prompts');
     touch($override.'/backend.md');
 
-    expect(Agent::outdatedOverrides($override))->toBe(['backend.md'])
-        ->and(Agent::outdatedOverrides(null))->toBe([]);
+    expect(PromptTemplates::outdated($override))->toBe(['backend.md'])
+        ->and(PromptTemplates::outdated(null))->toBe([]);
 });
 
 it('puts the preflight status and the task\'s own snapshots into the prompt', function () {
