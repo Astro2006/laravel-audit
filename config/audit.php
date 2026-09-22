@@ -107,11 +107,31 @@ return [
     |--------------------------------------------------------------------------
     */
 
+    /*
+    | Per audit: whether it runs and which preflight steps it needs. Only the
+    | steps listed here run; an audit without steps gets no preflight data.
+    | Steps: about, stack, loc, pint, routes, translations, composer, tests,
+    | browser, phpstan. The tests step also feeds the gate: without it,
+    | agents run without checking the test suite first.
+    */
+
     'audits' => [
-        'tests' => true,
-        'frontend' => true,
-        'backend' => true,
-        'dependencies' => true,
+        'tests' => [
+            'enabled' => true,
+            'preflight' => ['about', 'stack', 'loc', 'routes', 'tests', 'browser', 'phpstan'],
+        ],
+        'frontend' => [
+            'enabled' => true,
+            'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'tests', 'browser'],
+        ],
+        'backend' => [
+            'enabled' => true,
+            'preflight' => ['about', 'stack', 'loc', 'pint', 'routes', 'tests', 'phpstan'],
+        ],
+        'dependencies' => [
+            'enabled' => true,
+            'preflight' => ['about', 'stack', 'loc', 'composer', 'tests'],
+        ],
     ],
 
     /*
@@ -128,8 +148,6 @@ return [
         // not the app database. Set to true only if you know what you do.
         'allow_shared_database' => false,
 
-        'pint' => true,
-
         'tests' => [
             'command' => null,      // null = php artisan test with JUnit (+ Clover)
             'parallel' => true,     // switched off automatically without paratest
@@ -139,7 +157,6 @@ return [
         ],
 
         'browser' => [
-            'enabled' => true,              // runtime: --without=browser
             'command' => null,
             'testsuite' => 'Browser',       // excluded from the regular test step
             'path' => 'tests/Browser',      // fallback if the suite does not exist
@@ -149,7 +166,6 @@ return [
         ],
 
         'phpstan' => [
-            'enabled' => true,
             'level' => null,        // null = level from phpstan.neon; a number overrides it
             'stub_level' => 5,      // only for a phpstan.neon created by audit:install
             'memory_limit' => '2G',

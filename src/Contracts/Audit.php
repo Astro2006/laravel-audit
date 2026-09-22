@@ -6,7 +6,6 @@ namespace Astro2006\LaravelAudit\Contracts;
 
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
@@ -50,9 +49,6 @@ interface Audit
      * @return list<string>
      */
     public function sections(): array;
-
-    /** @return list<PreflightStep> */
-    public function preflightSteps(): array;
 
     /**
      * Facts from the preflight the report has to cover with a finding.

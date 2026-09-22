@@ -37,3 +37,22 @@ function claudeJson(array $overrides = []): string
         ],
     ], $overrides));
 }
+
+/**
+ * config('audit.audits') as the package ships it; with $enabled, only
+ * those audits are enabled.
+ *
+ * @param  list<string>|null  $enabled
+ */
+function auditsConfig(?array $enabled = null): array
+{
+    $audits = (require dirname(__DIR__).'/config/audit.php')['audits'];
+
+    if ($enabled !== null) {
+        foreach ($audits as $audit => $config) {
+            $audits[$audit]['enabled'] = in_array($audit, $enabled, true);
+        }
+    }
+
+    return $audits;
+}

@@ -10,21 +10,24 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 
 /**
- * Which audits run and which optional preflight parts are left out.
+ * Which audits run, which preflight steps they need and which optional
+ * preflight parts are left out.
  */
 final readonly class RunSelection
 {
     /**
      * @param  list<AuditType>  $audits
      * @param  list<OptionalStep>  $without
+     * @param  array<string, list<PreflightStep>>  $steps  audit => its preflight steps from config('audit.audits.<audit>.preflight')
      */
     public function __construct(
         public array $audits,
         public array $without = [],
+        public array $steps = [],
     ) {}
 
     /**
-     * @param  array<string, bool>  $configuredAudits  config('audit.audits')
+     * @param  array<string, mixed>  $configuredAudits  config('audit.audits')
      * @param  list<string>  $explicit  audits named with --tests, --frontend, …
      * @param  list<string>  $without  raw --without values, may be comma separated
      *
@@ -58,10 +61,21 @@ final readonly class RunSelection
             }
         }
 
-        $base = $explicit !== []
-            ? $explicit
-            : array_keys(array_filter($configuredAudits));
+        $enabled = [];
+        $steps = [];
 
+        foreach (AuditType::cases() as $type) {
+            $config = $configuredAudits[$type->value] ?? [];
+            $config = is_array($config) ? $config : [];
+
+            if ((bool) ($config['enabled'] ?? false)) {
+                $enabled[] = $type->value;
+            }
+
+            $steps[$type->value] = self::steps($type, $config['preflight'] ?? []);
+        }
+
+        $base = $explicit !== [] ? $explicit : $enabled;
         $audits = [];
 
         foreach (AuditType::cases() as $type) {
@@ -74,15 +88,33 @@ final readonly class RunSelection
             throw InvalidSelection::nothingLeft();
         }
 
-        $steps = [];
+        $without = [];
 
         foreach (OptionalStep::cases() as $step) {
             if (in_array($step->value, $withoutValues, true)) {
-                $steps[] = $step;
+                $without[] = $step;
             }
         }
 
-        return new self($audits, $steps);
+        return new self($audits, $without, $steps);
+    }
+
+    /**
+     * @return list<PreflightStep>
+     *
+     * @throws InvalidSelection
+     */
+    private static function steps(AuditType $audit, mixed $values): array
+    {
+        $steps = [];
+
+        foreach ((array) $values as $value) {
+            $step = PreflightStep::tryFrom((string) $value)
+                ?? throw InvalidSelection::unknownStep($audit->value, (string) $value, array_map(fn (PreflightStep $step): string => $step->value, PreflightStep::cases()));
+            $steps[] = $step;
+        }
+
+        return $steps;
     }
 
     public function includes(AuditType $audit): bool
@@ -96,18 +128,18 @@ final readonly class RunSelection
     }
 
     /**
-     * Preflight steps the selected audits need, in execution order.
-     * Steps left out with --without are still listed; they report "skipped".
-     * The test suite always runs: its result gates the agents of every audit.
+     * Preflight steps the selected audits list in their config, in execution
+     * order. Nothing else runs. Steps left out with --without are still
+     * listed; they report "skipped".
      *
      * @return list<PreflightStep>
      */
     public function requiredSteps(): array
     {
-        $needed = [PreflightStep::Tests];
+        $needed = [];
 
         foreach ($this->audits as $audit) {
-            array_push($needed, ...$audit->audit()->preflightSteps());
+            array_push($needed, ...($this->steps[$audit->value] ?? []));
         }
 
         return array_values(array_filter(
@@ -116,7 +148,14 @@ final readonly class RunSelection
         ));
     }
 
-    /** @return list<string> */
+    public function needs(PreflightStep $step): bool
+    {
+        return in_array($step, $this->requiredSteps(), true);
+    }
+
+    /**
+     * @return list<string>
+     */
     public function withoutValues(): array
     {
         return array_map(fn (OptionalStep $step): string => $step->value, $this->without);

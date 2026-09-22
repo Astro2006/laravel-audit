@@ -38,10 +38,6 @@ final class PhpstanStep implements Step
             return StepResult::skipped($this->step(), SkipReason::Without);
         }
 
-        if (! $context->config('preflight.phpstan.enabled', true)) {
-            return StepResult::skipped($this->step(), SkipReason::Disabled);
-        }
-
         if (! $project->hasVendorBinary('phpstan')) {
             return StepResult::skipped($this->step(), SkipReason::NotInstalled);
         }

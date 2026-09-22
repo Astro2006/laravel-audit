@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 
 final class BackendAgent extends Agent
@@ -81,18 +80,6 @@ final class BackendAgent extends Agent
             $this->task('logic', 'Logic and transactions', ['logic-bug', 'transaction-safety'], snapshots: [SnapshotType::Routes]),
             $this->task('performance', 'Performance', ['n-plus-one', 'inefficient-query', 'missing-index', 'missing-cache']),
             $this->task('dead-code', 'Dead code', ['dead-code'], sections: ['Dead code candidates'], snapshots: [SnapshotType::Routes, SnapshotType::Phpstan]),
-        ];
-    }
-
-    public function preflightSteps(): array
-    {
-        return [
-            PreflightStep::About,
-            PreflightStep::Stack,
-            PreflightStep::LinesOfCode,
-            PreflightStep::Pint,
-            PreflightStep::Routes,
-            PreflightStep::Phpstan,
         ];
     }
 }

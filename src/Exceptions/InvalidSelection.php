@@ -14,6 +14,12 @@ final class InvalidSelection extends InvalidArgumentException
         return new self(sprintf('Unknown --without value "%s". Allowed: %s.', $value, implode(', ', $allowed)));
     }
 
+    /** @param list<string> $allowed */
+    public static function unknownStep(string $audit, string $value, array $allowed): self
+    {
+        return new self(sprintf('Unknown preflight step "%s" in audit.audits.%s.preflight. Allowed: %s.', $value, $audit, implode(', ', $allowed)));
+    }
+
     public static function selectedAndExcluded(string $audit): self
     {
         return new self(sprintf('The audit "%s" is selected and excluded at the same time.', $audit));

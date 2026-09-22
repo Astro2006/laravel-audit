@@ -6,7 +6,6 @@ namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
@@ -76,19 +75,6 @@ final class TestsAgent extends Agent
     protected function summarySections(): array
     {
         return ['Top 10 missing tests'];
-    }
-
-    public function preflightSteps(): array
-    {
-        return [
-            PreflightStep::About,
-            PreflightStep::Stack,
-            PreflightStep::LinesOfCode,
-            PreflightStep::Routes,
-            PreflightStep::Tests,
-            PreflightStep::Browser,
-            PreflightStep::Phpstan,
-        ];
     }
 
     public function skipReason(AuditTask $task, PreflightSummary $preflight): ?string

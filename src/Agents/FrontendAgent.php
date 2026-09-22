@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 
 final class FrontendAgent extends Agent
@@ -78,18 +77,6 @@ final class FrontendAgent extends Agent
             $this->task('a11y', 'Accessibility', ['accessibility'], dependsOn: ['map']),
             $this->task('performance', 'Frontend performance', ['asset-performance', 'view-query']),
             $this->task('dead-code', 'Dead frontend code', ['dead-frontend-code']),
-        ];
-    }
-
-    public function preflightSteps(): array
-    {
-        return [
-            PreflightStep::About,
-            PreflightStep::Stack,
-            PreflightStep::LinesOfCode,
-            PreflightStep::Routes,
-            PreflightStep::Translations,
-            PreflightStep::Browser,
         ];
     }
 }

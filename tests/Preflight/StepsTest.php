@@ -29,7 +29,7 @@ function stepContext(array $without = [], array $config = [], ?string $project =
         $dir.'/preflight',
         $dir.'/logs',
         array_replace_recursive(require dirname(__DIR__, 2).'/config/audit.php', $config),
-        RunSelection::resolve(['tests' => true, 'frontend' => true, 'backend' => true, 'dependencies' => true], [], $without),
+        RunSelection::resolve(auditsConfig(), [], $without),
     );
 }
 
@@ -175,7 +175,7 @@ it('starts the test run without the variables the audit process loaded from .env
         $dir.'/preflight',
         $dir.'/logs',
         require dirname(__DIR__, 2).'/config/audit.php',
-        RunSelection::resolve(['tests' => true, 'frontend' => false, 'backend' => false, 'dependencies' => false], [], ['coverage']),
+        RunSelection::resolve(auditsConfig(['tests']), [], ['coverage']),
         new ChildEnvironment(['APP_ENV', 'DB_DATABASE']),
     );
 

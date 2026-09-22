@@ -99,7 +99,7 @@ class AuditCommand extends Command
 
         try {
             $selection = RunSelection::resolve(
-                array_map('boolval', Read::array($factory->allConfig(), 'audits')),
+                Read::array($factory->allConfig(), 'audits'),
                 $this->explicitAudits(),
                 array_values(array_map('strval', (array) $this->option('without'))),
             );

@@ -56,7 +56,7 @@ function runnerContext(array $explicit = []): PreflightContext
         $dir.'/preflight',
         $dir.'/logs',
         [],
-        RunSelection::resolve(['tests' => true, 'frontend' => true, 'backend' => true, 'dependencies' => true], $explicit, []),
+        RunSelection::resolve(auditsConfig(), $explicit, []),
     );
 }
 

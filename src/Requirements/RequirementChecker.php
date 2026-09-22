@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Requirements;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
-use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
+use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
@@ -38,14 +38,14 @@ final class RequirementChecker
         }
 
         $checks = [];
-        $tests = $selection->includes(AuditType::Tests);
-        $browserRelevant = ($tests || $selection->includes(AuditType::Frontend)) && ! $selection->skips(OptionalStep::Browser);
+        $tests = $selection->needs(PreflightStep::Tests);
+        $browser = $selection->needs(PreflightStep::Browser) && ! $selection->skips(OptionalStep::Browser);
 
         if ($agents) {
             array_push($checks, ...$this->agent());
         }
 
-        if ($selection->includes(AuditType::Dependencies)
+        if ($selection->needs(PreflightStep::Composer)
             && $this->project->findExecutable('composer') === null
             && ! is_file($this->project->path('composer.phar'))) {
             $checks[] = Check::failed($this->messages->get('requirements.composer_missing'));
@@ -59,7 +59,7 @@ final class RequirementChecker
                 : Check::info($this->messages->get('requirements.boost_missing'));
         }
 
-        if (($tests || $selection->includes(AuditType::Backend)) && ! $selection->skips(OptionalStep::Phpstan) && $this->config('preflight.phpstan.enabled', true)) {
+        if ($selection->needs(PreflightStep::Phpstan) && ! $selection->skips(OptionalStep::Phpstan)) {
             $config = $this->project->phpstanConfigPath();
             $checks[] = $config !== null && $this->project->hasVendorBinary('phpstan')
                 ? Check::ok($this->messages->get('requirements.phpstan', ['config' => basename($config)]))
@@ -79,14 +79,14 @@ final class RequirementChecker
             }
         }
 
-        if ($tests || $browserRelevant) {
+        if ($tests || $browser) {
             $database = $this->guard->check();
             $checks[] = $database->safe || $this->config('preflight.allow_shared_database', false)
                 ? Check::ok($this->messages->get('requirements.database_safe', ['test' => $database->testDatabase]))
                 : Check::warning($this->messages->get('requirements.database_shared', ['app' => $database->appDatabase]));
         }
 
-        if ($browserRelevant && $this->config('preflight.browser.enabled', true)) {
+        if ($browser) {
             $checks[] = $this->browser();
         }
 

@@ -385,14 +385,19 @@ return [
         'allow_read' => ['.env.example'],
     ],
 
-    'audits' => ['tests' => true, 'frontend' => true, 'backend' => true, 'dependencies' => true],
+    // Only the listed preflight steps run. Without `tests`, there is no test gate.
+    'audits' => [
+        'tests' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'tests', 'browser', 'phpstan']],
+        'frontend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'tests', 'browser']],
+        'backend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'pint', 'routes', 'tests', 'phpstan']],
+        'dependencies' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'composer', 'tests']],
+    ],
 
     'preflight' => [
         'allow_shared_database' => false,   // only if you know what you do
-        'pint' => true,
         'tests' => ['command' => null, 'parallel' => true, 'coverage' => true, 'gate' => 'ask', 'timeout' => 1800],
-        'browser' => ['enabled' => true, 'testsuite' => 'Browser', 'path' => 'tests/Browser', 'build_assets' => 'if-missing'],
-        'phpstan' => ['enabled' => true, 'level' => null, 'stub_level' => 5, 'memory_limit' => '2G'],
+        'browser' => ['testsuite' => 'Browser', 'path' => 'tests/Browser', 'build_assets' => 'if-missing'],
+        'phpstan' => ['level' => null, 'stub_level' => 5, 'memory_limit' => '2G'],
         'composer' => ['outdated' => true, 'licenses' => true],
         'license_allowlist' => ['MIT', 'BSD-3-Clause', 'Apache-2.0', /* … */],
     ],

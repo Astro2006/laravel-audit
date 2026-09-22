@@ -28,10 +28,6 @@ final class PintStep implements Step
             return StepResult::skipped($this->step(), SkipReason::Without);
         }
 
-        if (! $context->config('preflight.pint', true)) {
-            return StepResult::skipped($this->step(), SkipReason::Disabled);
-        }
-
         if (! $context->project->hasVendorBinary('pint')) {
             return StepResult::skipped($this->step(), SkipReason::NotInstalled);
         }

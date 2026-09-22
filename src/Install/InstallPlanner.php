@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Install;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
-use Astro2006\LaravelAudit\Enums\AuditType;
+use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
+use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 
@@ -47,15 +49,15 @@ final class InstallPlanner
             $plan->setup[] = 'boost';
         }
 
-        if ($this->active(AuditType::Tests) && ! $project->canRunParallel() && $project->isInstalled('phpunit/phpunit')) {
+        if ($this->needs(PreflightStep::Tests) && ! $project->canRunParallel() && $project->isInstalled('phpunit/phpunit')) {
             $plan->packages[] = new PlannedPackage('brianium/paratest', 'composer');
         }
 
-        if (($this->active(AuditType::Tests) || $this->active(AuditType::Frontend)) && Read::bool($this->config, 'preflight.browser.enabled', true)) {
+        if ($this->needs(PreflightStep::Browser)) {
             $this->planBrowser($plan);
         }
 
-        if ($project->phpstanConfigPath() === null && ($this->active(AuditType::Tests) || $this->active(AuditType::Backend))) {
+        if ($project->phpstanConfigPath() === null && $this->needs(PreflightStep::Phpstan)) {
             $plan->setup[] = 'phpstan-stub';
         }
 
@@ -105,7 +107,7 @@ final class InstallPlanner
     {
         $project = $this->project;
 
-        if ($this->active(AuditType::Tests) && $project->coverageDriver() === null) {
+        if ($this->needs(PreflightStep::Tests) && $project->coverageDriver() === null) {
             $plan->manual[] = 'requirements.coverage_missing';
         }
 
@@ -117,7 +119,7 @@ final class InstallPlanner
             $plan->manual[] = 'node';
         }
 
-        if ($this->guard !== null && $this->active(AuditType::Tests)) {
+        if ($this->guard !== null && $this->needs(PreflightStep::Tests)) {
             $database = $this->guard->check();
 
             if (! $database->safe) {
@@ -143,8 +145,13 @@ final class InstallPlanner
         return (glob($home.'/chromium*') ?: []) !== [];
     }
 
-    private function active(AuditType $audit): bool
+    /** Whether an enabled audit lists the step in its config. */
+    private function needs(PreflightStep $step): bool
     {
-        return Read::bool($this->config, 'audits.'.$audit->value, true);
+        try {
+            return RunSelection::resolve(Read::array($this->config, 'audits'), [], [])->needs($step);
+        } catch (InvalidSelection) {
+            return false;
+        }
     }
 }

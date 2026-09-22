@@ -41,10 +41,6 @@ final class BrowserStep implements Step
             return StepResult::skipped($this->step(), SkipReason::Without);
         }
 
-        if (! $context->config('preflight.browser.enabled', true)) {
-            return StepResult::skipped($this->step(), SkipReason::Disabled);
-        }
-
         $location = $project->browserTests(
             (string) $context->config('preflight.browser.testsuite', 'Browser'),
             (string) $context->config('preflight.browser.path', 'tests/Browser'),
