@@ -10,6 +10,8 @@ use Astro2006\LaravelAudit\Support\Read;
 
 final class CoverageSnapshot extends PreflightSnapshot
 {
+    private const string NOT_A_PATH = '/\\\\(Enums|Exceptions)\\\\|Exception$/';
+
     public function type(): SnapshotType
     {
         return SnapshotType::Coverage;
@@ -23,7 +25,8 @@ final class CoverageSnapshot extends PreflightSnapshot
             return null;
         }
 
-        $classes = Read::arrays($report, 'classes');
+        $all = Read::arrays($report, 'classes');
+        $classes = array_values(array_filter($all, fn (array $class): bool => preg_match(self::NOT_A_PATH, Read::string($class, 'class')) !== 1));
         usort($classes, fn (array $a, array $b): int => Read::float($a, 'lines_pct') <=> Read::float($b, 'lines_pct'));
         $percent = Read::nullableFloat($report, 'lines_pct');
 
@@ -31,7 +34,7 @@ final class CoverageSnapshot extends PreflightSnapshot
             SnapshotType::Coverage,
             'Coverage — '.($percent === null ? 'unknown' : sprintf('%.1f %% lines', $percent)),
             [
-                'Classes '.count($classes),
+                'Classes '.count($all).' ('.(count($all) - count($classes)).' enums and exceptions not listed)',
                 'Below 50 % '.count(array_filter($classes, fn (array $class): bool => Read::float($class, 'lines_pct') < 50)),
                 'Uncovered (0 %) '.count(array_filter($classes, fn (array $class): bool => Read::float($class, 'lines_pct') <= 0)),
             ],

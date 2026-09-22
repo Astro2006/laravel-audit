@@ -9,8 +9,10 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Snapshots\ComposerSnapshot;
+use Astro2006\LaravelAudit\Snapshots\CoverageSnapshot;
 use Astro2006\LaravelAudit\Snapshots\DatabaseSchemaSnapshot;
 use Astro2006\LaravelAudit\Snapshots\PhpstanSnapshot;
+use Astro2006\LaravelAudit\Snapshots\RouteTestsSnapshot;
 use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Snapshots\StatusSnapshot;
 use Astro2006\LaravelAudit\Snapshots\TestsSnapshot;
@@ -120,10 +122,12 @@ it('lists the preflight steps and skips sources without data', function () {
     $rendered = (new SnapshotWriter([new StatusSnapshot, new TestsSnapshot]))->write($preflight, 'pre');
 
     expect($rendered)->toHaveKeys(['status'])->not->toHaveKey('tests')
-        ->and($rendered['status'])->toContain('| S-02 | browser | skipped | no-browser-tests |')
-        ->toContain('| S-03 | phpstan | error | see details |')
+        ->and($rendered['status'])->toContain('1 ok (tests) · 1 skipped · 1 error')
+        ->toContain('| S-01 | browser | skipped | no-browser-tests |')
+        ->toContain('| S-02 | phpstan | error | see details |')
+        ->not->toContain('| tests | ok |')
         ->not->toContain('memory exhausted')
-        ->and(file_get_contents($preflight->directory.'/details/status/S-03.md'))->toContain('memory exhausted')
+        ->and(file_get_contents($preflight->directory.'/details/status/S-02.md'))->toContain('memory exhausted')
         ->and((new SnapshotWriter([new StatusSnapshot]))->write(new PreflightSummary('run', GateDecision::NotRun, new StepResults), 'pre'))->toBe([]);
 });
 
@@ -146,4 +150,34 @@ it('lists flagged tables first and keeps the columns in the detail file', functi
         ->toContain('| Y-01 | `orders` | 2 | 1 | 0 | `shop_id` has no foreign key constraint |')
         ->toContain('| Y-02 | `users` | 2 | 2 | 0 | – |')
         ->and(file_get_contents($preflight->directory.'/details/database-schema/Y-01.md'))->toContain('`shop_id` unsignedBigInteger');
+});
+
+it('leaves enums and exceptions out of the coverage rows', function () {
+    $preflight = snapshotPreflight(['tests/coverage-by-class.json' => ['lines_pct' => 90.0, 'classes' => [
+        ['class' => 'App\\Enums\\Status', 'file' => 'app/Enums/Status.php', 'lines_pct' => 0.0],
+        ['class' => 'App\\Exceptions\\Boom', 'file' => 'app/Exceptions/Boom.php', 'lines_pct' => 0.0],
+        ['class' => 'App\\Http\\Controllers\\LogoutController', 'file' => 'app/Http/Controllers/LogoutController.php', 'lines_pct' => 0.0],
+    ]]]);
+
+    $prompt = (new SnapshotWriter([new CoverageSnapshot]))->write($preflight, 'pre')['coverage'];
+
+    expect($prompt)->toContain('Classes 3 (2 enums and exceptions not listed)')
+        ->toContain('LogoutController')
+        ->not->toContain('Enums\\Status')
+        ->not->toContain('Boom');
+});
+
+it('leaves package routes out of the route test map', function () {
+    $preflight = snapshotPreflight(['tests/route-test-map.json' => ['routes' => [
+        ['method' => 'POST', 'uri' => 'livewire-03fdddf0/update', 'action' => 'Livewire\\Mechanisms\\HandleRequests\\HandleRequests@handleUpdate', 'tests' => []],
+        ['method' => 'POST', 'uri' => '_boost/browser-logs', 'action' => 'Closure', 'tests' => []],
+        ['method' => 'DELETE', 'uri' => 'locations/home', 'action' => 'App\\Http\\Controllers\\HomeLocationController@destroy', 'tests' => []],
+    ]]]);
+
+    $prompt = (new SnapshotWriter([new RouteTestsSnapshot]))->write($preflight, 'pre')['route-tests'];
+
+    expect($prompt)->toContain('1 of 1 routes without a test')
+        ->toContain('Package routes 2 (not listed)')
+        ->toContain('DELETE locations/home')
+        ->not->toContain('livewire');
 });

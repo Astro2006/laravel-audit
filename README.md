@@ -257,7 +257,7 @@ Total 2450 · Passed 2442 · Failed 8 · Skipped 0 · 312.4 s
 Details per ID: `storage/audit/<run>/preflight/details/tests/<ID>.md`
 ```
 
-The details of an ID (the message, the failing tests, examples, usage) are in a small file of their own, which the agent opens only for the IDs it judges. Every task sees the status of all preflight steps, plus only the snapshots its checks need. `snapshot_rows` (default 15) limits the rows per snapshot in the prompt; the rest are listed in `_all.md`.
+The details of an ID (the message, the failing tests, examples, usage) are in a small file of their own, which the agent opens only for the IDs it judges. Every task sees the status of all preflight steps, plus only the snapshots its checks need. `snapshot_rows` (default 10) limits the rows per snapshot in the prompt; the rest are listed in `_all.md`.
 
 | Step | Tool | Used by |
 |---|---|---|
@@ -412,7 +412,7 @@ return [
 | `preflight.phpstan.*` | `level` `null` (from phpstan.neon), `stub_level` `5`, `memory_limit` `2G`, `timeout` `1800`, `parallel` `true` (next to the tests) |
 | `preflight.composer.*` / `preflight.license_allowlist` | `outdated` and `licenses` on / common open-source licenses |
 | `max_findings_per_task` / `max_files_per_task` | `5` / `25` |
-| `snapshot_rows` | `15` |
+| `snapshot_rows` | `10` |
 | `summary` | `generated` (no agent call) or `agent` |
 | `exclude_paths` | `vendor`, `node_modules`, `storage`, `public/build`, `bootstrap/cache` |
 | `risk_points` | weights, experimental |

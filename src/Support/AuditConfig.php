@@ -70,7 +70,7 @@ final readonly class AuditConfig
 
         'max_findings_per_task' => 5,
         'max_files_per_task' => 25,
-        'snapshot_rows' => 15,
+        'snapshot_rows' => 10,
         'summary' => 'generated',
         'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
 
