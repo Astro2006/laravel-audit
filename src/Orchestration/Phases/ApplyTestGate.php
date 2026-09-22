@@ -2,15 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Actions\Audit;
+namespace Astro2006\LaravelAudit\Orchestration\Phases;
 
-use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
+use Astro2006\LaravelAudit\Orchestration\RunContext;
 use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Preflight\TestGate;
-use Astro2006\LaravelAudit\Support\HarnessFactory;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 
 /**
  * Shows failing tests and browser tests of the finished preflight and
@@ -18,10 +17,11 @@ use Astro2006\LaravelAudit\Support\HarnessFactory;
  */
 final class ApplyTestGate
 {
-    public function __construct(private readonly HarnessFactory $factory) {}
+    public function __construct(private readonly AuditConfig $config) {}
 
-    public function handle(StepResults $results, AuditOptions $options, AuditConsole $console): GateDecision
+    public function handle(RunContext $context, StepResults $results): GateDecision
     {
+        $console = $context->console;
         $failing = TestGate::failures($results) > 0;
 
         if ($failing) {
@@ -30,14 +30,14 @@ final class ApplyTestGate
 
         // Without agents there is nothing to protect. --reuse-preflight asks
         // again before agents start.
-        if ($options->preflightOnly && $failing) {
+        if ($context->options->preflightOnly && $failing) {
             return GateDecision::Continued;
         }
 
         return (new TestGate)->decide(
             $results,
-            GateMode::tryFrom($this->factory->config->string('preflight.tests.gate')) ?? GateMode::Ask,
-            $options->force,
+            GateMode::tryFrom($this->config->string('preflight.tests.gate')) ?? GateMode::Ask,
+            $context->options->force,
             $console->interactive,
             $console->confirmGate(...),
         );

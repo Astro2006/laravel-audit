@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Dotenv\Dotenv;
@@ -28,6 +29,17 @@ final class DatabaseGuard
         private readonly string $appConnection,
         private readonly array $inherited = [],
     ) {}
+
+    /** Compares the test database with the running app's database config. */
+    public static function forApp(ProjectInspector $project): self
+    {
+        return new self(
+            $project,
+            (array) config('database.connections', []),
+            (string) config('database.default', 'sqlite'),
+            ChildEnvironment::forApp($project)->inherited(),
+        );
+    }
 
     public function check(): DatabaseGuardResult
     {

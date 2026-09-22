@@ -8,7 +8,7 @@ use Astro2006\LaravelAudit\Data\Run\RunRecord;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Eval\EvalReport;
 use Astro2006\LaravelAudit\Eval\ExpectedSet;
-use Astro2006\LaravelAudit\Support\HarnessFactory;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Json;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
@@ -28,7 +28,7 @@ class EvalCommand extends Command
 
     protected $hidden = true;
 
-    public function handle(HarnessFactory $factory): int
+    public function handle(AuditConfig $config): int
     {
         try {
             $expected = ExpectedSet::fromFile((string) $this->argument('expected'));
@@ -38,7 +38,7 @@ class EvalCommand extends Command
             return self::FAILURE;
         }
 
-        $outputRoot = rtrim($factory->config->string('output_path'), '/');
+        $outputRoot = rtrim($config->string('output_path'), '/');
         $runs = max(1, (int) $this->option('runs'));
         $audits = array_values(array_intersect(AuditType::values(), array_map('strval', (array) $this->option('audit'))));
         $records = [];

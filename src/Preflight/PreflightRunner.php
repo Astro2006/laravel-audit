@@ -7,6 +7,16 @@ namespace Astro2006\LaravelAudit\Preflight;
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Preflight\Steps\AboutStep;
+use Astro2006\LaravelAudit\Preflight\Steps\BrowserStep;
+use Astro2006\LaravelAudit\Preflight\Steps\ComposerStep;
+use Astro2006\LaravelAudit\Preflight\Steps\LinesOfCodeStep;
+use Astro2006\LaravelAudit\Preflight\Steps\PhpstanStep;
+use Astro2006\LaravelAudit\Preflight\Steps\PintStep;
+use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
+use Astro2006\LaravelAudit\Preflight\Steps\StackStep;
+use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
+use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Collection;
@@ -27,6 +37,23 @@ final class PreflightRunner
     public function __construct(iterable $steps)
     {
         $this->steps = (new Collection($steps))->keyBy(fn (Step $step): string => $step->step()->value);
+    }
+
+    /** Every step the package has. */
+    public static function standard(DatabaseGuard $guard, string $locale): self
+    {
+        return new self([
+            new AboutStep,
+            new StackStep,
+            new LinesOfCodeStep,
+            new PintStep,
+            new RoutesStep,
+            new TranslationsStep($locale),
+            new ComposerStep,
+            new TestsStep($guard),
+            new BrowserStep($guard),
+            new PhpstanStep,
+        ]);
     }
 
     /**

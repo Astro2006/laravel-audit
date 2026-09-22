@@ -8,11 +8,14 @@ use Astro2006\LaravelAudit\Actions\Install\ExecuteInstallPlan;
 use Astro2006\LaravelAudit\Actions\Install\PreviewComposerChanges;
 use Astro2006\LaravelAudit\Actions\Install\PublishConfig;
 use Astro2006\LaravelAudit\Actions\Install\VerifyInstall;
+use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Console\InstallConsole;
 use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\InstallPlanner;
 use Astro2006\LaravelAudit\Install\PlanExecutor;
-use Astro2006\LaravelAudit\Support\HarnessFactory;
+use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
+use Astro2006\LaravelAudit\Support\AuditConfig;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Symfony\Component\Process\Process as SymfonyProcess;
 
 /**
@@ -26,7 +29,7 @@ final class InstallService
     public const int FAILURE = 1;
 
     public function __construct(
-        private readonly HarnessFactory $factory,
+        private readonly AuditConfig $config,
         private readonly PublishConfig $publishConfig,
         private readonly PreviewComposerChanges $previewComposerChanges,
         private readonly ExecuteInstallPlan $executeInstallPlan,
@@ -37,14 +40,14 @@ final class InstallService
     public function run(bool $dryRun, bool $yes, InstallConsole $console): int
     {
         $this->publishConfig->handle();
-        $project = $this->factory->project();
-        $outputPath = $this->factory->config->string('output_path');
-        $stubLevel = $this->factory->config->int('preflight.phpstan.stub_level');
+        $project = ProjectInspector::fromConfig($this->config);
+        $outputPath = $this->config->string('output_path');
+        $stubLevel = $this->config->int('preflight.phpstan.stub_level');
 
         $console->header();
 
-        $driver = $this->factory->driver($project);
-        $plan = (new InstallPlanner($project, $this->factory->config, $this->factory->databaseGuard($project), $driver))->plan();
+        $driver = (new DriverRegistry($this->config, $project))->resolve();
+        $plan = (new InstallPlanner($project, $this->config, DatabaseGuard::forApp($project), $driver))->plan();
         $executor = new PlanExecutor($project);
 
         $console->plan($plan, $executor, $stubLevel);

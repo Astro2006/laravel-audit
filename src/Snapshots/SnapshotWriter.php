@@ -22,6 +22,23 @@ final class SnapshotWriter
         private readonly Filesystem $files = new Filesystem,
     ) {}
 
+    /** Every snapshot the package has. */
+    public static function standard(int $maxRows): self
+    {
+        return new self([
+            new StatusSnapshot,
+            new TestsSnapshot,
+            new BrowserSnapshot,
+            new PhpstanSnapshot,
+            new CoverageSnapshot,
+            new RouteTestsSnapshot,
+            new RoutesSnapshot,
+            new PintSnapshot,
+            new TranslationsSnapshot,
+            new ComposerSnapshot,
+        ], max(1, $maxRows));
+    }
+
     /**
      * @param  string  $displayDir  the preflight directory as the agent sees it (relative to the project)
      * @return array<string, string> snapshot type => markdown for the prompt

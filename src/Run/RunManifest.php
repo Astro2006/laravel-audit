@@ -66,6 +66,13 @@ final class RunManifest
         $this->finishedAt = new DateTimeImmutable;
     }
 
+    /** Finishes the run with this status and writes run.md and run.json. */
+    public function close(RunStatus $status): void
+    {
+        $this->finish($status);
+        $this->write();
+    }
+
     public function write(): void
     {
         file_put_contents($this->run->manifestPath(), $this->render());

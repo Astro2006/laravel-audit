@@ -31,6 +31,12 @@ final readonly class ChildEnvironment
         public array $dotenvNames = [],
     ) {}
 
+    /** For the running app, with the environment file it loaded. */
+    public static function forApp(ProjectInspector $project): self
+    {
+        return self::for($project, app()->environmentFile());
+    }
+
     public static function for(ProjectInspector $project, string $environmentFile = '.env'): self
     {
         $path = $project->path($environmentFile);

@@ -5,19 +5,20 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Commands;
 
 use Astro2006\LaravelAudit\Console\AuditConsole;
+use Astro2006\LaravelAudit\Contracts\Orchestrator;
 use Astro2006\LaravelAudit\Data\AuditOptions;
+use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Services\AuditService;
 use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\Command;
 
 class AuditCommand extends Command
 {
-    public const int OK = AuditService::OK;
+    public const int OK = AuditExit::Ok->value;
 
-    public const int GATE_ABORTED = AuditService::GATE_ABORTED;
+    public const int GATE_ABORTED = AuditExit::GateAborted->value;
 
-    public const int HARNESS_ERROR = AuditService::HARNESS_ERROR;
+    public const int HARNESS_ERROR = AuditExit::HarnessError->value;
 
     protected $signature = 'audit
         {--tests : Run the tests audit}
@@ -34,9 +35,9 @@ class AuditCommand extends Command
 
     protected $description = 'Audit this app: a deterministic preflight, then headless agents (Claude Code, OpenCode or Codex) for tests, frontend, backend and dependencies';
 
-    public function handle(AuditService $service): int
+    public function handle(Orchestrator $orchestrator): int
     {
-        return $service->run(
+        return $orchestrator->run(
             new AuditOptions(
                 audits: array_values(array_filter(AuditType::values(), fn (string $audit): bool => (bool) $this->option($audit))),
                 without: array_values(array_map('strval', (array) $this->option('without'))),
@@ -49,7 +50,7 @@ class AuditCommand extends Command
                 mode: $this->stringOption('mode'),
             ),
             new AuditConsole($this->output, Messages::fromConfig(), $this->input->isInteractive()),
-        );
+        )->value;
     }
 
     private function stringOption(string $name): ?string

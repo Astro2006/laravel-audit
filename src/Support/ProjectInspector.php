@@ -36,6 +36,12 @@ class ProjectInspector
 
     public function __construct(public readonly string $basePath) {}
 
+    /** The app this package is installed in; `base_path` in the config points elsewhere (tests). */
+    public static function fromConfig(AuditConfig $config): self
+    {
+        return new self($config->nullableString('base_path') ?? base_path());
+    }
+
     public function path(string $relative = ''): string
     {
         return rtrim($this->basePath, '/').($relative === '' ? '' : '/'.ltrim($relative, '/'));

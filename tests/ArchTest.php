@@ -6,7 +6,8 @@ arch('it will not use debugging functions')
 
 arch('enums are backed enums')
     ->expect('Astro2006\LaravelAudit\Enums')
-    ->toBeStringBackedEnums();
+    ->toBeStringBackedEnums()
+    ->ignoring('Astro2006\LaravelAudit\Enums\AuditExit'); // exit codes are ints
 
 arch('contracts are interfaces')
     ->expect('Astro2006\LaravelAudit\Contracts')

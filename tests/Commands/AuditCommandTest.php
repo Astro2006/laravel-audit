@@ -232,6 +232,18 @@ it('reuses an earlier preflight', function () {
     Process::assertRanTimes(fn ($process) => str_contains(implode(' ', (array) $process->command), 'audit --format=json'), 1);
 });
 
+it('marks the run failed when there is no preflight to reuse', function () {
+    $project = auditProject();
+    fakeTools();
+
+    $this->artisan('audit', ['--dependencies' => true, '--reuse-preflight' => null])
+        ->expectsOutputToContain('No run with a complete preflight found')
+        ->assertExitCode(3);
+
+    expect(RunFrontmatter::read(latestRun($project).'/run.md'))->status->toBe('failed');
+    Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), '-p --output-format'));
+});
+
 it('rejects invalid --without values', function () {
     auditProject();
 

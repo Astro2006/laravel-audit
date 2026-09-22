@@ -28,6 +28,9 @@ abstract class Agent implements Audit
     private const string VERIFY_TEMPLATE = 'agents/_verify.md';
 
     /** Prompt files of the single-agent layout; a published copy is ignored now. */
+    /** Where `vendor:publish --tag=audit-prompts` puts the prompts, below resources/. */
+    public const string PUBLISHED_PROMPTS = 'prompts/vendor/laravel-audit';
+
     private const array OUTDATED_TEMPLATES = ['_base.md', 'tests.md', 'frontend.md', 'backend.md', 'dependencies.md', 'summary.md'];
 
     /** @param  string|null  $overridePath  published prompts (resource_path('prompts/vendor/laravel-audit')); files there win */
@@ -149,6 +152,12 @@ abstract class Agent implements Audit
             'en' => 'English (en)',
             default => $locale,
         };
+    }
+
+    /** Published prompts; files there win over the package's own. */
+    public static function publishedPromptsPath(): ?string
+    {
+        return function_exists('resource_path') ? resource_path(self::PUBLISHED_PROMPTS) : null;
     }
 
     /**

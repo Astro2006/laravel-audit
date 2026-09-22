@@ -18,6 +18,11 @@ final class ReportValidator
         private readonly FindingEditor $editor = new FindingEditor,
     ) {}
 
+    public static function forProject(string $basePath): self
+    {
+        return new self(new ReportLinter($basePath));
+    }
+
     /** @param list<RequiredFinding> $required */
     public function validate(string $answer, ReportSpec $spec, array $required = []): ValidatedReport
     {
