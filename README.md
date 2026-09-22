@@ -299,7 +299,7 @@ storage/audit/
     ├── preflight/           # condensed tool results (summary.json, route-facts.json, tests/, phpstan/, composer/ …)
     │   ├── snapshots/       # what each prompt shows: metrics and IDs per data source
     │   └── details/         # one small file per ID, opened by the agent on demand
-    └── logs/                # per task: rendered prompt, raw agent output, reports that failed validation; tool logs
+    └── logs/                # per task: rendered prompt, agent output as formatted JSON, reports that failed validation; tool logs
 ```
 
 ### Report format

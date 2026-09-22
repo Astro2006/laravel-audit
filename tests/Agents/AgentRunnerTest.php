@@ -5,6 +5,7 @@ use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\BackendAgent;
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
@@ -46,6 +47,22 @@ it('validates a good answer without a repair pass', function () {
         ->and($logs.'/backend.json')->toBeFile();
 
     Process::assertRanTimes(fn ($process) => $process->input === 'Audit the backend.' && $process->environment['AUDIT_TASK'] === 'backend', 1);
+});
+
+it('writes a JSON Lines answer as one formatted JSON document', function () {
+    $stream = file_get_contents(fixture('agents/opencode-run.jsonl'))."{\"type\":\"tool_use\"\n";
+    Process::fake(['*' => Process::result($stream)]);
+    $logs = tempDir('logs');
+    $runner = new AgentRunner(new OpenCodeDriver(fixture('project')), new ReportValidator(new ReportLinter(fixture('project'))), $logs, pollMicroseconds: 1000);
+
+    $runner->run([backendJob()]);
+
+    $events = json_decode(file_get_contents($logs.'/backend.json'), true);
+
+    expect($events)->toBeList()
+        ->and($events[0]['type'])->toBe('step_start')
+        ->and(end($events))->toBe('{"type":"tool_use"')
+        ->and(file_get_contents($logs.'/backend.json'))->toContain("\n    ");
 });
 
 it('repairs an invalid answer in the same session', function () {

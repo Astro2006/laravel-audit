@@ -11,6 +11,7 @@ All notable changes to `laravel-audit` will be documented in this file.
 - `max_findings` is now `max_findings_per_task` (default 8), `agent.timeout` is per task (default 900 s).
 - Prompts moved to `_task.md` and `tasks/<audit>/<task>.md`. Published prompts of the old layout are ignored, with a warning.
 - The Boost MCP server no longer needs an `.mcp.json` entry, and `get-config` is never allowed because it returns secret values.
+- Task logs (`logs/<task>.json`) are always one formatted JSON document. The JSON Lines streams of OpenCode and Codex are stored as a list of their events.
 
 ### Added
 
