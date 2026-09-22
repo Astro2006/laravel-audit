@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Support;
 use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
 use Astro2006\LaravelAudit\Enums\PackageManager;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Process;
 use SimpleXMLElement;
 use Symfony\Component\Process\ExecutableFinder;
 
@@ -31,6 +32,8 @@ class ProjectInspector
     private ?Collection $locked = null;
 
     private SimpleXMLElement|false|null $phpunitXml = null;
+
+    private string|false|null $herdCoverageIni = null;
 
     public function __construct(public readonly string $basePath) {}
 
@@ -213,9 +216,30 @@ class ProjectInspector
     {
         return match (true) {
             extension_loaded('pcov') => 'pcov',
+            $this->herdCoverageIni() !== null => 'herd',
             extension_loaded('xdebug') => 'xdebug',
             default => null,
         };
+    }
+
+    /**
+     * The ini Laravel Herd loads for `herd coverage` (Xdebug), when it loads
+     * Xdebug for this PHP version. The test step passes it as PHPRC: unlike
+     * `herd coverage`'s -c, it reaches the processes the test runner starts.
+     */
+    public function herdCoverageIni(): ?string
+    {
+        if ($this->herdCoverageIni === null) {
+            $home = (string) (getenv('HOME') ?: '');
+            $ini = $home.'/Library/Application Support/Herd/config/php/'.PHP_MAJOR_VERSION.PHP_MINOR_VERSION.'/debug/debug.ini';
+
+            $this->herdCoverageIni = $home !== '' && is_file($ini) && trim(Process::env(['PHPRC' => $ini, 'XDEBUG_MODE' => 'coverage'])
+                ->timeout(15)
+                ->run([PHP_BINARY, '-r', 'echo extension_loaded("xdebug") ? "on" : "off";'])
+                ->output()) === 'on' ? $ini : false;
+        }
+
+        return $this->herdCoverageIni ?: null;
     }
 
     public function phpstanConfigPath(): ?string

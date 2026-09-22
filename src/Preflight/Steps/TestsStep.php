@@ -91,7 +91,14 @@ final class TestsStep implements AsyncStep
             ? $custom.' '.implode(' ', array_map('escapeshellarg', $flags))
             : $context->artisan(['test', ...($this->parallel ? ['--parallel'] : []), ...$flags]);
 
-        return $context->process($driver === 'xdebug' && $this->coverage ? ['XDEBUG_MODE' => 'coverage'] : [])
+        $environment = match (true) {
+            ! $this->coverage => [],
+            $driver === 'herd' => ['PHPRC' => (string) $project->herdCoverageIni(), 'XDEBUG_MODE' => 'coverage'],
+            $driver === 'xdebug' => ['XDEBUG_MODE' => 'coverage'],
+            default => [],
+        };
+
+        return $context->process($environment)
             ->timeout((int) $context->config('preflight.tests.timeout', 1800))
             ->start($command);
     }

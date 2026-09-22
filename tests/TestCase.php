@@ -18,7 +18,24 @@ class TestCase extends Orchestra
             unlink($published);
         }
 
+        // Herd (coverage) and Playwright are looked up below HOME. An empty
+        // one keeps the tests independent of what this machine has installed.
+        $home = dirname(__DIR__).'/build/tests/home';
+
+        if (! is_dir($home)) {
+            mkdir($home, 0777, true);
+        }
+
+        putenv('HOME='.$home);
+
         parent::setUp();
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('HOME='.$_SERVER['HOME']);
+
+        parent::tearDown();
     }
 
     protected function getPackageProviders($app)

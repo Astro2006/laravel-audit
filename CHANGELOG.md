@@ -12,9 +12,11 @@ All notable changes to `laravel-audit` will be documented in this file.
 - Prompts moved to `_task.md` and `tasks/<audit>/<task>.md`. Published prompts of the old layout are ignored, with a warning.
 - The Boost MCP server no longer needs an `.mcp.json` entry, and `get-config` is never allowed because it returns secret values.
 - Task logs (`logs/<task>.json`) are always one formatted JSON document. The JSON Lines streams of OpenCode and Codex are stored as a list of their events.
+- Each audit lists its preflight steps in `audits.<audit>.preflight` (`audits.<audit>.enabled` turns it on). Only listed steps run, the test suite included. `preflight.pint`, `preflight.browser.enabled` and `preflight.phpstan.enabled` are gone.
 
 ### Added
 
+- Laravel Herd's coverage (Xdebug) counts as a coverage driver. The test step passes Herd's `debug.ini` as `PHPRC`, so the processes `artisan test` and paratest start load Xdebug too.
 - The harness drops findings it can disprove, without a repair pass: nonexistent files, quoted code that is not in the file, `missing:` files that exist, and dependency findings composer contradicts. `run.md` lists them under "Rejected findings".
 - A verify pass per task (`agent.verify`, on by default) checks findings of medium severity and above with the same agent and keeps, downgrades or drops them.
 - `missing:path` locations for findings about a file that should exist.

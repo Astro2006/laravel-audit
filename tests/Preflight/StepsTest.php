@@ -185,6 +185,30 @@ it('starts the test run without the variables the audit process loaded from .env
         && $process->environment['APP_ENV'] === false && $process->environment['CLAUDECODE'] === false);
 });
 
+it('runs coverage through Herd\'s Xdebug ini so the processes the test runner starts load it too', function () {
+    Process::fake(['*artisan*test*' => Process::result('')]);
+    $dir = tempDir('steps');
+    $project = new class(fixture('project')) extends ProjectInspector
+    {
+        public function coverageDriver(): ?string
+        {
+            return 'herd';
+        }
+
+        public function herdCoverageIni(): ?string
+        {
+            return '/herd/debug.ini';
+        }
+    };
+    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', require dirname(__DIR__, 2).'/config/audit.php', RunSelection::resolve(auditsConfig(['tests']), [], []));
+
+    (new TestsStep(safeGuard($project)))->start($context)->wait();
+
+    Process::assertRan(fn ($process) => $process->environment['PHPRC'] === '/herd/debug.ini'
+        && $process->environment['XDEBUG_MODE'] === 'coverage'
+        && str_contains(implode(' ', (array) $process->command), '--coverage-clover'));
+});
+
 it('refuses to run tests against the app database', function () {
     $project = tempDir('shared');
     file_put_contents($project.'/phpunit.xml', '<phpunit/>');

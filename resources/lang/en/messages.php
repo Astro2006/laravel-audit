@@ -27,7 +27,7 @@ return [
         'phpstan' => 'Larastan (:config)',
         'phpstan_no_config' => 'No phpstan.neon — PHPStan is skipped → php artisan audit:install',
         'coverage' => 'Coverage driver: :driver',
-        'coverage_missing' => 'No coverage driver (pcov or xdebug) — tests run without coverage',
+        'coverage_missing' => 'No coverage driver (pcov, xdebug or Herd coverage) — tests run without coverage',
         'paratest_missing' => 'brianium/paratest missing — tests run without --parallel → php artisan audit:install',
         'database_safe' => 'Test database: :test (separate from the app database)',
         'database_shared' => 'Tests would use the app database (:app) — tests and browser tests are skipped. Configure a separate test database in phpunit.xml.',

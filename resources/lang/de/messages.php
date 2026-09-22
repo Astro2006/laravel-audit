@@ -27,7 +27,7 @@ return [
         'phpstan' => 'Larastan (:config)',
         'phpstan_no_config' => 'Keine phpstan.neon — PHPStan wird übersprungen → php artisan audit:install',
         'coverage' => 'Coverage-Treiber: :driver',
-        'coverage_missing' => 'Kein Coverage-Treiber (pcov oder xdebug) — Tests laufen ohne Coverage',
+        'coverage_missing' => 'Kein Coverage-Treiber (pcov, xdebug oder Herd-Coverage) — Tests laufen ohne Coverage',
         'paratest_missing' => 'brianium/paratest fehlt — Tests laufen ohne --parallel → php artisan audit:install',
         'database_safe' => 'Test-Datenbank: :test (getrennt von der App-DB)',
         'database_shared' => 'Tests würden gegen die App-Datenbank laufen (:app) — Tests und Browser-Tests werden übersprungen. Eigene Test-DB in phpunit.xml eintragen.',
