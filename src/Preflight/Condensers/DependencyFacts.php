@@ -5,16 +5,11 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
 use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
-use Astro2006\LaravelAudit\Data\Composer\Advisory;
 use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
-use Astro2006\LaravelAudit\Data\Composer\FlaggedConstraint;
-use Astro2006\LaravelAudit\Data\Composer\FlaggedLicense;
-use Astro2006\LaravelAudit\Data\Composer\OutdatedPackage;
 use Astro2006\LaravelAudit\Data\Composer\UsageMap;
 use Astro2006\LaravelAudit\Data\Composer\ValidateResult;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
-use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Support\Collection;
 
 /**
@@ -44,15 +39,15 @@ final class DependencyFacts
         $candidates = new UsageCandidates;
 
         return new DependencyFactsReport(
-            advisories: $this->advisories($project, $audit, $why),
+            advisories: (new Advisories)->build($project, $audit, $why),
             abandoned: $this->abandoned($audit, $outdated),
-            outdatedMajor: $this->outdatedMajor($outdated),
+            outdatedMajor: (new OutdatedMajors)->build($outdated),
             misplacedCandidates: $candidates->misplaced($usageMap),
             unusedCandidates: $candidates->unused($usageMap),
             shadowCandidates: $candidates->shadow($usageMap),
-            licensesFlagged: $this->licenses($project, $licenses, $licenseAllowlist),
-            constraintsFlagged: $this->constraints($project),
-            composerConfig: $this->composerConfig($project),
+            licensesFlagged: (new LicenseCheck)->flagged($project, $licenses, $licenseAllowlist),
+            constraintsFlagged: (new ComposerHygiene)->constraints($project),
+            composerConfig: (new ComposerHygiene)->config($project),
             validate: new ValidateResult(
                 ok: $validateExitCode === 0,
                 lockInSync: ! str_contains(strtolower($validateOutput), 'lock file is not up to date')
@@ -77,60 +72,6 @@ final class DependencyFacts
             $packages,
             fn (string $package): bool => ! array_key_exists($package, $direct),
         )));
-    }
-
-    /**
-     * @param  array<mixed>  $audit
-     * @param  array<string, list<string>>  $why
-     * @return list<Advisory>
-     */
-    private function advisories(ProjectInspector $project, array $audit, array $why): array
-    {
-        $direct = new Collection($project->composer()->directPackages());
-        $whyLines = new Collection($why);
-        $result = [];
-
-        foreach (Read::array($audit, 'advisories') as $package => $advisories) {
-            $package = strtolower((string) $package);
-
-            foreach (array_values(array_filter(is_array($advisories) ? $advisories : [], 'is_array')) as $advisory) {
-                $result[] = new Advisory(
-                    package: $package,
-                    installed: $project->composer()->installedVersion($package),
-                    advisory: Read::nullableString($advisory, 'advisoryId'),
-                    cve: Read::nullableString($advisory, 'cve'),
-                    title: Read::nullableString($advisory, 'title'),
-                    severity: Read::nullableString($advisory, 'severity'),
-                    affected: Read::nullableString($advisory, 'affectedVersions'),
-                    link: Read::nullableString($advisory, 'link'),
-                    direct: $direct->has($package),
-                    section: $direct->get($package),
-                    via: $this->via($whyLines->get($package, [])),
-                );
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param  list<string>  $lines
-     * @return list<string>
-     */
-    private function via(array $lines): array
-    {
-        $via = [];
-
-        foreach ($lines as $line) {
-            $parent = Regex::groups('/^([a-z0-9_.-]+\/[a-z0-9_.-]+)\s/i', trim($line));
-
-            if ($parent !== null) {
-                [$package] = $parent;
-                $via[] = strtolower($package);
-            }
-        }
-
-        return array_values(array_unique($via));
     }
 
     /**
@@ -161,142 +102,5 @@ final class DependencyFacts
             ->map(fn (?string $replacement, int|string $package): AbandonedPackage => new AbandonedPackage((string) $package, $replacement))
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  array<mixed>  $outdated
-     * @return list<OutdatedPackage>
-     */
-    private function outdatedMajor(array $outdated): array
-    {
-        $result = [];
-
-        foreach (Read::arrays($outdated, 'installed') as $package) {
-            $installed = Read::string($package, 'version');
-            $latest = Read::string($package, 'latest');
-
-            if ($installed !== '' && $latest !== '' && $this->isMajorBehind($installed, $latest)) {
-                $result[] = new OutdatedPackage(strtolower(Read::string($package, 'name')), $installed, $latest);
-            }
-        }
-
-        return $result;
-    }
-
-    private function isMajorBehind(string $installed, string $latest): bool
-    {
-        $a = $this->versionParts($installed);
-        $b = $this->versionParts($latest);
-
-        if ($a === null || $b === null) {
-            return false;
-        }
-
-        [$aMajor, $aMinor] = $a;
-        [$bMajor, $bMinor] = $b;
-
-        // 0.x releases treat the minor version as the breaking one.
-        return $aMajor === 0 && $bMajor === 0 ? $bMinor > $aMinor : $bMajor > $aMajor;
-    }
-
-    /** @return array{int, int}|null */
-    private function versionParts(string $version): ?array
-    {
-        $parts = Regex::groups('/^v?(\d+)\.(\d+)/', $version);
-
-        if ($parts === null) {
-            return null;
-        }
-
-        [$major, $minor] = $parts;
-
-        return [(int) $major, (int) $minor];
-    }
-
-    /**
-     * @param  array<mixed>  $licenses
-     * @param  list<string>  $allowlist
-     * @return list<FlaggedLicense>
-     */
-    private function licenses(ProjectInspector $project, array $licenses, array $allowlist): array
-    {
-        $root = data_get($project->composer()->composerJson(), 'license');
-        $rootLicense = match (true) {
-            is_array($root) => implode(' OR ', array_map('strval', $root)),
-            is_string($root) => $root,
-            default => 'none (assumed proprietary)',
-        };
-        $allowed = array_map('strtolower', $allowlist);
-        $result = [];
-
-        foreach (Read::array($licenses, 'dependencies') as $package => $data) {
-            $packageLicenses = Read::strings(is_array($data) ? $data : [], 'license');
-            $ok = array_intersect(array_map('strtolower', $packageLicenses), $allowed) !== [];
-
-            if (! $ok) {
-                $result[] = new FlaggedLicense(
-                    strtolower((string) $package),
-                    $packageLicenses === [] ? 'unknown' : implode(' OR ', $packageLicenses),
-                    $rootLicense,
-                );
-            }
-        }
-
-        return $result;
-    }
-
-    /** @return list<FlaggedConstraint> */
-    private function constraints(ProjectInspector $project): array
-    {
-        $composer = $project->composer()->composerJson();
-        $result = [];
-
-        foreach (['require', 'require-dev'] as $section) {
-            foreach (Read::stringMap($composer, $section) as $package => $constraint) {
-                $reason = match (true) {
-                    trim($constraint) === '*' => 'any version',
-                    str_starts_with($constraint, 'dev-') || str_contains($constraint, '@dev') => 'development branch',
-                    str_contains($constraint, '>') && ! str_contains($constraint, '<') && ! str_contains($constraint, '^') && ! str_contains($constraint, '~') => 'no upper bound',
-                    default => null,
-                };
-
-                if ($reason !== null) {
-                    $result[] = new FlaggedConstraint(strtolower($package), $constraint, $reason);
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /** @return list<string> */
-    private function composerConfig(ProjectInspector $project): array
-    {
-        $composer = $project->composer()->composerJson();
-        $issues = [];
-
-        if (Read::string($composer, 'minimum-stability', 'stable') === 'dev' && data_get($composer, 'prefer-stable') !== true) {
-            $issues[] = 'minimum-stability is "dev" without prefer-stable: true';
-        }
-
-        if (data_get($composer, 'config.allow-plugins') === true) {
-            $issues[] = 'config.allow-plugins is true for every plugin';
-        }
-
-        foreach (Read::arrays($composer, 'repositories') as $repository) {
-            $type = Read::string($repository, 'type');
-
-            if (in_array($type, ['vcs', 'path', 'artifact', 'package'], true)) {
-                $issues[] = sprintf('custom repository of type "%s": %s', $type, Read::string($repository, 'url', (string) json_encode($repository)));
-            }
-        }
-
-        $platform = Read::nullableString($composer, 'config.platform.php');
-
-        if ($platform !== null) {
-            $issues[] = 'config.platform.php is set to '.$platform.' — compare with the production PHP version';
-        }
-
-        return $issues;
     }
 }
