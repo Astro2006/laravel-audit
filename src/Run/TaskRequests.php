@@ -34,11 +34,11 @@ final class TaskRequests
         private readonly string $workingDirectory,
         private readonly ?string $configFile,
         private readonly array $extraDirectories,
-        private readonly Severity $verifyMinSeverity,
-        private readonly AuditAssembler $assembler,
-        private readonly ReportParser $parser,
-        private readonly FindingEditor $editor,
-        private readonly VerdictApplier $verdicts,
+        private readonly Severity $verifyMinSeverity = Severity::Medium,
+        private readonly AuditAssembler $assembler = new AuditAssembler,
+        private readonly ReportParser $parser = new ReportParser,
+        private readonly FindingEditor $editor = new FindingEditor,
+        private readonly VerdictApplier $verdicts = new VerdictApplier,
     ) {}
 
     /**
@@ -92,7 +92,7 @@ final class TaskRequests
     }
 
     /**
-     * @param  array<string, array{Audit, list<AuditTask>}>  $audits  audit key => audit and its tasks
+     * @param  array<string, PlannedAudit>  $audits
      * @param  array<string, string>  $skipped
      * @param  array<string, TaskOutcome>  $finished
      */
@@ -100,8 +100,9 @@ final class TaskRequests
     {
         $digests = [];
 
-        foreach ($audits as [$audit, $tasks]) {
-            $report = $this->assembler->assemble($audit, $tasks, $this->verdicts->apply($finished), skipped: $skipped);
+        foreach ($audits as $planned) {
+            $audit = $planned->audit;
+            $report = $this->assembler->assemble($audit, $planned->tasks, $this->verdicts->apply($finished), skipped: $skipped);
             $parsed = $this->parser->parse($report->body);
 
             $counts = [];
@@ -121,7 +122,7 @@ final class TaskRequests
             );
         }
 
-        return $this->request(AuditTasks::RESULTS_KEY, (new ResultsAgent($this->overridePath))->render($this->context, $digests));
+        return $this->request(JobPlanner::RESULTS_KEY, (new ResultsAgent($this->overridePath))->render($this->context, $digests));
     }
 
     private function request(string $key, RenderedPrompt $prompt): AgentRequest
