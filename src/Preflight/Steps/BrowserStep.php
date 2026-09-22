@@ -7,14 +7,15 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
 use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
-use Astro2006\LaravelAudit\Enums\AssetBuildMode;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\AssetBuild;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Support\Files;
 use Illuminate\Support\Collection;
 
 /**
@@ -61,7 +62,7 @@ final class BrowserStep implements Step
             return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new BrowserDTO(path: $location->path, database: $database));
         }
 
-        $warnings = $this->prepareAssets($context);
+        $warnings = (new AssetBuild)->prepare($context);
 
         $junit = $context->path('tests/browser-junit.xml');
         @unlink($junit);
@@ -101,57 +102,12 @@ final class BrowserStep implements Step
         return StepResult::ok($this->step(), BrowserDTO::fromReport($report, $location->path, $location->type, count($artifacts)), $warnings);
     }
 
-    /** @return list<string> warning codes */
-    private function prepareAssets(PreflightContext $context): array
-    {
-        $project = $context->project;
-        $manifest = $project->path('public/build/manifest.json');
-        $mode = AssetBuildMode::tryFrom($context->config->string('preflight.browser.build_assets')) ?? AssetBuildMode::IfMissing;
-        $warnings = [];
-
-        $build = match ($mode) {
-            AssetBuildMode::Always => true,
-            AssetBuildMode::IfMissing => ! is_file($manifest),
-            AssetBuildMode::Never => false,
-        };
-
-        if ($build && is_file($project->path('package.json'))) {
-            $result = $context->process()->timeout(600)->run($project->packageManager()->buildCommand());
-            file_put_contents($context->logPath('asset-build.log'), $result->output()."\n".$result->errorOutput());
-
-            if (! $result->successful()) {
-                $warnings[] = 'asset-build-failed';
-            }
-        }
-
-        if (! is_file($manifest)) {
-            $warnings[] = 'assets-missing';
-        } elseif ($this->newestSource($context) > (int) filemtime($manifest)) {
-            $warnings[] = 'assets-stale';
-        }
-
-        return $warnings;
-    }
-
-    private function newestSource(PreflightContext $context): int
-    {
-        $newest = 0;
-
-        foreach (['resources/js', 'resources/css'] as $dir) {
-            foreach ($this->files($context->project->path($dir)) as $file) {
-                $newest = max($newest, $file->getMTime());
-            }
-        }
-
-        return $newest;
-    }
-
     /** @return list<string> copied files, relative to the preflight directory */
     private function collectArtifacts(PreflightContext $context, string $testPath, int $since): array
     {
         $max = $context->config->int('preflight.browser.max_artifacts');
 
-        return (new Collection($this->files($context->project->path(rtrim($testPath, '/').'/Screenshots'))))
+        return (new Collection(Files::below($context->project->path(rtrim($testPath, '/').'/Screenshots'))))
             ->filter(fn (\SplFileInfo $file): bool => $file->getMTime() >= $since)
             ->sortByDesc(fn (\SplFileInfo $file): int => $file->getMTime())
             ->take(max(0, $max))
@@ -163,24 +119,6 @@ final class BrowserStep implements Step
             })
             ->values()
             ->all();
-    }
-
-    /** @return list<\SplFileInfo> */
-    private function files(string $directory): array
-    {
-        if (! is_dir($directory)) {
-            return [];
-        }
-
-        $files = [];
-
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof \SplFileInfo && $file->isFile()) {
-                $files[] = $file;
-            }
-        }
-
-        return $files;
     }
 
     /** @return array<string, list<string>> test file => URIs passed to visit() */
