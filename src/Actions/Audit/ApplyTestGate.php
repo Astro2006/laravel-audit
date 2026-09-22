@@ -36,7 +36,7 @@ final class ApplyTestGate
 
         return (new TestGate)->decide(
             $results,
-            GateMode::tryFrom((string) $this->factory->config('preflight.tests.gate', 'ask')) ?? GateMode::Ask,
+            GateMode::tryFrom($this->factory->config->string('preflight.tests.gate')) ?? GateMode::Ask,
             $options->force,
             $console->interactive,
             $console->confirmGate(...),

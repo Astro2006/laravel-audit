@@ -28,7 +28,7 @@ function stepContext(array $without = [], array $config = [], ?string $project =
         new ProjectInspector($project ?? fixture('project')),
         $dir.'/preflight',
         $dir.'/logs',
-        array_replace_recursive(require dirname(__DIR__, 2).'/config/audit.php', $config),
+        auditConfig($config),
         RunSelection::resolve(auditsConfig(), [], $without),
     );
 }
@@ -174,7 +174,7 @@ it('starts the test run without the variables the audit process loaded from .env
         new ProjectInspector(fixture('project')),
         $dir.'/preflight',
         $dir.'/logs',
-        require dirname(__DIR__, 2).'/config/audit.php',
+        auditConfig(),
         RunSelection::resolve(auditsConfig(['tests']), [], ['coverage']),
         new ChildEnvironment(['APP_ENV', 'DB_DATABASE']),
     );
@@ -200,7 +200,7 @@ it('runs coverage through Herd\'s Xdebug ini so the processes the test runner st
             return '/herd/debug.ini';
         }
     };
-    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', require dirname(__DIR__, 2).'/config/audit.php', RunSelection::resolve(auditsConfig(['tests']), [], []));
+    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', auditConfig(), RunSelection::resolve(auditsConfig(['tests']), [], []));
 
     (new TestsStep(safeGuard($project)))->start($context)->wait();
 

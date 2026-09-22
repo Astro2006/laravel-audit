@@ -57,7 +57,7 @@ function runnerContext(array $explicit = []): PreflightContext
         new ProjectInspector(fixture('project')),
         $dir.'/preflight',
         $dir.'/logs',
-        [],
+        auditConfig(),
         RunSelection::resolve(auditsConfig(), $explicit, []),
     );
 }

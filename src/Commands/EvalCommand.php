@@ -38,7 +38,7 @@ class EvalCommand extends Command
             return self::FAILURE;
         }
 
-        $outputRoot = rtrim((string) $factory->config('output_path', storage_path('audit')), '/');
+        $outputRoot = rtrim($factory->config->string('output_path'), '/');
         $runs = max(1, (int) $this->option('runs'));
         $audits = array_values(array_intersect(AuditType::values(), array_map('strval', (array) $this->option('audit'))));
         $records = [];

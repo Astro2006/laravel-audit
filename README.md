@@ -361,55 +361,70 @@ Everything the agents see goes to the model provider of your agent CLI (Anthropi
 
 ## Configuration
 
-Publish the config with `php artisan vendor:publish --tag="audit-config"`. The most important keys:
+`php artisan audit:install` publishes `config/audit.php` once and never overwrites it. The file holds only the settings people usually change; keep only the keys you change. Every key you leave out falls back to the package default, also after a package update adds new keys.
 
 ```php
 return [
     'output_path' => env('AUDIT_OUTPUT_PATH', storage_path('audit')),
-    'report_language' => env('AUDIT_LANGUAGE'),              // null = app.locale
+    'report_language' => env('AUDIT_LANGUAGE'),          // null = app.locale
 
     'agent' => [
-        'driver' => env('AUDIT_AGENT', 'auto'),             // claude_code, opencode, codex or auto
-        'model' => env('AUDIT_MODEL'),                      // overrides the driver model; null = CLI default
-        'mode' => env('AUDIT_MODE', 'single'),              // single: one task at a time; parallel: up to concurrency
-        'concurrency' => env('AUDIT_CONCURRENCY', 4),       // tasks at once in parallel mode
-        'timeout' => 900,                                   // seconds per task
-        'verify' => ['enabled' => true, 'min_severity' => 'medium'], // second call per task that checks its findings
+        'driver' => env('AUDIT_AGENT', 'auto'),         // claude_code, opencode, codex or auto
+        'model' => env('AUDIT_MODEL'),                  // null = the CLI's default model
+        'mode' => env('AUDIT_MODE', 'single'),          // single: one task at a time; parallel: up to concurrency
+        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4),
+        'timeout' => 900,                               // seconds per task
+        'verify' => true,                               // second call per task that checks its findings
         'drivers' => [
-            'claude_code' => ['binary' => 'claude', 'model' => null, 'effort' => null, 'max_budget_usd' => null /* per task */],
-            'opencode' => ['binary' => 'opencode', 'model' => null /* provider/model */],
-            'codex' => ['binary' => 'codex', 'model' => null, 'config' => [/* -c overrides */], 'allow_unrestricted_read' => false],
+            'claude_code' => ['binary' => 'claude', 'effort' => null, 'max_budget_usd' => null /* per task */],
+            'opencode' => ['binary' => 'opencode'],
+            'codex' => ['binary' => 'codex', 'allow_unrestricted_read' => false],
         ],
-        'boost_tools' => [/* read-only allowlist */],
         'deny_read' => ['.env*', 'auth.json', 'storage/*.key'],
         'allow_read' => ['.env.example'],
     ],
 
-    // Only the listed preflight steps run. Without `tests`, there is no test gate.
-    'audits' => [
-        'tests' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'tests', 'browser', 'phpstan']],
-        'frontend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'routes', 'translations', 'tests', 'browser']],
-        'backend' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'pint', 'routes', 'tests', 'phpstan']],
-        'dependencies' => ['enabled' => true, 'preflight' => ['about', 'stack', 'loc', 'composer', 'tests']],
-    ],
+    'audits' => ['tests' => true, 'frontend' => true, 'backend' => true, 'dependencies' => true],
 
     'preflight' => [
-        'allow_shared_database' => false,   // only if you know what you do
-        'tests' => ['command' => null, 'parallel' => true, 'coverage' => true, 'gate' => 'ask', 'timeout' => 1800],
-        'browser' => ['testsuite' => 'Browser', 'path' => 'tests/Browser', 'build_assets' => 'if-missing'],
-        'phpstan' => ['level' => null, 'stub_level' => 5, 'memory_limit' => '2G'],
-        'composer' => ['outdated' => true, 'licenses' => true],
-        'license_allowlist' => ['MIT', 'BSD-3-Clause', 'Apache-2.0', /* … */],
+        'tests' => ['gate' => 'ask', 'coverage' => true, 'parallel' => true],
     ],
 
-    'max_findings_per_task' => 5,           // agents group instead of listing more
-    'max_files_per_task' => 25,             // files an agent should open at most
-    'summary' => 'generated',               // generated (no agent call) or agent
-    'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],
     'custom_checks' => ['tests' => [], 'frontend' => [], 'backend' => [], 'dependencies' => []],
-    'risk_points' => [/* weights, experimental */],
 ];
 ```
+
+**Precedence.** A command option (`--agent`, `--model`, `--mode`) wins over `config/audit.php` (and the `AUDIT_*` variables in it), which wins over the package default. There is one place for each value: one `agent.model` for every driver, no per-driver models.
+
+**Rarely changed settings** live in `Astro2006\LaravelAudit\Support\AuditConfig::DEFAULTS`. Set any of them in `config/audit.php` with the same key to change it:
+
+| Key | Default |
+|---|---|
+| `audits.<audit>.preflight` | the preflight steps each audit needs; without `tests` there is no test gate |
+| `agent.verify.min_severity` | `medium` |
+| `agent.boost_tools` | the read-only Boost tools |
+| `agent.drivers.codex.config` | `[]`, extra `-c` overrides |
+| `preflight.allow_shared_database` | `false`, only if you know what you do |
+| `preflight.tests.command` / `timeout` | `null` (php artisan test) / `1800` |
+| `preflight.browser.*` | `testsuite` `Browser`, `path` `tests/Browser`, `build_assets` `if-missing`, `timeout` `1200`, `max_artifacts` `10` |
+| `preflight.phpstan.*` | `level` `null` (from phpstan.neon), `stub_level` `5`, `memory_limit` `2G`, `timeout` `1800` |
+| `preflight.composer.*` / `preflight.license_allowlist` | `outdated` and `licenses` on / common open-source licenses |
+| `max_findings_per_task` / `max_files_per_task` | `5` / `25` |
+| `snapshot_rows` | `15` |
+| `summary` | `generated` (no agent call) or `agent` |
+| `exclude_paths` | `vendor`, `node_modules`, `storage`, `public/build`, `bootstrap/cache` |
+| `risk_points` | weights, experimental |
+
+Lists replace the default, they are not merged: `'exclude_paths' => ['vendor']` excludes only `vendor`.
+
+**Upgrading from an older config.** A config published by an older version keeps working. These keys are no longer read; `php artisan audit` names each one it finds:
+
+| Old key | New key |
+|---|---|
+| `agent.binary` | `agent.drivers.claude_code.binary` |
+| `agent.effort` | `agent.drivers.claude_code.effort` |
+| `agent.max_budget_usd` | `agent.drivers.claude_code.max_budget_usd` |
+| `agent.drivers.<driver>.model` | `agent.model` |
 
 ### Customizing prompts
 

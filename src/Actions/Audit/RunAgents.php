@@ -48,7 +48,7 @@ final class RunAgents
             $validator,
             $run->logsDir(),
             $concurrency,
-            (int) $this->factory->config('agent.timeout', 900),
+            $this->factory->config->int('agent.timeout'),
             environment: $this->factory->childEnvironment($project),
         );
 
@@ -75,7 +75,7 @@ final class RunAgents
     {
         $config = $driver->writeConfig($run->logsDir(), $extra);
         $snapshots = $this->factory->snapshotWriter()->write($summary, $project->relative($run->preflightDir()));
-        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->allConfig(), $console->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote(), $snapshots);
+        $context = (new PromptContextBuilder)->build($summary, $run, $project, $this->factory->config, $console->messages->locale, $project->boostMcpServer() !== null, $driver->toolsNote(), $snapshots);
 
         return new AuditTasks(
             $selection->audits,
@@ -87,10 +87,10 @@ final class RunAgents
             $project->basePath,
             $config,
             $extra,
-            max(1, (int) $this->factory->config('max_findings_per_task', 5)),
-            $this->factory->config('summary', AuditTasks::SUMMARY_GENERATED) === AuditTasks::SUMMARY_AGENT ? AuditTasks::SUMMARY_AGENT : AuditTasks::SUMMARY_GENERATED,
-            (bool) $this->factory->config('agent.verify.enabled', true),
-            Severity::tryFrom((string) $this->factory->config('agent.verify.min_severity', 'medium')) ?? Severity::Medium,
+            max(1, $this->factory->config->int('max_findings_per_task')),
+            $this->factory->config->string('summary') === AuditTasks::SUMMARY_AGENT ? AuditTasks::SUMMARY_AGENT : AuditTasks::SUMMARY_GENERATED,
+            $this->factory->config->bool('agent.verify.enabled'),
+            Severity::tryFrom($this->factory->config->string('agent.verify.min_severity')) ?? Severity::Medium,
         );
     }
 }

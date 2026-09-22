@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit;
 use Astro2006\LaravelAudit\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Commands\InstallCommand;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\HarnessFactory;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -28,7 +29,8 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
-        $this->app->bind(HarnessFactory::class, fn () => new HarnessFactory((array) config('audit', [])));
+        $this->app->bind(AuditConfig::class, fn () => AuditConfig::load((array) config('audit', [])));
+        $this->app->bind(HarnessFactory::class, fn ($app) => new HarnessFactory($app->make(AuditConfig::class)));
     }
 
     public function packageBooted(): void

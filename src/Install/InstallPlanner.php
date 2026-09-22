@@ -9,8 +9,8 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Astro2006\LaravelAudit\Support\Read;
 
 /**
  * Collects what is missing. Larastan and Pint come with this package; the
@@ -19,10 +19,9 @@ use Astro2006\LaravelAudit\Support\Read;
  */
 final class InstallPlanner
 {
-    /** @param array<string, mixed> $config */
     public function __construct(
         private readonly ProjectInspector $project,
-        private readonly array $config,
+        private readonly AuditConfig $config,
         private readonly ?DatabaseGuard $guard = null,
         private readonly ?AgentDriver $driver = null,
     ) {}
@@ -94,8 +93,8 @@ final class InstallPlanner
         }
 
         $location = $project->browserTests(
-            Read::string($this->config, 'preflight.browser.testsuite', 'Browser'),
-            Read::string($this->config, 'preflight.browser.path', 'tests/Browser'),
+            $this->config->string('preflight.browser.testsuite'),
+            $this->config->string('preflight.browser.path'),
         );
 
         if ($location === null) {
@@ -149,7 +148,7 @@ final class InstallPlanner
     private function needs(PreflightStep $step): bool
     {
         try {
-            return RunSelection::resolve(Read::array($this->config, 'audits'), [], [])->needs($step);
+            return RunSelection::resolve($this->config->array('audits'), [], [])->needs($step);
         } catch (InvalidSelection) {
             return false;
         }

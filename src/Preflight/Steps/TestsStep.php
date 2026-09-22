@@ -60,7 +60,7 @@ final class TestsStep implements AsyncStep
 
         $this->database = $this->guard->check();
 
-        if (! $this->database->safe && ! $context->config('preflight.allow_shared_database', false)) {
+        if (! $this->database->safe && ! $context->config->bool('preflight.allow_shared_database')) {
             return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsDTO(database: $this->database));
         }
 
@@ -70,10 +70,10 @@ final class TestsStep implements AsyncStep
         @unlink($clover);
 
         $driver = $project->coverageDriver();
-        $this->coverage = (bool) $context->config('preflight.tests.coverage', true)
+        $this->coverage = $context->config->bool('preflight.tests.coverage')
             && ! $context->selection->skips(OptionalStep::Coverage)
             && $driver !== null;
-        $this->parallel = (bool) $context->config('preflight.tests.parallel', true) && $project->canRunParallel();
+        $this->parallel = $context->config->bool('preflight.tests.parallel') && $project->canRunParallel();
         $this->suites = $this->suitesWithoutBrowser($context);
 
         $flags = ['--log-junit='.$junit];
@@ -86,8 +86,8 @@ final class TestsStep implements AsyncStep
             $flags[] = '--testsuite='.implode(',', $this->suites);
         }
 
-        $custom = $context->config('preflight.tests.command');
-        $command = is_string($custom) && $custom !== ''
+        $custom = $context->config->nullableString('preflight.tests.command');
+        $command = $custom !== null
             ? $custom.' '.implode(' ', array_map('escapeshellarg', $flags))
             : $context->artisan(['test', ...($this->parallel ? ['--parallel'] : []), ...$flags]);
 
@@ -99,7 +99,7 @@ final class TestsStep implements AsyncStep
         };
 
         return $context->process($environment)
-            ->timeout((int) $context->config('preflight.tests.timeout', 1800))
+            ->timeout($context->config->int('preflight.tests.timeout'))
             ->start($command);
     }
 
@@ -141,7 +141,7 @@ final class TestsStep implements AsyncStep
     private function suitesWithoutBrowser(PreflightContext $context): array
     {
         $suites = $context->project->phpunit()->testSuites();
-        $browser = (string) $context->config('preflight.browser.testsuite', 'Browser');
+        $browser = $context->config->string('preflight.browser.testsuite');
 
         if (! in_array($browser, $suites, true)) {
             return [];

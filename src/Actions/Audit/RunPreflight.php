@@ -23,7 +23,7 @@ final class RunPreflight
 
     public function handle(AuditRun $run, RunSelection $selection, ProjectInspector $project, DatabaseGuard $guard, AuditConsole $console): PreflightContext
     {
-        $context = new PreflightContext($project, $run->preflightDir(), $run->logsDir(), $this->factory->allConfig(), $selection, $this->factory->childEnvironment($project));
+        $context = new PreflightContext($project, $run->preflightDir(), $run->logsDir(), $this->factory->config, $selection, $this->factory->childEnvironment($project));
 
         (new PreflightRunner($this->factory->steps($project, $guard)))->run(
             $context,

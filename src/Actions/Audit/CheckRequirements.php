@@ -25,7 +25,7 @@ final class CheckRequirements
     /** @return list<Check> */
     public function handle(ProjectInspector $project, RunSelection $selection, DatabaseGuard $guard, AgentDriver $driver, Messages $messages, bool $withAgents): array
     {
-        $checks = (new RequirementChecker($project, $this->factory->allConfig(), $guard, $driver, $messages))
+        $checks = (new RequirementChecker($project, $this->factory->config, $guard, $driver, $messages))
             ->check($selection, $withAgents, app()->environment('production'));
         $outdated = Agent::outdatedOverrides($this->factory->promptOverridePath());
 

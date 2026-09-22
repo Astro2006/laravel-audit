@@ -42,8 +42,8 @@ final class BrowserStep implements Step
         }
 
         $location = $project->browserTests(
-            (string) $context->config('preflight.browser.testsuite', 'Browser'),
-            (string) $context->config('preflight.browser.path', 'tests/Browser'),
+            $context->config->string('preflight.browser.testsuite'),
+            $context->config->string('preflight.browser.path'),
         );
 
         if ($location === null) {
@@ -57,7 +57,7 @@ final class BrowserStep implements Step
         $testsData = $context->results->get(PreflightStep::Tests)?->data;
         $database = ($testsData instanceof TestsDTO ? $testsData->database : null) ?? $this->guard->check();
 
-        if (! $database->safe && ! $context->config('preflight.allow_shared_database', false)) {
+        if (! $database->safe && ! $context->config->bool('preflight.allow_shared_database')) {
             return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new BrowserDTO(path: $location->path, database: $database));
         }
 
@@ -67,14 +67,14 @@ final class BrowserStep implements Step
         @unlink($junit);
         $startedAt = time();
 
-        $custom = $context->config('preflight.browser.command');
+        $custom = $context->config->nullableString('preflight.browser.command');
         $target = $location->isSuite() ? '--testsuite='.$location->value : $location->value;
-        $command = is_string($custom) && $custom !== ''
+        $command = $custom !== null
             ? $custom.' '.escapeshellarg('--log-junit='.$junit)
             : $context->artisan(['test', $target, '--log-junit='.$junit]);
 
         $result = $context->process()
-            ->timeout((int) $context->config('preflight.browser.timeout', 1200))
+            ->timeout($context->config->int('preflight.browser.timeout'))
             ->run($command);
 
         file_put_contents($context->logPath('browser.log'), $result->output()."\n".$result->errorOutput());
@@ -106,7 +106,7 @@ final class BrowserStep implements Step
     {
         $project = $context->project;
         $manifest = $project->path('public/build/manifest.json');
-        $mode = AssetBuildMode::tryFrom((string) $context->config('preflight.browser.build_assets', 'if-missing')) ?? AssetBuildMode::IfMissing;
+        $mode = AssetBuildMode::tryFrom($context->config->string('preflight.browser.build_assets')) ?? AssetBuildMode::IfMissing;
         $warnings = [];
 
         $build = match ($mode) {
@@ -149,7 +149,7 @@ final class BrowserStep implements Step
     /** @return list<string> copied files, relative to the preflight directory */
     private function collectArtifacts(PreflightContext $context, string $testPath, int $since): array
     {
-        $max = (int) $context->config('preflight.browser.max_artifacts', 10);
+        $max = $context->config->int('preflight.browser.max_artifacts');
 
         return (new Collection($this->files($context->project->path(rtrim($testPath, '/').'/Screenshots'))))
             ->filter(fn (\SplFileInfo $file): bool => $file->getMTime() >= $since)

@@ -6,13 +6,13 @@ namespace Astro2006\LaravelAudit\Services;
 
 use Astro2006\LaravelAudit\Actions\Install\ExecuteInstallPlan;
 use Astro2006\LaravelAudit\Actions\Install\PreviewComposerChanges;
+use Astro2006\LaravelAudit\Actions\Install\PublishConfig;
 use Astro2006\LaravelAudit\Actions\Install\VerifyInstall;
 use Astro2006\LaravelAudit\Console\InstallConsole;
 use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\InstallPlanner;
 use Astro2006\LaravelAudit\Install\PlanExecutor;
 use Astro2006\LaravelAudit\Support\HarnessFactory;
-use Astro2006\LaravelAudit\Support\Read;
 use Symfony\Component\Process\Process as SymfonyProcess;
 
 /**
@@ -27,6 +27,7 @@ final class InstallService
 
     public function __construct(
         private readonly HarnessFactory $factory,
+        private readonly PublishConfig $publishConfig,
         private readonly PreviewComposerChanges $previewComposerChanges,
         private readonly ExecuteInstallPlan $executeInstallPlan,
         private readonly VerifyInstall $verifyInstall,
@@ -35,14 +36,15 @@ final class InstallService
     /** @param bool $yes install the plan without asking (except upgrades) */
     public function run(bool $dryRun, bool $yes, InstallConsole $console): int
     {
+        $this->publishConfig->handle();
         $project = $this->factory->project();
-        $outputPath = Read::string($this->factory->allConfig(), 'output_path', storage_path('audit'));
-        $stubLevel = (int) $this->factory->config('preflight.phpstan.stub_level', 5);
+        $outputPath = $this->factory->config->string('output_path');
+        $stubLevel = $this->factory->config->int('preflight.phpstan.stub_level');
 
         $console->header();
 
         $driver = $this->factory->driver($project);
-        $plan = (new InstallPlanner($project, $this->factory->allConfig(), $this->factory->databaseGuard($project), $driver))->plan();
+        $plan = (new InstallPlanner($project, $this->factory->config, $this->factory->databaseGuard($project), $driver))->plan();
         $executor = new PlanExecutor($project);
 
         $console->plan($plan, $executor, $stubLevel);

@@ -48,14 +48,13 @@ final class PhpstanStep implements Step
             return StepResult::skipped($this->step(), SkipReason::NoConfig);
         }
 
-        $override = $context->config('preflight.phpstan.level');
-        $override = $override === null || $override === '' ? null : (string) $override;
+        $override = $context->config->nullableString('preflight.phpstan.level');
         $arguments = [
             'analyse',
             '--error-format=json',
             '--no-progress',
             '--no-interaction',
-            '--memory-limit='.$context->config('preflight.phpstan.memory_limit', '2G'),
+            '--memory-limit='.$context->config->string('preflight.phpstan.memory_limit'),
         ];
 
         if ($override !== null) {
@@ -63,7 +62,7 @@ final class PhpstanStep implements Step
         }
 
         $result = $context->process()
-            ->timeout((int) $context->config('preflight.phpstan.timeout', 1800))
+            ->timeout($context->config->int('preflight.phpstan.timeout'))
             ->run($context->vendorBinary('phpstan', $arguments));
 
         file_put_contents($context->logPath('phpstan.log'), $result->errorOutput());

@@ -19,10 +19,6 @@ class InstallCommand extends Command
 
     public function handle(InstallService $service): int
     {
-        if (! is_file(config_path('audit.php'))) {
-            $this->callSilently('vendor:publish', ['--tag' => 'audit-config']);
-        }
-
         return $service->run(
             (bool) $this->option('dry-run'),
             (bool) $this->option('yes'),

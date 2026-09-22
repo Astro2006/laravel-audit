@@ -28,7 +28,6 @@ use Astro2006\LaravelAudit\Run\RunManifest;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\HarnessFactory;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Astro2006\LaravelAudit\Support\Read;
 use Composer\InstalledVersions;
 use Throwable;
 
@@ -59,16 +58,16 @@ final class AuditService
         $project = $this->factory->project();
 
         try {
-            $selection = RunSelection::resolve(Read::array($this->factory->allConfig(), 'audits'), $options->audits, $options->without);
+            $selection = RunSelection::resolve($this->factory->config->array('audits'), $options->audits, $options->without);
             $driver = $this->factory->driver($project, $options->agent, $options->model);
-            $mode = AgentMode::resolve($options->mode ?? (string) $this->factory->config('agent.mode', AgentMode::Single->value));
+            $mode = AgentMode::resolve($options->mode ?? $this->factory->config->string('agent.mode'));
         } catch (InvalidSelection $exception) {
             $console->error($exception->getMessage());
 
             return self::HARNESS_ERROR;
         }
 
-        $concurrency = $mode->concurrency((int) $this->factory->config('agent.concurrency', 4));
+        $concurrency = $mode->concurrency($this->factory->config->int('agent.concurrency'));
         $guard = $this->factory->databaseGuard($project);
         $checks = $this->checkRequirements->handle($project, $selection, $guard, $driver, $console->messages, ! $options->preflightOnly);
 
@@ -79,7 +78,7 @@ final class AuditService
             return self::HARNESS_ERROR;
         }
 
-        $run = AuditRun::create((string) $this->factory->config('output_path', storage_path('audit')));
+        $run = AuditRun::create($this->factory->config->string('output_path'));
         $manifest = new RunManifest($run, $selection, GitInfo::read($project->basePath), $driver->name(), self::version());
         $manifest->write();
 
@@ -158,8 +157,8 @@ final class AuditService
     private function riskPoints(): RiskPoints
     {
         return new RiskPoints(
-            Read::array($this->factory->allConfig(), 'risk_points.weights'),
-            Read::array($this->factory->allConfig(), 'risk_points.confidence'),
+            $this->factory->config->array('risk_points.weights'),
+            $this->factory->config->array('risk_points.confidence'),
         );
     }
 

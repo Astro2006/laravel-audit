@@ -89,6 +89,16 @@ function latestRun(string $project): string
     return end($runs);
 }
 
+it('warns about config keys that are no longer read', function () {
+    auditProject();
+    fakeTools();
+    config()->set('audit.agent.effort', 'high');
+
+    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true])
+        ->expectsOutputToContain('config/audit.php sets agent.effort, which is no longer read. Use agent.drivers.claude_code.effort instead.')
+        ->assertExitCode(0);
+});
+
 it('runs the preflight only', function () {
     $project = auditProject();
     fakeTools();

@@ -31,30 +31,17 @@ use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Snapshots\StatusSnapshot;
 use Astro2006\LaravelAudit\Snapshots\TestsSnapshot;
 use Astro2006\LaravelAudit\Snapshots\TranslationsSnapshot;
-use Illuminate\Support\Arr;
 
 /**
  * Builds the harness pieces from config/audit.php.
  */
 class HarnessFactory
 {
-    /** @param array<string, mixed> $config */
-    public function __construct(private readonly array $config) {}
-
-    public function config(string $key, mixed $default = null): mixed
-    {
-        return Arr::get($this->config, $key, $default);
-    }
-
-    /** @return array<string, mixed> */
-    public function allConfig(): array
-    {
-        return $this->config;
-    }
+    public function __construct(public readonly AuditConfig $config) {}
 
     public function project(): ProjectInspector
     {
-        return new ProjectInspector((string) ($this->config('base_path') ?? base_path()));
+        return new ProjectInspector($this->config->nullableString('base_path') ?? base_path());
     }
 
     public function databaseGuard(ProjectInspector $project): DatabaseGuard
@@ -102,7 +89,7 @@ class HarnessFactory
             new PintSnapshot,
             new TranslationsSnapshot,
             new ComposerSnapshot,
-        ], max(1, (int) $this->config('snapshot_rows', 15)));
+        ], max(1, $this->config->int('snapshot_rows')));
     }
 
     /**

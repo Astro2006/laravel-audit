@@ -27,7 +27,7 @@ function installProject(array $lockDev = [], array $files = []): ProjectInspecto
 it('plans only the optional parts for a pest 5 project', function () {
     $project = installProject(['pestphp/pest' => 'v5.1.0', 'larastan/larastan' => 'v3.0.0', 'laravel/pint' => 'v1.20.0']);
 
-    $plan = (new InstallPlanner($project, ['audits' => auditsConfig()]))->plan();
+    $plan = (new InstallPlanner($project, auditConfig(['audits' => auditsConfig()])))->plan();
 
     expect($plan->present)->toBe(['larastan/larastan', 'laravel/pint', 'pestphp/pest'])
         ->and($plan->names())->toBe(['laravel/boost', 'pestphp/pest-plugin-browser', 'playwright'])
@@ -38,7 +38,7 @@ it('plans only the optional parts for a pest 5 project', function () {
 it('marks pest as an upgrade for phpunit-only projects and adds paratest', function () {
     $project = installProject(['phpunit/phpunit' => '12.0.0']);
 
-    $plan = (new InstallPlanner($project, ['audits' => auditsConfig()]))->plan();
+    $plan = (new InstallPlanner($project, auditConfig(['audits' => auditsConfig()])))->plan();
     $pest = collect($plan->packages)->firstWhere('name', 'pestphp/pest');
 
     expect($pest->isUpgrade())->toBeTrue()
@@ -47,13 +47,13 @@ it('marks pest as an upgrade for phpunit-only projects and adds paratest', funct
 });
 
 it('marks old pest versions as an upgrade', function () {
-    $plan = (new InstallPlanner(installProject(['pestphp/pest' => 'v3.8.0']), ['audits' => auditsConfig()]))->plan();
+    $plan = (new InstallPlanner(installProject(['pestphp/pest' => 'v3.8.0']), auditConfig(['audits' => auditsConfig()])))->plan();
 
     expect(collect($plan->packages)->firstWhere('name', 'pestphp/pest')->upgradeReason)->toBe('Pest 3 → Pest 4+');
 });
 
 it('drops browser packages when the pest upgrade is declined', function () {
-    $plan = (new InstallPlanner(installProject(['phpunit/phpunit' => '12.0.0']), ['audits' => auditsConfig()]))->plan();
+    $plan = (new InstallPlanner(installProject(['phpunit/phpunit' => '12.0.0']), auditConfig(['audits' => auditsConfig()])))->plan();
 
     $selected = $plan->only(['laravel/boost', 'brianium/paratest', 'pestphp/pest-plugin-browser', 'playwright']);
 
@@ -62,14 +62,14 @@ it('drops browser packages when the pest upgrade is declined', function () {
 });
 
 it('skips browser packages when neither tests nor frontend is active', function () {
-    $plan = (new InstallPlanner(installProject(['pestphp/pest' => 'v5.1.0']), ['audits' => auditsConfig(['backend', 'dependencies'])]))->plan();
+    $plan = (new InstallPlanner(installProject(['pestphp/pest' => 'v5.1.0']), auditConfig(['audits' => auditsConfig(['backend', 'dependencies'])])))->plan();
 
     expect($plan->names())->toBe(['laravel/boost']);
 });
 
 it('bundles packages into one composer and one npm command', function () {
     $project = installProject(['phpunit/phpunit' => '12.0.0'], ['pnpm-lock.yaml' => '']);
-    $plan = (new InstallPlanner($project, ['audits' => auditsConfig()]))->plan();
+    $plan = (new InstallPlanner($project, auditConfig(['audits' => auditsConfig()])))->plan();
     $executor = new PlanExecutor($project);
 
     expect($executor->composerCommand($plan, dryRun: true))->toBe([

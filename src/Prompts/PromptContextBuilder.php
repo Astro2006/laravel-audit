@@ -8,16 +8,15 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Run\AuditRun;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Astro2006\LaravelAudit\Support\Read;
 
 final class PromptContextBuilder
 {
     /**
-     * @param  array<mixed>  $config
      * @param  array<string, string>  $snapshots  snapshot type => markdown (SnapshotWriter::write())
      */
-    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, array $config, string $locale, bool $boostAvailable, string $toolsNote = '', array $snapshots = []): PromptContext
+    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, AuditConfig $config, string $locale, bool $boostAvailable, string $toolsNote = '', array $snapshots = []): PromptContext
     {
         $steps = $summary->steps;
         $about = $steps->about();
@@ -26,8 +25,8 @@ final class PromptContextBuilder
 
         $customChecks = [];
 
-        foreach (Read::keys($config, 'custom_checks') as $audit) {
-            $customChecks = [...$customChecks, $audit => Read::strings($config, 'custom_checks.'.$audit)];
+        foreach (array_keys($config->array('custom_checks')) as $audit) {
+            $customChecks = [...$customChecks, (string) $audit => $config->strings('custom_checks.'.$audit)];
         }
 
         return new PromptContext(
@@ -42,12 +41,12 @@ final class PromptContextBuilder
             outputDir: $project->relative($run->dir()),
             preflightDir: $project->relative($run->preflightDir()),
             reportLanguage: $locale,
-            excludePaths: Read::strings($config, 'exclude_paths'),
+            excludePaths: $config->strings('exclude_paths'),
             customChecks: $customChecks,
-            maxFindings: max(1, Read::int($config, 'max_findings_per_task', 5)),
+            maxFindings: max(1, $config->int('max_findings_per_task')),
             boostAvailable: $boostAvailable,
             toolsNote: $toolsNote,
-            maxFiles: max(1, Read::int($config, 'max_files_per_task', 25)),
+            maxFiles: max(1, $config->int('max_files_per_task')),
             snapshots: $snapshots,
         );
     }

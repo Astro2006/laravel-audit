@@ -5,37 +5,29 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Process\PendingProcess;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Process;
 
 final class PreflightContext
 {
     public readonly StepResults $results;
 
-    /**
-     * @param  array<string, mixed>  $config  the "audit" config array
-     */
     public function __construct(
         public readonly ProjectInspector $project,
         public readonly string $preflightDir,
         public readonly string $logsDir,
-        public readonly array $config,
+        public readonly AuditConfig $config,
         public readonly RunSelection $selection,
         public readonly ChildEnvironment $environment = new ChildEnvironment,
         public readonly string $phpBinary = PHP_BINARY,
     ) {
         $this->results = new StepResults;
-    }
-
-    public function config(string $key, mixed $default = null): mixed
-    {
-        return Arr::get($this->config, $key, $default);
     }
 
     /**

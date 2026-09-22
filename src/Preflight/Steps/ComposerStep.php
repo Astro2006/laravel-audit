@@ -50,11 +50,11 @@ final class ComposerStep implements Step
             'validate' => ['validate', '--no-check-publish'],
         ]);
 
-        if ($context->config('preflight.composer.outdated', true)) {
+        if ($context->config->bool('preflight.composer.outdated')) {
             $commands->put('outdated', ['outdated', '--direct', '--format=json']);
         }
 
-        if ($context->config('preflight.composer.licenses', true)) {
+        if ($context->config->bool('preflight.composer.licenses')) {
             $commands->put('licenses', ['licenses', '--format=json']);
         }
 
@@ -88,7 +88,7 @@ final class ComposerStep implements Step
             validateExitCode: (int) $validate?->exitCode(),
             usageMap: $usageMap,
             why: $why,
-            licenseAllowlist: array_values(array_map('strval', (array) $context->config('preflight.license_allowlist', []))),
+            licenseAllowlist: $context->config->strings('preflight.license_allowlist'),
         );
 
         $context->writeJson(DependenciesAgent::FACTS_FILE, $facts);
