@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
-use Astro2006\LaravelAudit\Data\Run\RunRecord;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Eval\EvalReport;
+use Astro2006\LaravelAudit\Eval\EvalRunner;
 use Astro2006\LaravelAudit\Eval\ExpectedSet;
-use Astro2006\LaravelAudit\Support\AuditConfig;
-use Astro2006\LaravelAudit\Support\Json;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -28,7 +26,7 @@ class EvalCommand extends Command
 
     protected $hidden = true;
 
-    public function handle(AuditConfig $config): int
+    public function handle(EvalRunner $runner): int
     {
         try {
             $expected = ExpectedSet::fromFile((string) $this->argument('expected'));
@@ -38,33 +36,13 @@ class EvalCommand extends Command
             return self::FAILURE;
         }
 
-        $outputRoot = rtrim($config->string('output_path'), '/');
         $runs = max(1, (int) $this->option('runs'));
         $audits = array_values(array_intersect(AuditType::values(), array_map('strval', (array) $this->option('audit'))));
-        $records = [];
 
-        for ($i = 0; $i < $runs; $i++) {
-            $before = glob($outputRoot.'/*', GLOB_ONLYDIR) ?: [];
-
-            // The tools are deterministic; only the agents vary between runs.
-            $options = [
-                '--force' => true,
-                '--no-interaction' => true,
-                ...array_fill_keys(array_map(fn (string $audit): string => '--'.$audit, $audits), true),
-                ...($i > 0 ? ['--reuse-preflight' => null] : []),
-            ];
-
-            $this->components->info(sprintf('Eval run %d of %d', $i + 1, $runs));
+        $records = $runner->records($runs, $audits, function (int $run, array $options) use ($runs): void {
+            $this->components->info(sprintf('Eval run %d of %d', $run, $runs));
             $this->call('audit', $options);
-
-            foreach (array_diff(glob($outputRoot.'/*', GLOB_ONLYDIR) ?: [], $before) as $created) {
-                $data = Json::readFile($created.'/run.json');
-
-                if ($data !== []) {
-                    $records[] = RunRecord::fromArray($data);
-                }
-            }
-        }
+        });
 
         if ($records === []) {
             $this->components->error('No run produced a run.json.');
@@ -74,9 +52,7 @@ class EvalCommand extends Command
 
         $report = new EvalReport;
         $result = $report->evaluate($expected, $records);
-        $path = $outputRoot.'/eval-'.date('Y-m-d_H-i-s').'.md';
-        file_put_contents($path, $report->render($result));
-        Json::writeFile(substr($path, 0, -3).'.json', $result->toArray());
+        $path = $runner->write($report, $result);
 
         $this->newLine();
 
