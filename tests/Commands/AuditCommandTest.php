@@ -130,7 +130,7 @@ it('runs an audit end to end with a validated report', function () {
         ->toContain('| dependencies.security | completed | 3 | no | 12 |')
         ->toContain('| vulnerable-dependency | medium | confirmed | `package:guzzlehttp/psr7` |')
         ->and($run.'/logs/dependencies.security.prompt.md')->toBeFile()
-        ->and(file_get_contents($run.'/logs/dependencies.security.prompt.md'))->toContain('Report language: **English (en)**')
+        ->and(file_get_contents($run.'/logs/dependencies.security.prompt.md'))->toContain('Write all prose in **English (en)**')
         ->and(file_get_contents($run.'/logs/dependencies.summary.prompt.md'))->toContain('- DEP-003 · low · confirmed · `abandoned-package` — acme/test-only is abandoned (package:acme/test-only)');
 
     Process::assertRan(fn ($process) => in_array('--restricted', (array) $process->command, true)
