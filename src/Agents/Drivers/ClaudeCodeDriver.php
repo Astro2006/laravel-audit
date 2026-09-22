@@ -6,14 +6,12 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
-use Astro2006\LaravelAudit\Agents\Telemetry;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
-use Symfony\Component\Process\ExecutableFinder;
 
 /**
  * Claude Code, started headless with `claude -p`.
@@ -26,6 +24,8 @@ use Symfony\Component\Process\ExecutableFinder;
  */
 final class ClaudeCodeDriver implements AgentDriver
 {
+    use RunsCli;
+
     public const string NAME = 'claude_code';
 
     private const array TOOLS = ['Read', 'Grep', 'Glob'];
@@ -61,21 +61,6 @@ final class ClaudeCodeDriver implements AgentDriver
     public function displayName(): string
     {
         return 'Claude Code';
-    }
-
-    public function binary(): string
-    {
-        return $this->binary;
-    }
-
-    public function model(): ?string
-    {
-        return $this->model;
-    }
-
-    public function isAvailable(): bool
-    {
-        return is_file($this->binary) || (new ExecutableFinder)->find($this->binary) !== null;
     }
 
     public function readProtection(): ReadProtection
@@ -136,9 +121,7 @@ final class ClaudeCodeDriver implements AgentDriver
 
         $command[] = '--disallowedTools='.implode(',', $this->deniedTools());
 
-        if ($this->model !== null && $this->model !== '') {
-            array_push($command, '--model', $this->model);
-        }
+        array_push($command, ...$this->modelArguments());
 
         if ($this->effort !== null && $this->effort !== '') {
             array_push($command, '--effort', $this->effort);
@@ -176,14 +159,14 @@ final class ClaudeCodeDriver implements AgentDriver
             default => AgentExit::Error,
         };
 
-        [$telemetry, $model] = $this->usage($data);
+        $usage = ClaudeUsage::fromResult($data);
         $answer = Read::string($data, 'result');
 
         return new AgentResult(
             answer: $answer,
             sessionId: Read::nullableString($data, 'session_id'),
-            model: $model,
-            telemetry: $telemetry,
+            model: $usage->model,
+            telemetry: $usage->telemetry,
             exit: $exit,
             truncated: Read::string($data, 'stop_reason') === 'max_tokens',
             error: $exit === AgentExit::Success ? null : trim($subtype.' '.mb_substr($answer, 0, 300)),
@@ -209,51 +192,5 @@ final class ClaudeCodeDriver implements AgentDriver
         }
 
         return $denied;
-    }
-
-    /**
-     * Sums token usage over all models (the CLI may use a small model for
-     * housekeeping) and names the model that did most of the work.
-     *
-     * @param  array<mixed>  $data
-     * @return array{Telemetry, string|null}
-     */
-    private function usage(array $data): array
-    {
-        $input = 0;
-        $output = 0;
-        $cacheRead = 0;
-        $model = null;
-        $topCost = -1.0;
-
-        foreach (Read::array($data, 'modelUsage') as $name => $usage) {
-            $usage = is_array($usage) ? $usage : [];
-            $input += Read::int($usage, 'inputTokens') + Read::int($usage, 'cacheCreationInputTokens');
-            $output += Read::int($usage, 'outputTokens');
-            $cacheRead += Read::int($usage, 'cacheReadInputTokens');
-
-            if (Read::float($usage, 'costUSD') > $topCost) {
-                $topCost = Read::float($usage, 'costUSD');
-                $model = Read::nullableString($usage, 'canonicalModel') ?? (string) preg_replace('/\[.*\]$/', '', (string) $name);
-            }
-        }
-
-        if ($input === 0) {
-            $input = Read::int($data, 'usage.input_tokens') + Read::int($data, 'usage.cache_creation_input_tokens');
-            $output = Read::int($data, 'usage.output_tokens');
-            $cacheRead = Read::int($data, 'usage.cache_read_input_tokens');
-        }
-
-        return [
-            new Telemetry(
-                inputTokens: $input,
-                outputTokens: $output,
-                cacheReadTokens: $cacheRead,
-                costUsd: Read::nullableFloat($data, 'total_cost_usd'),
-                turns: Read::int($data, 'num_turns'),
-                durationMs: Read::int($data, 'duration_ms'),
-            ),
-            $model,
-        ];
     }
 }

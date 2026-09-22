@@ -13,7 +13,6 @@ use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
-use Symfony\Component\Process\ExecutableFinder;
 
 /**
  * OpenAI Codex, started headless with `codex exec --json`.
@@ -27,6 +26,8 @@ use Symfony\Component\Process\ExecutableFinder;
  */
 final class CodexDriver implements AgentDriver
 {
+    use RunsCli;
+
     public const string NAME = 'codex';
 
     /**
@@ -50,21 +51,6 @@ final class CodexDriver implements AgentDriver
     public function displayName(): string
     {
         return 'Codex';
-    }
-
-    public function binary(): string
-    {
-        return $this->binary;
-    }
-
-    public function model(): ?string
-    {
-        return $this->model;
-    }
-
-    public function isAvailable(): bool
-    {
-        return is_file($this->binary) || (new ExecutableFinder)->find($this->binary) !== null;
     }
 
     public function readProtection(): ReadProtection
@@ -149,11 +135,7 @@ final class CodexDriver implements AgentDriver
     /** @return list<string> */
     private function base(): array
     {
-        $command = [$this->binary, 'exec', '--json', '--skip-git-repo-check'];
-
-        if ($this->model !== null && $this->model !== '') {
-            array_push($command, '--model', $this->model);
-        }
+        $command = [$this->binary, 'exec', '--json', '--skip-git-repo-check', ...$this->modelArguments()];
 
         foreach ([...$this->mcpOverrides(), ...$this->overrides] as $override) {
             array_push($command, '-c', $override);
