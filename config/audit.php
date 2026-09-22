@@ -130,7 +130,7 @@ return [
         ],
         'dependencies' => [
             'enabled' => true,
-            'preflight' => ['about', 'stack', 'loc', 'composer', 'tests'],
+            'preflight' => ['about', 'stack', 'composer'],
         ],
     ],
 

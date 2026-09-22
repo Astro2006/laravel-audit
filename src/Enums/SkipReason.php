@@ -13,5 +13,4 @@ enum SkipReason: string
     case NoBrowserTests = 'no-browser-tests';
     case PluginMissing = 'plugin-missing';
     case SharedDatabase = 'shared-database';
-    case GateAborted = 'gate-aborted';
 }

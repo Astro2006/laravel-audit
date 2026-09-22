@@ -76,7 +76,6 @@ return [
         'no-browser-tests' => 'no browser tests',
         'plugin-missing' => 'browser plugin or Playwright missing',
         'shared-database' => 'skipped: would use the app database',
-        'gate-aborted' => 'not run (aborted at the test gate)',
     ],
 
     'warnings' => [
@@ -89,6 +88,8 @@ return [
     'gate' => [
         'failing' => ':count tests fail. First failures:',
         'broken' => 'Almost every test fails for the same reason (:reason). The environment looks broken; an audit makes little sense.',
+        'browser_failing' => ':count of :total browser tests fail.',
+        'browser_broken' => 'Almost every browser test fails for the same reason. The server, the assets or the browser look broken.',
         'question' => 'Continue with the audits anyway?',
         'aborted' => 'Aborted at the test gate. The preflight is kept in :path.',
     ],

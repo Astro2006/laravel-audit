@@ -31,7 +31,7 @@ enum PreflightStep: string
 
     /**
      * Heavy steps compete for CPU and run one after another:
-     * tests → gate → browser → phpstan.
+     * tests → browser → phpstan.
      */
     public function isHeavy(): bool
     {

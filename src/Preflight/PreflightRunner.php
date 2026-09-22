@@ -6,18 +6,17 @@ namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
-use Astro2006\LaravelAudit\Enums\SkipReason;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * Runs the preflight in two strands: the heavy steps (tests → gate →
- * browser → phpstan) one after another, the light steps meanwhile. Tests
- * start in the background first, so the light steps run while they do.
+ * Runs the preflight in two strands: the heavy steps (tests → browser →
+ * phpstan) one after another, the light steps meanwhile. Tests start in the
+ * background first, so the light steps run while they do. The test gate
+ * comes afterwards, once every step has a result.
  */
 final class PreflightRunner
 {
@@ -32,10 +31,9 @@ final class PreflightRunner
 
     /**
      * @param  Closure(StepResult): void  $onResult  called after every step
-     * @param  Closure(StepResult): GateDecision  $gate  called with the test result
      * @param  (Closure(PreflightStep): void)|null  $onStart
      */
-    public function run(PreflightContext $context, Closure $onResult, Closure $gate, ?Closure $onStart = null): GateDecision
+    public function run(PreflightContext $context, Closure $onResult, ?Closure $onStart = null): void
     {
         $required = $context->selection->requiredSteps();
         $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && $this->steps->has($step->value);
@@ -76,24 +74,14 @@ final class PreflightRunner
             $this->record($context, $result->withDuration(microtime(true) - $testsStarted), $onResult);
         }
 
-        $decision = $gate($context->results->get(PreflightStep::Tests) ?? StepResult::skipped(PreflightStep::Tests, SkipReason::Disabled));
-
         foreach ([PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
             if (! $has($step) || $context->results->get($step) !== null) {
-                continue;
-            }
-
-            if (! $decision->allowsAgents()) {
-                $this->record($context, StepResult::skipped($step, SkipReason::GateAborted), $onResult);
-
                 continue;
             }
 
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
         }
-
-        return $decision;
     }
 
     private function step(PreflightStep $step): ?Step

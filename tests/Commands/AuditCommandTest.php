@@ -45,6 +45,15 @@ function greenTestRun(array|string $command): mixed
     return Process::result('');
 }
 
+/** Writes a JUnit report with one failing test where the test step asked for it. */
+function redTestRun(array|string $command): mixed
+{
+    preg_match('/--log-junit=(\S+)/', implode(' ', (array) $command), $match);
+    file_put_contents($match[1], '<?xml version="1.0"?><testsuites><testsuite name="Feature" tests="2" assertions="2" errors="0" failures="1" skipped="0" time="0.1"><testcase name="it works" file="/app/tests/Feature/HomeTest.php" class="Tests\Feature\HomeTest" assertions="1" time="0.1"/><testcase name="it checks out" file="/app/tests/Feature/CheckoutTest.php" class="Tests\Feature\CheckoutTest" assertions="1" time="0.1"><failure type="Failure">Expected 200, got 500.</failure></testcase></testsuite></testsuites>');
+
+    return Process::result('', exitCode: 1);
+}
+
 /** @return array<string, string> task key => answer */
 function dependencyAnswers(): array
 {
@@ -334,3 +343,38 @@ it('writes the summary itself and applies the verify pass', function () {
         ->toContain('| dependencies.hygiene | DEP-003 | Made-up constraint | the code in Evidence does not appear in `composer.json`. |')
         ->toContain('| Wall clock |');
 });
+
+it('asks at the test gate once the preflight is done and stops when told to', function () {
+    $project = auditProject();
+    config()->set('audit.audits.dependencies.preflight', ['about', 'stack', 'composer', 'tests']);
+    fakeTools(['*--log-junit*' => fn ($process) => redTestRun($process->command)]);
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('1 tests fail. First failures:')
+        ->expectsConfirmation('Continue with the audits anyway?', 'no')
+        ->expectsOutputToContain('Aborted at the test gate.')
+        ->assertExitCode(2);
+
+    $run = latestRun($project);
+
+    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('aborted')->preflightComplete->toBeTrue()
+        ->and(file_get_contents($run.'/run.md'))->toContain('gate: aborted');
+    Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), '-p --output-format'));
+});
+
+it('starts the agents without asking with --force', function () {
+    $project = auditProject();
+    config()->set('audit.audits.dependencies.preflight', ['about', 'stack', 'composer', 'tests']);
+    fakeTools([
+        '*pint*-p*' => fn ($process) => Process::result(claudeJson(['result' => dependencyAnswers()[$process->environment['AUDIT_TASK'] ?? ''] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n"])),
+        '*--log-junit*' => fn ($process) => redTestRun($process->command),
+    ]);
+
+    $this->artisan('audit', ['--dependencies' => true, '--force' => true])
+        ->expectsOutputToContain('1 tests fail. First failures:')
+        ->doesntExpectOutputToContain('Continue with the audits anyway?')
+        ->assertExitCode(0);
+
+    expect(file_get_contents(latestRun($project).'/run.md'))->toContain('gate: forced');
+});
+

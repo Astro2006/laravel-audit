@@ -76,7 +76,6 @@ return [
         'no-browser-tests' => 'keine Browser-Tests',
         'plugin-missing' => 'Browser-Plugin oder Playwright fehlt',
         'shared-database' => 'übersprungen: würde die App-Datenbank nutzen',
-        'gate-aborted' => 'nicht gelaufen (am Test-Gate abgebrochen)',
     ],
 
     'warnings' => [
@@ -89,6 +88,8 @@ return [
     'gate' => [
         'failing' => ':count Tests schlagen fehl. Erste Fehlschläge:',
         'broken' => 'Fast alle Tests scheitern aus demselben Grund (:reason). Die Umgebung wirkt kaputt; ein Audit ergibt hier wenig Sinn.',
+        'browser_failing' => ':count von :total Browser-Tests schlagen fehl.',
+        'browser_broken' => 'Fast alle Browser-Tests scheitern aus demselben Grund. Server, Assets oder Browser wirken kaputt.',
         'question' => 'Trotzdem mit den Audits fortfahren?',
         'aborted' => 'Am Test-Gate abgebrochen. Der Preflight bleibt in :path erhalten.',
     ],

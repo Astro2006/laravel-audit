@@ -80,6 +80,7 @@ final class BackendAgent extends Agent
             $this->task('logic', 'Logic and transactions', ['logic-bug', 'transaction-safety'], snapshots: [SnapshotType::Routes]),
             $this->task('performance', 'Performance', ['n-plus-one', 'inefficient-query', 'missing-index', 'missing-cache']),
             $this->task('dead-code', 'Dead code', ['dead-code'], sections: ['Dead code candidates'], snapshots: [SnapshotType::Routes, SnapshotType::Phpstan]),
+            $this->task('database', 'Database schema', ['missing-index'], snapshots: [SnapshotType::DatabaseSchema]),
         ];
     }
 }
