@@ -8,9 +8,12 @@ use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Dotenv\Dotenv;
+use Illuminate\Support\Arr;
 
 final class DatabaseGuard
 {
+    private const array URL_DRIVERS = ['mysql2' => 'mysql', 'postgres' => 'pgsql', 'postgresql' => 'pgsql', 'sqlite3' => 'sqlite', 'mssql' => 'sqlsrv'];
+
     /**
      * @param  array<mixed>  $connections  config('database.connections')
      * @param  string  $appConnection  config('database.default')
@@ -56,6 +59,15 @@ final class DatabaseGuard
         $driver = Read::string($config, 'driver', $name);
         $database = Read::string($env, 'DB_DATABASE', Read::string($config, 'database'));
         $host = Read::string($env, 'DB_HOST', Read::string($config, 'host'));
+        $port = Read::string($env, 'DB_PORT', (string) Read::int($config, 'port'));
+        $url = parse_url(Read::string($env, 'DB_URL', Read::string($config, 'url')));
+
+        if (is_array($url) && Arr::has($url, 'scheme')) {
+            $driver = (string) Arr::get(self::URL_DRIVERS, (string) Arr::get($url, 'scheme'), Arr::get($url, 'scheme'));
+            $host = (string) Arr::get($url, 'host', $host);
+            $port = (string) Arr::get($url, 'port', $port);
+            $database = Arr::has($url, 'path') ? substr((string) Arr::get($url, 'path'), 1) : $database;
+        }
 
         if ($driver === 'sqlite' && $database === '') {
             $database = $this->project->path('database/database.sqlite');
@@ -65,7 +77,7 @@ final class DatabaseGuard
             ? 'sqlite '.($database === ':memory:' ? ':memory:' : $this->project->relative($database))
             : sprintf('%s %s@%s', $driver, $database, $host ?: 'localhost');
 
-        return new ConnectionInfo($driver, $host, $database, $label);
+        return new ConnectionInfo($driver, $host, $database, $label, $port === '0' ? '' : $port);
     }
 
     private function sameDatabase(ConnectionInfo $a, ConnectionInfo $b): bool
@@ -78,17 +90,26 @@ final class DatabaseGuard
         }
 
         return strcasecmp($a->database, $b->database) === 0
-            && $this->normalizeHost($a->host) === $this->normalizeHost($b->host);
+            && $this->normalizeHost($a->host) === $this->normalizeHost($b->host)
+            && ($a->port === '' || $b->port === '' || $a->port === $b->port);
     }
 
-    /** @return array<string, string> */
+    /**
+     * The variables the test process ends up with. PHPUnit sets <env> before
+     * Laravel boots (without force only where the shell has no value), then
+     * Laravel loads `.env.<APP_ENV>` if it exists, else `.env`, without
+     * overwriting anything already set.
+     *
+     * @return array<string, string>
+     */
     private function testEnv(): array
     {
-        $env = is_file($this->project->path('.env.testing'))
-            ? $this->fileEnv('.env.testing')
-            : $this->fileEnv('.env');
+        $phpunit = $this->project->phpunit();
+        $set = [...$phpunit->env(), ...$this->inherited, ...$phpunit->env(forcedOnly: true)];
+        $appEnv = Read::string($set, 'APP_ENV');
+        $file = $appEnv !== '' && is_file($this->project->path('.env.'.$appEnv)) ? '.env.'.$appEnv : '.env';
 
-        return [...$env, ...$this->project->phpunit()->env(), ...$this->inherited, ...$this->project->phpunit()->env(forcedOnly: true)];
+        return [...$this->fileEnv($file), ...$set];
     }
 
     /** @return array<string, string> */

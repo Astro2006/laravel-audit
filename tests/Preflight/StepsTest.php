@@ -176,12 +176,12 @@ it('starts the test run without the variables the audit process loaded from .env
         $dir.'/logs',
         auditConfig(),
         RunSelection::resolve(auditsConfig(['tests']), [], ['coverage']),
-        new ChildEnvironment(['APP_ENV', 'DB_DATABASE']),
+        new ChildEnvironment(['APP_ENV' => (string) getenv('APP_ENV'), 'DB_DATABASE' => 'shop']),
     );
 
     (new TestsStep(safeGuard($context->project)))->start($context)->wait();
 
-    Process::assertRan(fn ($process) => $process->environment === (new ChildEnvironment(['APP_ENV', 'DB_DATABASE']))->overrides()
+    Process::assertRan(fn ($process) => $process->environment === (new ChildEnvironment(['APP_ENV' => (string) getenv('APP_ENV'), 'DB_DATABASE' => 'shop']))->toolOverrides()
         && $process->environment['APP_ENV'] === false && $process->environment['CLAUDECODE'] === false);
 });
 

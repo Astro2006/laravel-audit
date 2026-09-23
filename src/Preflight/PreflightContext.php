@@ -38,7 +38,7 @@ final class PreflightContext
      */
     public function process(array $environment = []): PendingProcess
     {
-        return Process::path($this->project->basePath)->env([...$this->environment->overrides(), ...$environment]);
+        return Process::path($this->project->basePath)->env([...$this->environment->toolOverrides(), ...$environment]);
     }
 
     public function record(StepResult $result): void

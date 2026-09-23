@@ -83,7 +83,7 @@ it('stops an agent that runs past the timeout and fails its task', function () {
 
 it('removes the variables loaded from .env from the agent environment', function () {
     Process::fake(['*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))]))]);
-    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), pollMicroseconds: 1000, environment: new ChildEnvironment(['APP_KEY', 'DB_PASSWORD']));
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), pollMicroseconds: 1000, environment: new ChildEnvironment(['APP_KEY' => 'base64:x', 'DB_PASSWORD' => 'secret']));
 
     $runner->run([backendJob()]);
 

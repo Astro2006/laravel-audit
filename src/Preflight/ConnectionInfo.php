@@ -11,6 +11,7 @@ final readonly class ConnectionInfo
         public string $host,
         public string $database,
         public string $label,
+        public string $port = '',
     ) {}
 
     public function isInMemorySqlite(): bool

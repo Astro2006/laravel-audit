@@ -280,9 +280,9 @@ Browser tests are Pest 4+ browser tests with Playwright. They are found through 
 
 ### The database guard
 
-Tests with `RefreshDatabase` wipe the database they run against. Before any test runs, the guard resolves the test connection the way Laravel does: `.env.testing` replaces `.env`, `phpunit.xml` `<env>` wins over it, and variables exported in your shell win over `<env>` without `force="true"`. The guard then compares the test connection with the app database. If they could be the same, tests and browser tests are **skipped**, not run. When in doubt, it says "not safe".
+Tests with `RefreshDatabase` wipe the database they run against. Before any test runs, the guard resolves the test connection the way Laravel does: variables exported in your shell win over `phpunit.xml` `<env>` without `force="true"`, `<env force="true">` wins over both, and `.env.<APP_ENV>` (for example `.env.testing` when `APP_ENV=testing`) replaces `.env` only for the environment those settle on. `DB_URL` and `DB_PORT` count too. The guard then compares the test connection with the app database. If they could be the same, tests and browser tests are **skipped**, not run. When in doubt, it says "not safe".
 
-The test process itself starts without the variables `php artisan audit` loaded from your `.env`, like a fresh shell. So the guard's result is also what the tests really use.
+The test process itself starts without the variables `php artisan audit` loaded from your `.env`, like a fresh shell; variables you exported keep their value. So the guard's result is also what the tests really use. Agent CLIs get none of the variables named in `.env`, exported or not.
 
 ## Output
 
