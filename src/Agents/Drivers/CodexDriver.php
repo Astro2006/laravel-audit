@@ -20,6 +20,8 @@ final class CodexDriver implements AgentDriver
 
     public const string NAME = 'codex';
 
+    private const string READ_ONLY_EVEN_ON_RESUME = 'sandbox_mode="read-only"';
+
     /**
      * @param  list<string>  $boostTools  allowed Boost MCP tools
      * @param  list<string>  $overrides  extra `-c key=value` overrides, e.g. model_provider="ollama"
@@ -123,7 +125,7 @@ final class CodexDriver implements AgentDriver
     {
         $command = [$this->binary, 'exec', '--json', '--skip-git-repo-check', ...$this->modelArguments()];
 
-        foreach ([...$this->mcpOverrides(), ...$this->overrides] as $override) {
+        foreach ([...$this->mcpOverrides(), ...$this->overrides, self::READ_ONLY_EVEN_ON_RESUME] as $override) {
             array_push($command, '-c', $override);
         }
 

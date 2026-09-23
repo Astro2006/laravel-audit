@@ -353,7 +353,7 @@ The agents look at your code. They must not change it or see your secrets. Each 
   - Claude Code gets `Read`, `Grep` and `Glob` only, runs with `--restricted` (your settings files do not apply) and `--permission-prompts none`, so nothing can be approved by accident.
   - OpenCode gets a generated config: every tool off except read, glob and list, every other permission denied, never "ask", `--pure` (no plugins).
   - Codex runs in its read-only sandbox. It works through a shell, so it can run read-only commands.
-- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/*.key` are denied by explicit rules (`agent.deny_read`, `agent.allow_read`). Claude Code and OpenCode enforce this; Codex cannot and only runs when you accept that. Every child process starts without the variables loaded from your `.env`.
+- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/**/*.key` are denied by explicit rules (`agent.deny_read`, `agent.allow_read`). Claude Code and OpenCode enforce this; Codex cannot and only runs when you accept that. Every child process starts without the variables loaded from your `.env`.
 - **Read-only Boost.** Boost's MCP server (`php artisan boost:mcp`) is the only MCP server, and only an allowlist of its tools is enabled (`agent.boost_tools`). Tinker, database queries, log readers and `get-config` (it returns secret values) are always denied.
 - **Never in production.** `php artisan audit` refuses to run when `APP_ENV` is `production`.
 - **Test database guard.** See [above](#the-database-guard).
@@ -383,7 +383,7 @@ return [
             'opencode' => ['binary' => 'opencode'],
             'codex' => ['binary' => 'codex', 'allow_unrestricted_read' => false],
         ],
-        'deny_read' => ['.env*', 'auth.json', 'storage/*.key'],
+        'deny_read' => ['.env*', 'auth.json', 'storage/**/*.key'],
         'allow_read' => ['.env.example'],
     ],
 

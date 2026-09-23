@@ -16,8 +16,15 @@ it('runs codex exec in the read-only sandbox with boost as the only mcp server',
         '-c', 'mcp_servers.laravel-boost.args=["artisan","boost:mcp"]',
         '-c', 'mcp_servers.laravel-boost.enabled_tools=["application-info"]',
         '-c', 'model_provider="ollama"',
+        '-c', 'sandbox_mode="read-only"',
         '--sandbox', 'read-only', '-',
     ]);
+});
+
+it('keeps the read-only sandbox when a config override tries to loosen it', function () {
+    $command = (new CodexDriver(overrides: ['sandbox_mode="danger-full-access"']))->command(new AgentRequest('k', 'p', '/app'));
+
+    expect(array_search('sandbox_mode="read-only"', $command, true))->toBeGreaterThan(array_search('sandbox_mode="danger-full-access"', $command, true));
 });
 
 it('cannot protect secret files unless the config accepts that', function () {
@@ -36,7 +43,7 @@ it('parses the json lines and resumes the thread', function () {
         ->and($result->telemetry->cacheReadTokens)->toBe(24448)
         ->and($result->telemetry->outputTokens)->toBe(162)
         ->and($result->telemetry->costUsd)->toBeNull()
-        ->and(array_slice($driver->resumeCommand($result, new AgentRequest('k', 'p', '/app')), -3))->toBe(['resume', '0199a213-81c0-7800-8aa1-bbab2a035a53', '-']);
+        ->and(array_slice($driver->resumeCommand($result, new AgentRequest('k', 'p', '/app')), -5))->toBe(['-c', 'sandbox_mode="read-only"', 'resume', '0199a213-81c0-7800-8aa1-bbab2a035a53', '-']);
 });
 
 it('reports failed turns', function () {

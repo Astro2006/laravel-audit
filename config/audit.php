@@ -74,7 +74,7 @@ return [
 
         // Files the agents must never read. Globs are expanded at run time;
         // allow_read punches holes into deny_read.
-        'deny_read' => ['.env*', 'auth.json', 'storage/*.key'],
+        'deny_read' => ['.env*', 'auth.json', 'storage/**/*.key'],
         'allow_read' => ['.env.example'],
     ],
 

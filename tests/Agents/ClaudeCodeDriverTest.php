@@ -96,6 +96,17 @@ it('resolves denied files and keeps the allowed exceptions', function () {
         ->toBe(['.env', '.env.testing', 'auth.json', 'storage/oauth-private.key']);
 });
 
+it('resolves ** in denied globs to any depth', function () {
+    $dir = tempDir('deny');
+    mkdir($dir.'/storage/app/keys', 0777, true);
+    touch($dir.'/storage/oauth-private.key');
+    touch($dir.'/storage/app/keys/signing.key');
+    touch($dir.'/storage/app/keys/readme.txt');
+
+    expect(DeniedFiles::resolve($dir, ['storage/**/*.key', 'missing/**/*.pem'], []))
+        ->toBe(['storage/app/keys/signing.key', 'storage/oauth-private.key']);
+});
+
 it('writes an mcp config with only the boost server', function () {
     $dir = tempDir('mcp');
     file_put_contents($dir.'/composer.lock', json_encode(['packages-dev' => [['name' => 'laravel/boost', 'version' => '1.0.0']]]));
