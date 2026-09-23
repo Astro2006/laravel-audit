@@ -3,7 +3,6 @@
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
-use Astro2006\LaravelAudit\Agents\Drivers\CodexDriver;
 use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
@@ -23,8 +22,7 @@ it('resolves drivers by boost name and alias', function () {
     $registry = new DriverRegistry(auditConfig(['agent' => ['driver' => 'claude']]), registryProject());
 
     expect($registry->resolve())->toBeInstanceOf(ClaudeCodeDriver::class)
-        ->and($registry->resolve('opencode'))->toBeInstanceOf(OpenCodeDriver::class)
-        ->and($registry->resolve('codex'))->toBeInstanceOf(CodexDriver::class);
+        ->and($registry->resolve('opencode'))->toBeInstanceOf(OpenCodeDriver::class);
 });
 
 it('rejects unknown drivers', function () {
@@ -38,7 +36,6 @@ it('picks the first available boost agent in auto mode', function () {
     $config = ['agent' => ['driver' => 'auto', 'drivers' => [
         'claude_code' => ['binary' => '/missing/claude'],
         'opencode' => ['binary' => $fake],
-        'codex' => ['binary' => '/missing/codex'],
     ]]];
 
     expect((new DriverRegistry(auditConfig($config), registryProject(['cursor', 'codex', 'opencode'])))->resolve())->toBeInstanceOf(OpenCodeDriver::class)
@@ -49,10 +46,9 @@ it('names the first candidate when no agent CLI is installed', function () {
     $config = ['agent' => ['drivers' => [
         'claude_code' => ['binary' => '/missing/claude'],
         'opencode' => ['binary' => '/missing/opencode'],
-        'codex' => ['binary' => '/missing/codex'],
     ]]];
 
-    expect((new DriverRegistry(auditConfig($config), registryProject(['codex'])))->resolve()->name())->toBe('codex');
+    expect((new DriverRegistry(auditConfig($config), registryProject(['codex'])))->resolve()->name())->toBe('claude_code');
 });
 
 it('lets --model win over agent.model and agent.model over the CLI default', function () {

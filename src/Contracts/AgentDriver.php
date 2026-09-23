@@ -6,7 +6,6 @@ namespace Astro2006\LaravelAudit\Contracts;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 
 interface AgentDriver
 {
@@ -19,8 +18,6 @@ interface AgentDriver
     public function model(): ?string;
 
     public function isAvailable(): bool;
-
-    public function readProtection(): ReadProtection;
 
     public function toolsNote(): string;
 

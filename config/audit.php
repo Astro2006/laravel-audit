@@ -26,8 +26,8 @@ return [
     'report_language' => env('AUDIT_LANGUAGE'),
 
     'agent' => [
-        // claude_code, opencode, codex or auto (the first agent from
-        // boost.json that is installed, then Claude Code, OpenCode, Codex).
+        // claude_code, opencode or auto (the first agent from boost.json
+        // that is installed, then Claude Code, OpenCode).
         'driver' => env('AUDIT_AGENT', 'auto'),
 
         // null = the CLI's own default model. With OpenCode: provider/model,
@@ -44,7 +44,7 @@ return [
         // Tool calls (turns) one agent session may take before it has to
         // answer. Every turn sends the whole conversation again, so long
         // sessions get slow and expensive, above all with local models.
-        // null = no limit. Claude Code and OpenCode; Codex has no such limit.
+        // null = no limit.
         'max_turns' => (int) env('AUDIT_MAX_TURNS', 15) ?: null,
 
         // A second call checks each task's findings (keep, downgrade, drop).
@@ -58,12 +58,6 @@ return [
             ],
             'opencode' => [
                 'binary' => env('AUDIT_OPENCODE_BINARY', 'opencode'),
-            ],
-            'codex' => [
-                'binary' => env('AUDIT_CODEX_BINARY', 'codex'),
-                // Codex works through a shell and cannot keep agents away
-                // from .env; it only runs when you accept that here.
-                'allow_unrestricted_read' => false,
             ],
         ],
 

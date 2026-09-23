@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
@@ -111,14 +110,7 @@ final class RequirementChecker
             return [Check::failed($this->messages->get('requirements.agent_missing', $replace))];
         }
 
-        return [
-            Check::ok($this->messages->get('requirements.agent', $replace)),
-            ...match ($driver->readProtection()) {
-                ReadProtection::Enforced => [],
-                ReadProtection::Waived => [Check::warning($this->messages->get('requirements.agent_unprotected_waived', $replace))],
-                ReadProtection::Missing => [Check::failed($this->messages->get('requirements.agent_unprotected', [...$replace, 'key' => 'agent.drivers.'.$driver->name().'.allow_unrestricted_read']))],
-            },
-        ];
+        return [Check::ok($this->messages->get('requirements.agent', $replace))];
     }
 
     private function outputDirectory(): Check

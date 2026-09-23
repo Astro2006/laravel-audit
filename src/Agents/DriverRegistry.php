@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
-use Astro2006\LaravelAudit\Agents\Drivers\CodexDriver;
 use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
@@ -20,7 +19,7 @@ final class DriverRegistry
 {
     public const string AUTO = 'auto';
 
-    public const array DRIVERS = [ClaudeCodeDriver::NAME, OpenCodeDriver::NAME, CodexDriver::NAME];
+    public const array DRIVERS = [ClaudeCodeDriver::NAME, OpenCodeDriver::NAME];
 
     private const array ALIASES = ['claude' => ClaudeCodeDriver::NAME];
 
@@ -101,14 +100,6 @@ final class DriverRegistry
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
-            ),
-            CodexDriver::NAME => new CodexDriver(
-                binary: $this->binary($name),
-                model: $model,
-                boost: $boost,
-                boostTools: $boostTools,
-                allowUnrestrictedRead: $this->config->bool("agent.drivers.{$name}.allow_unrestricted_read"),
-                overrides: $this->config->strings("agent.drivers.{$name}.config"),
             ),
             default => new ClaudeCodeDriver(
                 binary: $this->binary($name),

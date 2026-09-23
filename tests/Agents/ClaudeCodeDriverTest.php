@@ -4,7 +4,6 @@ use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\DeniedFiles;
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
@@ -30,8 +29,7 @@ it('builds a read-only headless command', function () {
         '--max-budget-usd', '3',
         '--add-dir', '/elsewhere',
     ])
-        ->and($driver->name())->toBe('claude_code')
-        ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
+        ->and($driver->name())->toBe('claude_code');
 });
 
 it('limits the turns', function () {

@@ -3,7 +3,6 @@
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\McpServer;
 
 it('builds a headless run command with its own agent and model', function () {
@@ -12,8 +11,7 @@ it('builds a headless run command with its own agent and model', function () {
     expect($driver->command(new AgentRequest('backend.injection', 'p', '/app', '/run/logs/opencode.json')))
         ->toBe(['opencode', 'run', '--pure', '--format', 'json', '--agent', 'laravel-audit', '--model', 'ollama/qwen3-coder:30b'])
         ->and($driver->environment(new AgentRequest('backend.injection', 'p', '/app', '/run/logs/opencode.json')))
-        ->toBe(['OPENCODE_CONFIG' => '/run/logs/opencode.json'])
-        ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
+        ->toBe(['OPENCODE_CONFIG' => '/run/logs/opencode.json']);
 });
 
 it('writes a config with read-only tools, denied secrets and only the allowed boost tools', function () {

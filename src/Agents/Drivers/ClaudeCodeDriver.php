@@ -8,7 +8,6 @@ use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
@@ -53,11 +52,6 @@ final class ClaudeCodeDriver implements AgentDriver
     public function displayName(): string
     {
         return 'Claude Code';
-    }
-
-    public function readProtection(): ReadProtection
-    {
-        return ReadProtection::Enforced;
     }
 
     public function toolsNote(): string

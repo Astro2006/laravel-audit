@@ -271,25 +271,6 @@ it('speaks german when the report language is german', function () {
         ->assertExitCode(0);
 });
 
-it('refuses codex unless the config accepts that it can read secrets', function () {
-    $project = auditProject();
-    config()->set('audit.agent.drivers.codex.binary', $project.'/vendor/bin/pint');
-
-    $this->artisan('audit', ['--dependencies' => true, '--agent' => 'codex'])
-        ->expectsOutputToContain('Codex cannot keep agents away from .env and other secret files (it works through a shell). Set agent.drivers.codex.allow_unrestricted_read to true')
-        ->assertExitCode(3);
-
-    config()->set('audit.agent.drivers.codex.allow_unrestricted_read', true);
-    fakeAgent(dependencyAnswers(), '*pint*exec*', fn (string $answer): string => '{"type":"thread.started","thread_id":"t1"}'."\n".json_encode(['type' => 'item.completed', 'item' => ['type' => 'agent_message', 'text' => $answer]]));
-
-    $this->artisan('audit', ['--dependencies' => true, '--agent' => 'codex'])
-        ->expectsOutputToContain('Codex can read .env and other secret files')
-        ->assertExitCode(0);
-
-    expect(file_get_contents(latestRun($project).'/run.md'))->toContain("\nagent: codex\n");
-    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'exec --json --skip-git-repo-check'));
-});
-
 it('runs one task at a time by default and shows every task as it starts', function () {
     auditProject();
     fakeAgent(dependencyAnswers());

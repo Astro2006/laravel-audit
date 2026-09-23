@@ -11,7 +11,7 @@ An AI code audit for Laravel apps, started with one Artisan command.
 php artisan audit
 ```
 
-First, a **deterministic preflight** runs the tools you already trust: your test suite, your Pest browser tests, Larastan, Pint, `route:list`, `composer audit` and more. Their results are condensed into small JSON facts. After that, **read-only agents** audit the app in four areas: **tests, frontend, backend and dependencies**. Each area is split into small tasks of a few related checks, and every task is one headless run of an agent CLI: **Claude Code, OpenCode or Codex**, with whatever model you configured there, including self-hosted ones. The harness validates every task report against a fixed format, sends it back once for repair if needed, rejects it when it misses facts the preflight has proven (a known security advisory, a failing test), and assembles one Markdown report per area.
+First, a **deterministic preflight** runs the tools you already trust: your test suite, your Pest browser tests, Larastan, Pint, `route:list`, `composer audit` and more. Their results are condensed into small JSON facts. After that, **read-only agents** audit the app in four areas: **tests, frontend, backend and dependencies**. Each area is split into small tasks of a few related checks, and every task is one headless run of an agent CLI: **Claude Code or OpenCode**, with whatever model you configured there, including self-hosted ones. The harness validates every task report against a fixed format, sends it back once for repair if needed, rejects it when it misses facts the preflight has proven (a known security advisory, a failing test), and assembles one Markdown report per area.
 
 ```
  laravel-audit 1.0.0 · Agent: Claude Code
@@ -74,7 +74,7 @@ First, a **deterministic preflight** runs the tools you already trust: your test
 
 - PHP 8.3+
 - Laravel 12 or 13
-- One agent CLI, installed and logged in: [Claude Code](https://docs.claude.com/claude-code) (`claude`), [OpenCode](https://opencode.ai) (`opencode`) or [Codex](https://developers.openai.com/codex) (`codex`). See [Agents](#agents)
+- One agent CLI, installed and logged in: [Claude Code](https://docs.claude.com/claude-code) (`claude`) or [OpenCode](https://opencode.ai) (`opencode`). See [Agents](#agents)
 - Composer
 
 Optional, but recommended. `php artisan audit:install` sets these up for you:
@@ -185,7 +185,7 @@ Other options:
 | `--force` | Start the agents even if tests or browser tests fail, without asking |
 | `--preflight-only` | Run the tools only, no agents, no cost. Useful to check the setup |
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
-| `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
+| `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode` or `auto` |
 | `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
 | `--concurrency=N` | Tasks at once for this run; `1` runs them one after the other (the default, `agent.max_concurrency`) |
 | `--reselect-skills` | Ask the agent again which project skills each task gets |
@@ -221,15 +221,14 @@ The agents audit code, not a broken environment. The gate comes once the whole p
 
 ## Agents
 
-The package never talks to a model itself. It starts an agent CLI headless, once per task, and reads its JSON output. Models and providers are configured in that CLI, so anything the CLI supports works, including self-hosted models (for example Ollama through OpenCode or Codex).
+The package never talks to a model itself. It starts an agent CLI headless, once per task, and reads its JSON output. Models and providers are configured in that CLI, so anything the CLI supports works, including self-hosted models (for example Ollama through OpenCode).
 
 | Driver | CLI | Tools the agent gets | Secret files (`deny_read`) |
 |---|---|---|---|
 | `claude_code` | `claude -p --restricted` | Read, Grep, Glob, allowed Boost tools | blocked for every tool |
 | `opencode` | `opencode run --pure` with a generated config | read, glob, list, allowed Boost tools. No grep: OpenCode's grep returns denied files when given an `include` pattern | blocked |
-| `codex` | `codex exec --sandbox read-only` | a read-only shell, allowed Boost tools | **not blocked**: Codex can read `.env`. The run only starts with `agent.drivers.codex.allow_unrestricted_read = true` |
 
-`agent.driver` is `auto` by default: the first agent from Boost's `boost.json` that is installed, then Claude Code, OpenCode, Codex. Driver names are Boost's agent names. Pick one per run with `--agent`, and a model with `--model`:
+`agent.driver` is `auto` by default: the first agent from Boost's `boost.json` that is installed, then Claude Code, OpenCode. Driver names are Boost's agent names. Pick one per run with `--agent`, and a model with `--model`:
 
 ```bash
 php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
@@ -376,8 +375,7 @@ The agents look at your code. They must not change it or see your secrets. Each 
 - **Read-only tools.** No agent gets write tools, web access or code execution.
   - Claude Code gets `Read`, `Grep` and `Glob` only, runs with `--restricted` (your settings files do not apply) and `--permission-prompts none`, so nothing can be approved by accident.
   - OpenCode gets a generated config: every tool off except read, glob and list, every other permission denied, never "ask", `--pure` (no plugins).
-  - Codex runs in its read-only sandbox. It works through a shell, so it can run read-only commands.
-- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/**/*.key` are denied by explicit rules (`agent.deny_read`, `agent.allow_read`). Claude Code and OpenCode enforce this; Codex cannot and only runs when you accept that. Every child process starts without the variables loaded from your `.env`.
+- **No secrets.** `.env*` (except `.env.example`), `auth.json` and `storage/**/*.key` are denied by explicit rules (`agent.deny_read`, `agent.allow_read`). Claude Code and OpenCode enforce this. Every child process starts without the variables loaded from your `.env`.
 - **Read-only Boost.** Boost's MCP server (`php artisan boost:mcp`) is the only MCP server, and only an allowlist of its tools is enabled (`agent.boost_tools`). Tinker, database queries, log readers and `get-config` (it returns secret values) are always denied.
 - **Never in production.** `php artisan audit` refuses to run when `APP_ENV` is `production`.
 - **Test database guard.** See [above](#the-database-guard).
@@ -395,7 +393,7 @@ return [
     'report_language' => env('AUDIT_LANGUAGE'),          // null = app.locale
 
     'agent' => [
-        'driver' => env('AUDIT_AGENT', 'auto'),         // claude_code, opencode, codex or auto
+        'driver' => env('AUDIT_AGENT', 'auto'),         // claude_code, opencode or auto
         'model' => env('AUDIT_MODEL'),                  // null = the CLI's default model
         'max_concurrency' => (int) env('AUDIT_CONCURRENCY', 1), // tasks at once; 1 = one after the other
         'timeout' => 900,                               // seconds per task
@@ -404,7 +402,6 @@ return [
         'drivers' => [
             'claude_code' => ['binary' => 'claude', 'effort' => null, 'max_budget_usd' => null /* per task */],
             'opencode' => ['binary' => 'opencode'],
-            'codex' => ['binary' => 'codex', 'allow_unrestricted_read' => false],
         ],
         'deny_read' => ['.env*', 'auth.json', 'storage/**/*.key'],
         'allow_read' => ['.env.example'],
@@ -428,7 +425,6 @@ return [
 |---|---|
 | `audits.<audit>.preflight` | the preflight steps each audit needs; without `tests` there is no test gate |
 | `agent.boost_tools` | the read-only Boost tools |
-| `agent.drivers.codex.config` | `[]`, extra `-c` overrides |
 | `preflight.allow_shared_database` | `false`, only if you know what you do |
 | `preflight.tests.command` / `timeout` | `null` (php artisan test) / `1800` |
 | `preflight.browser.*` | `testsuite` `Browser`, `path` `tests/Browser`, `build_assets` `if-missing`, `timeout` `1200`, `max_artifacts` `10` |
@@ -455,6 +451,7 @@ Lists replace the default, they are not merged: `'exclude_paths' => ['vendor']` 
 | `agent.drivers.<driver>.model` | `agent.model` |
 | `agent.verify.min_severity` | none: severity and confidence decide together which findings are verified |
 | `agent.mode`, `agent.concurrency` | `agent.max_concurrency`: `1` for single, the old concurrency for parallel |
+| `agent.drivers.codex` | none: the Codex driver is removed for now, because it cannot keep agents away from `.env` |
 | `orchestrator`, `agent.orchestrator.*` | none: run the audit from your agent session with the Boost skill; `tool.wait_timeout` replaces `agent.orchestrator.wait_timeout` |
 
 ### Customizing prompts

@@ -43,10 +43,15 @@ it('still reads the long form of a published config', function () {
 });
 
 it('names the legacy keys a published config still sets', function () {
-    $config = AuditConfig::load(['agent' => ['effort' => 'high', 'drivers' => ['codex' => ['model' => null]]]]);
+    $config = AuditConfig::load(['agent' => ['effort' => 'high', 'drivers' => ['opencode' => ['model' => null]]]]);
 
     expect($config->legacyKeys())->toBe(['agent.effort' => 'agent.drivers.claude_code.effort'])
         ->and(AuditConfig::load([])->legacyKeys())->toBe([]);
+});
+
+it('names a published codex driver block as no longer read', function () {
+    expect(AuditConfig::load(['agent' => ['drivers' => ['codex' => ['binary' => 'codex', 'allow_unrestricted_read' => false]]]])->legacyKeys())
+        ->toBe(['agent.drivers.codex' => null]);
 });
 
 it('treats empty strings as not set', function () {

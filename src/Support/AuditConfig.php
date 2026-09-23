@@ -16,9 +16,6 @@ final readonly class AuditConfig
         'agent' => [
             'skills' => 'auto',
             'verify_max_turns' => 6,
-            'drivers' => [
-                'codex' => ['config' => []],
-            ],
             'boost_tools' => [
                 'application-info',
                 'database-connections',
@@ -96,7 +93,7 @@ final readonly class AuditConfig
         'agent.max_budget_usd' => 'agent.drivers.claude_code.max_budget_usd',
         'agent.drivers.claude_code.model' => 'agent.model',
         'agent.drivers.opencode.model' => 'agent.model',
-        'agent.drivers.codex.model' => 'agent.model',
+        'agent.drivers.codex' => null,
     ];
 
     /**
