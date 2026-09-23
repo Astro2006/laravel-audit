@@ -337,3 +337,15 @@ Not decided on purpose; each needs numbers from phase 6 first:
 - `--restricted` stays for Claude Code tasks, and the OpenCode task agent keeps `skill` denied; skills reach the model as prompt text.
 - The selection call uses the configured task driver (same CLI, same model); it costs ≈ 4k input tokens on a project with 50 skills.
 - Boost's third-party guideline rendering supports `.blade.php` for packages the same way as for its own files (code path reads both extensions; not run in a fixture yet).
+
+## 11. Implementation status (2026-09-23, branch `feature/mvp2`)
+
+All phases are implemented; 350 tests, PHPStan level 6 and Pint pass. Deviations from the plan above:
+
+- **Order.** The headless orchestrator was removed (phase 3) before the folder move (phase 2), so fewer files had to move.
+- **Folders.** `Actions/` and `Services/` stay, because the house rules in `tests/Core` name them. Artisan commands moved to `Console/Commands/` and their output helpers to `Console/Output/` (decided with the maintainer). `Contracts\Audit` is gone: the abstract `Audits\Audit` was its only implementation.
+- **Skills (§2.3).** Implemented as decided: inventory, one selection call per run with a cache (`skills.json`, `--reselect-skills`), inlining. The inventory leaves out skills named `laravel-audit*`, so the orchestration skill is never given to a task. The separate `laravel-audit-evidence` skill (§5.3) was not created: the reporting rules stay in `shared/task.md`, where the parser depends on them, and a second copy would drift.
+- **Concurrency (§6.2).** `agent.max_concurrency` (default 1) and `--concurrency` replace `agent.mode`/`agent.concurrency`/`--mode`.
+- **Prompt tokens (§4.5).** Checks the task prompt already explains are listed by slug only, and the dependency inputs are shorter: 231 626 → 225 423 characters over all task prompts without snapshots (−2.7 %). Verify calls are capped at 6 tool calls. Per-task Boost tool lists were not done.
+- **Not done from §4.2.** Snapshots still read the preflight JSON instead of the DTOs; `TestsStep` and `BrowserStep` share no base class; Codex and OpenCode keep their own event parsers. Each would add an abstraction for little gain.
+- **Not verified against the real CLIs.** The skill selection call, OpenCode's second agent `laravel-audit-verify`, and Codex's `-c sandbox_mode="read-only"` on `exec resume` (Codex is not installed here). The next real run on homemanager should confirm them, together with the token numbers in §4.5.
