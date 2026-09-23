@@ -1,5 +1,6 @@
 <?php
 
+use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Contracts\StepDTO;
 use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
@@ -15,6 +16,9 @@ use Astro2006\LaravelAudit\Preflight\StepResults;
 use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Support\Facades\Process;
 
 function fakeStep(PreflightStep $step, ?StepDTO $data = null, ?Closure $run = null): Step
 {
@@ -36,6 +40,39 @@ function fakeStep(PreflightStep $step, ?StepDTO $data = null, ?Closure $run = nu
             $class = $this->step->dtoClass();
 
             return StepResult::ok($this->step, $this->data ?? new $class);
+        }
+    };
+}
+
+function fakeAsyncStep(PreflightStep $step, ArrayObject $events): AsyncStep
+{
+    return new class($step, $events) implements AsyncStep
+    {
+        public function __construct(private PreflightStep $step, private ArrayObject $events) {}
+
+        public function step(): PreflightStep
+        {
+            return $this->step;
+        }
+
+        public function run(PreflightContext $context): StepResult
+        {
+            return $this->finish($context, $this->start($context)->wait());
+        }
+
+        public function start(PreflightContext $context): InvokedProcess
+        {
+            $this->events[] = 'start:'.$this->step->value;
+
+            return Process::start($this->step->value.'-in-background');
+        }
+
+        public function finish(PreflightContext $context, ProcessResult $result): StepResult
+        {
+            $this->events[] = 'finish:'.$this->step->value.':'.trim($result->output());
+            $class = $this->step->dtoClass();
+
+            return StepResult::ok($this->step, new $class);
         }
     };
 }
@@ -73,6 +110,50 @@ it('runs tests first (async in real runs), light steps, then browser and phpstan
     );
 
     expect($order)->toBe(['tests', 'about', 'stack', 'loc', 'pint', 'routes', 'translations', 'composer', 'migrations', 'candidates', 'browser', 'phpstan']);
+});
+
+it('starts tests and phpstan in the background, runs the light steps meanwhile and collects them in a fixed order', function () {
+    Process::fake(['*' => Process::describe()->output('done')->runsFor(iterations: 3)]);
+    $events = new ArrayObject;
+    $steps = array_map(
+        fn (PreflightStep $step) => in_array($step, [PreflightStep::Tests, PreflightStep::Phpstan], true) ? fakeAsyncStep($step, $events) : fakeStep($step),
+        PreflightStep::cases(),
+    );
+    $started = [];
+
+    (new PreflightRunner($steps))->run(
+        runnerContext(),
+        function (StepResult $result) use ($events) {
+            $events[] = 'result:'.$result->step->value;
+        },
+        function (PreflightStep $step) use (&$started) {
+            $started[] = $step->value;
+        },
+    );
+
+    expect($started)->toBe(['tests', 'phpstan', 'about', 'stack', 'loc', 'pint', 'routes', 'translations', 'composer', 'migrations', 'candidates', 'browser'])
+        ->and($events->getArrayCopy())->toBe([
+            'start:tests', 'start:phpstan',
+            'result:about', 'result:stack', 'result:loc', 'result:pint', 'result:routes', 'result:translations', 'result:composer', 'result:migrations', 'result:candidates',
+            'finish:tests:done', 'result:tests',
+            'result:browser',
+            'finish:phpstan:done', 'result:phpstan',
+        ]);
+});
+
+it('runs phpstan after the tests when it may not run next to them', function () {
+    Process::fake(['*' => Process::describe()->output('done')]);
+    $events = new ArrayObject;
+    $steps = array_map(
+        fn (PreflightStep $step) => in_array($step, [PreflightStep::Tests, PreflightStep::Phpstan], true) ? fakeAsyncStep($step, $events) : fakeStep($step),
+        PreflightStep::cases(),
+    );
+    $dir = tempDir('run');
+    $context = new PreflightContext(new ProjectInspector(fixture('project')), $dir.'/preflight', $dir.'/logs', auditConfig(['preflight' => ['phpstan' => ['parallel' => false]]]), RunSelection::resolve(auditsConfig(), [], []));
+
+    (new PreflightRunner($steps))->run($context, fn () => null);
+
+    expect($events->getArrayCopy())->toBe(['start:tests', 'finish:tests:done', 'start:phpstan', 'finish:phpstan:done']);
 });
 
 it('runs browser tests and phpstan even when tests fail', function () {

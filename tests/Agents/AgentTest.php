@@ -353,3 +353,15 @@ it('shows the task its own finding limit', function () {
     expect((new BackendAgent)->renderTask(backendTask('injection'), promptContext(), maxFindings: 11)->text)->toContain('At most 11 findings.')
         ->and((new BackendAgent)->renderTask(backendTask('injection'), promptContext())->text)->toContain('At most 8 findings.');
 });
+
+it('keeps every task prompt within its size budget', function (AuditType $type) {
+    $audit = $type->audit();
+
+    foreach ($audit->tasks(withCustom: true) as $task) {
+        if ($task->isSummary()) {
+            continue;
+        }
+
+        expect(strlen($audit->renderTask($task, promptContext())->text))->toBeLessThanOrEqual(7_600, $task->key());
+    }
+})->with(AuditType::cases());

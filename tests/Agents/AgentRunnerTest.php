@@ -13,6 +13,7 @@ use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Illuminate\Support\Facades\Process;
 
 function runner(string $logs, int $concurrency = 2): AgentRunner
@@ -63,6 +64,33 @@ it('writes a JSON Lines answer as one formatted JSON document', function () {
         ->and($events[0]['type'])->toBe('step_start')
         ->and(end($events))->toBe('{"type":"tool_use"')
         ->and(file_get_contents($logs.'/backend.json'))->toContain("\n    ");
+});
+
+it('stops an agent that runs past the timeout and fails its task', function () {
+    Process::fake(['*' => Process::describe()->output('partial')->errorOutput('still thinking')->runsFor(iterations: 1000)]);
+    $logs = tempDir('logs');
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, timeout: 0, pollMicroseconds: 1000);
+
+    [$outcome] = $runner->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Failed)
+        ->and($outcome->reason)->toContain('timed out after 0 seconds')
+        ->and($outcome->repaired)->toBeFalse()
+        ->and($logs.'/backend.json')->toBeFile();
+
+    Process::assertRanTimes(fn () => true, 1);
+});
+
+it('removes the variables loaded from .env from the agent environment', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))]))]);
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), pollMicroseconds: 1000, environment: new ChildEnvironment(['APP_KEY', 'DB_PASSWORD']));
+
+    $runner->run([backendJob()]);
+
+    Process::assertRan(fn ($process) => $process->environment['APP_KEY'] === false
+        && $process->environment['DB_PASSWORD'] === false
+        && $process->environment['CLAUDECODE'] === false
+        && $process->environment['AUDIT_TASK'] === 'backend');
 });
 
 it('repairs an invalid answer in the same session', function () {

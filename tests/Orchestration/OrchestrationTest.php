@@ -115,6 +115,21 @@ it('refuses work it cannot start', function () {
         ->and(tool($run, 'status')['tasks']['dependencies.security'])->toBe(['status' => 'running']);
 });
 
+it('starts the worker in the background and returns right away', function () {
+    $project = orchestratedProject();
+    fakeTools(['*nohup*' => Process::result('')]);
+    $run = orchestratedRun($project);
+
+    $started = tool($run, 'preflight', ['composer']);
+
+    expect($started)->toBe(['started' => ['about', 'stack', 'loc', 'composer'], 'hint' => 'Running in the background. Run `wait` to block until it is done.'])
+        ->and(tool($run, 'status')['worker'])->toMatchArray(['working_on' => 'preflight', 'items' => ['about', 'stack', 'loc', 'composer']]);
+
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'nohup')
+        && str_contains(implode(' ', (array) $process->command), "audit:tool work --run='".$run->id."'")
+        && str_contains(implode(' ', (array) $process->command), 'worker-preflight.log'));
+});
+
 it('runs tasks and returns their findings', function () {
     $project = orchestratedProject();
     fakeOrchestration(fn () => '');
