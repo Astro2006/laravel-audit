@@ -23,7 +23,7 @@ final class SkillSelector
 
     private const string TEMPLATE = 'shared/skills.md';
 
-    private const int DESCRIPTION_CHARS = 160;
+    private const int DESCRIPTION_CHARS = 100;
 
     public function __construct(private readonly AuditConfig $config) {}
 
@@ -76,6 +76,16 @@ final class SkillSelector
     }
 
     /** @param  list<AuditTask>  $tasks */
+    public static function prompt(array $tasks, SkillInventory $inventory, int $perTask): string
+    {
+        return strtr((new PromptTemplates(PromptTemplates::publishedPath()))->get(self::TEMPLATE), [
+            '{{tasks}}' => implode("\n", array_map(fn (AuditTask $task): string => sprintf('- %s (%s): %s', $task->key(), $task->title, implode(', ', $task->checks)), $tasks)),
+            '{{skills}}' => implode("\n", array_map(fn (Skill $skill): string => sprintf('- %s: %s', $skill->name, $skill->summary(self::DESCRIPTION_CHARS)), $inventory->skills)),
+            '{{per_task}}' => (string) $perTask,
+        ]);
+    }
+
+    /** @param  list<AuditTask>  $tasks */
     public static function tasksHash(array $tasks): string
     {
         return substr(sha1((string) json_encode(array_map(fn (AuditTask $task): array => [$task->key(), $task->checks], $tasks))), 0, 12);
@@ -87,11 +97,7 @@ final class SkillSelector
      */
     private function ask(array $tasks, SkillInventory $inventory, int $perTask, AgentDriver $driver, AuditRun $run, ProjectInspector $project): ?array
     {
-        $prompt = strtr((new PromptTemplates(PromptTemplates::publishedPath()))->get(self::TEMPLATE), [
-            '{{tasks}}' => implode("\n", array_map(fn (AuditTask $task): string => sprintf('- `%s` — %s: %s', $task->key(), $task->title, implode(', ', $task->checks)), $tasks)),
-            '{{skills}}' => implode("\n", array_map(fn (Skill $skill): string => sprintf('- `%s` — %s', $skill->name, mb_strimwidth($skill->description, 0, self::DESCRIPTION_CHARS, '…')), $inventory->skills)),
-            '{{per_task}}' => (string) $perTask,
-        ]);
+        $prompt = self::prompt($tasks, $inventory, $perTask);
 
         if (! is_dir($run->logsDir())) {
             mkdir($run->logsDir(), 0777, true);

@@ -46,6 +46,14 @@ it('reads name, description and body of a skill, also folded descriptions', func
         ->and(Skill::fromFile($dir.'/.claude/skills/broken/SKILL.md'))->toBeNull();
 });
 
+it('shortens a description to its first sentence for the selection prompt', function () {
+    $skill = new Skill('ai', "TRIGGER when working with the AI SDK. Activate when building agents,\n chatbots and more.", '/x');
+
+    expect($skill->summary(100))->toBe('TRIGGER when working with the AI SDK.')
+        ->and($skill->summary(20))->toBe('TRIGGER when workin…')
+        ->and((new Skill('x', 'No full stop here', '/x'))->summary(100))->toBe('No full stop here');
+});
+
 it('finds the skills Boost installed for Claude Code and OpenCode, but not its own', function () {
     $dir = skillProject([
         '.claude/skills/models/SKILL.md' => skillFile('models', 'From Claude.'),
@@ -106,7 +114,7 @@ it('asks the agent once and validates its answer', function () {
 
     expect($selection)->tasks->toBe(['backend.data' => ['models']])->source->toBe('agent')
         ->and($warnings)->toBe(['Skill selection: dropped unknown skill "queues" for backend.jobs.'])
-        ->and(file_get_contents($run->logsDir().'/skills.prompt.md'))->toContain('- `models` — Eloquent models.')->toContain('- `backend.data` — ');
+        ->and(file_get_contents($run->logsDir().'/skills.prompt.md'))->toContain('- models: Eloquent models.')->toContain('- backend.data (Models and data exposure): ');
 
     Process::assertRan(fn ($process) => $process->environment['AUDIT_TASK'] === 'skills');
 });

@@ -1,6 +1,4 @@
-# Laravel Audit — Pick project skills
-
-Audit tasks will review this project. The project has skills installed: short documents with its conventions and rules. Pick the skills that help a task judge its checks, so the task gets them in its prompt.
+Pick project skills for audit tasks. A task gets a skill's text in its prompt.
 
 ## Tasks
 
@@ -12,9 +10,8 @@ Audit tasks will review this project. The project has skills installed: short do
 
 ## Rules
 
-- A skill fits a task when its description covers what the task checks, for example a PHPStan skill for the PHPStan task or a models skill for model hygiene.
-- At most {{per_task}} skills per task. Most tasks need none; leave them out.
-- Use only the task keys and skill names listed above.
-- Do not use tools. Answer right away.
+- A skill fits a task when it covers what the task checks (a models skill for model hygiene, a PHPStan skill for the PHPStan task).
+- At most {{per_task}} skills per task. Most tasks need none: leave them out.
+- Only the task keys and skill names above. No tools.
 
-Answer with one JSON object and nothing else, for example `{"backend.data": ["models"], "tests.phpstan": ["phpstan"]}`.
+Answer with one JSON object only, e.g. {"backend.data": ["models"]}.

@@ -23,6 +23,15 @@ final readonly class Skill
         return $name === '' || $description === '' ? null : new self($name, $description, $path);
     }
 
+    /** @return string the first sentence of the description, at most $maxChars long */
+    public function summary(int $maxChars): string
+    {
+        [$sentence] = Regex::groups('/^(.+?[.!?])(?:\s|$)/s', $this->description) ?? [$this->description];
+        $sentence = (string) preg_replace('/\s+/', ' ', $sentence);
+
+        return mb_strimwidth(trim($sentence), 0, $maxChars, '…');
+    }
+
     /** @return string the instructions below the frontmatter, cut after $maxChars with a note */
     public function body(int $maxChars): string
     {
