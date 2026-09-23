@@ -27,4 +27,13 @@ final class Files
 
         return $files;
     }
+
+    /** @return string the path relative to $basePath with forward slashes; unchanged when it lies outside */
+    public static function relative(string $path, string $basePath): string
+    {
+        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
+        $path = str_replace('\\', '/', $path);
+
+        return str_starts_with($path, $base) ? substr($path, strlen($base)) : $path;
+    }
 }

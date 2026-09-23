@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Preflight\Data\Tests\JunitReport;
 use Astro2006\LaravelAudit\Preflight\Data\Tests\SkippedTest;
 use Astro2006\LaravelAudit\Preflight\Data\Tests\SlowTest;
 use Astro2006\LaravelAudit\Preflight\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Support\Files;
 use Astro2006\LaravelAudit\Support\Regex;
 use Astro2006\LaravelAudit\Support\Xml;
 use Illuminate\Support\Collection;
@@ -133,10 +134,7 @@ final class JunitCondenser
 
     private function relativeFile(string $file, string $basePath): string
     {
-        $file = str_replace('\\', '/', (string) preg_replace('/::.*$/', '', $file));
-        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
-
-        return str_starts_with($file, $base) ? substr($file, strlen($base)) : $file;
+        return Files::relative((string) preg_replace('/::.*$/', '', $file), $basePath);
     }
 
     private function firstLine(string $text, ?string $skipPrefix = null): string

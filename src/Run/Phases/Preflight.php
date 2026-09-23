@@ -14,7 +14,6 @@ use Astro2006\LaravelAudit\Preflight\SummaryBuilder;
 use Astro2006\LaravelAudit\Run\PreflightReuse;
 use Astro2006\LaravelAudit\Run\RunContext;
 use Astro2006\LaravelAudit\Support\AuditConfig;
-use Astro2006\LaravelAudit\Support\ChildEnvironment;
 
 final class Preflight
 {
@@ -41,9 +40,9 @@ final class Preflight
     {
         $plan = $context->plan;
         $run = $context->run;
-        $preflight = new PreflightContext($plan->project, $run->preflightDir(), $run->logsDir(), $this->config, $plan->selection, ChildEnvironment::forApp($plan->project));
+        $preflight = PreflightContext::forRun($plan, $run, $this->config);
 
-        PreflightRunner::standard($plan->guard, (string) config('app.locale', 'en'))->run(
+        PreflightRunner::forPlan($plan)->run(
             $preflight,
             $context->console->stepFinished(...),
             $context->console->stepStarted(...),

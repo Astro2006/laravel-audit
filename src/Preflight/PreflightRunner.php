@@ -19,6 +19,7 @@ use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
 use Astro2006\LaravelAudit\Preflight\Steps\StackStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
 use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
+use Astro2006\LaravelAudit\Run\RunPlan;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
 use Illuminate\Support\Arr;
@@ -34,6 +35,11 @@ final class PreflightRunner
     public function __construct(iterable $steps)
     {
         $this->steps = (new Collection($steps))->keyBy(fn (Step $step): string => $step->step()->value);
+    }
+
+    public static function forPlan(RunPlan $plan): self
+    {
+        return self::standard($plan->guard, (string) config('app.locale', 'en'));
     }
 
     public static function standard(DatabaseGuard $guard, string $locale): self

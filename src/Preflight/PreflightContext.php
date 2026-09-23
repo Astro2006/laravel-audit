@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
+use Astro2006\LaravelAudit\Run\AuditRun;
+use Astro2006\LaravelAudit\Run\RunPlan;
 use Astro2006\LaravelAudit\Run\RunSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
@@ -28,6 +30,11 @@ final class PreflightContext
         public readonly string $phpBinary = PHP_BINARY,
     ) {
         $this->results = new StepResults;
+    }
+
+    public static function forRun(RunPlan $plan, AuditRun $run, AuditConfig $config, ?RunSelection $selection = null): self
+    {
+        return new self($plan->project, $run->preflightDir(), $run->logsDir(), $config, $selection ?? $plan->selection, ChildEnvironment::forApp($plan->project));
     }
 
     /**

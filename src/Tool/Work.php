@@ -48,14 +48,14 @@ final class Work
     {
         $plan = $run->plan;
         $steps = array_values(array_filter(array_map(fn (string $item): ?PreflightStep => PreflightStep::tryFrom($item), $items)));
-        $context = new PreflightContext($plan->project, $run->run->preflightDir(), $run->run->logsDir(), $this->config, $plan->selection->onlySteps($steps), ChildEnvironment::forApp($plan->project));
+        $context = PreflightContext::forRun($plan, $run->run, $this->config, $plan->selection->onlySteps($steps));
         $summary = new SummaryBuilder;
 
         foreach ($run->preflight()?->steps->all() ?? [] as $result) {
             $context->results->put($result);
         }
 
-        PreflightRunner::standard($plan->guard, (string) config('app.locale', 'en'))->run(
+        PreflightRunner::forPlan($plan)->run(
             $context,
             function () use ($summary, $context, $run): void {
                 $summary->write($context, $run->run->id, GateDecision::NotRun);

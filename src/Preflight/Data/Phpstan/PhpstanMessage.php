@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Data\Phpstan;
 
+use Astro2006\LaravelAudit\Support\Files;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Contracts\Support\Arrayable;
 
@@ -27,12 +28,10 @@ final readonly class PhpstanMessage implements Arrayable
      */
     public static function listFromJson(array $json, string $basePath): array
     {
-        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
         $messages = [];
 
         foreach (Read::array($json, 'files') as $file => $data) {
-            $path = str_replace('\\', '/', (string) $file);
-            $relative = str_starts_with($path, $base) ? substr($path, strlen($base)) : $path;
+            $relative = Files::relative((string) $file, $basePath);
 
             foreach (Read::arrays(is_array($data) ? $data : [], 'messages') as $message) {
                 $messages[] = new self(

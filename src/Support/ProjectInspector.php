@@ -36,10 +36,7 @@ class ProjectInspector
 
     public function relative(string $absolute): string
     {
-        $base = rtrim(str_replace('\\', '/', $this->basePath), '/').'/';
-        $absolute = str_replace('\\', '/', $absolute);
-
-        return str_starts_with($absolute, $base) ? substr($absolute, strlen($base)) : $absolute;
+        return Files::relative($absolute, $this->basePath);
     }
 
     public function composer(): ComposerPackages
