@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Console;
+namespace Astro2006\LaravelAudit\Console\Output;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Install\InstallPlan;

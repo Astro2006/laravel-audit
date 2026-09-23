@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
-use Astro2006\LaravelAudit\Console\AuditConsole;
+use Astro2006\LaravelAudit\Console\Output\AuditConsole;
 use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\RunStatus;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;

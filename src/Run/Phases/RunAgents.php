@@ -8,7 +8,7 @@ use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
-use Astro2006\LaravelAudit\Console\AgentProgress;
+use Astro2006\LaravelAudit\Console\Output\AgentProgress;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Run\JobPlan;

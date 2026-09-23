@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Console;
+namespace Astro2006\LaravelAudit\Console\Output;
 
 final readonly class StepLine
 {

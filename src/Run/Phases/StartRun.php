@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run\Phases;
 
-use Astro2006\LaravelAudit\Console\AuditConsole;
+use Astro2006\LaravelAudit\Console\Output\AuditConsole;
 use Astro2006\LaravelAudit\Run\AuditOptions;
 use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Run\GitInfo;

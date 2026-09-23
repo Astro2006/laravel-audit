@@ -9,7 +9,7 @@ use Astro2006\LaravelAudit\Actions\Install\PreviewComposerChangesAction;
 use Astro2006\LaravelAudit\Actions\Install\PublishConfigAction;
 use Astro2006\LaravelAudit\Actions\Install\VerifyInstallAction;
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
-use Astro2006\LaravelAudit\Console\InstallConsole;
+use Astro2006\LaravelAudit\Console\Output\InstallConsole;
 use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\InstallPlanner;
 use Astro2006\LaravelAudit\Install\PlanExecutor;

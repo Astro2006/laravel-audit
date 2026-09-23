@@ -4,7 +4,7 @@ use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Agents\Telemetry;
-use Astro2006\LaravelAudit\Console\TaskBoard;
+use Astro2006\LaravelAudit\Console\Output\TaskBoard;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\ReportSpec;

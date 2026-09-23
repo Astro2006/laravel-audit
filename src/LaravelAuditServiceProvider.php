@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit;
 
-use Astro2006\LaravelAudit\Commands\AuditCommand;
-use Astro2006\LaravelAudit\Commands\EvalCommand;
-use Astro2006\LaravelAudit\Commands\InstallCommand;
-use Astro2006\LaravelAudit\Commands\ToolCommand;
+use Astro2006\LaravelAudit\Console\Commands\AuditCommand;
+use Astro2006\LaravelAudit\Console\Commands\EvalCommand;
+use Astro2006\LaravelAudit\Console\Commands\InstallCommand;
+use Astro2006\LaravelAudit\Console\Commands\ToolCommand;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Spatie\LaravelPackageTools\Package;

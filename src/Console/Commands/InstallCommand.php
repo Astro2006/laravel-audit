@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Commands;
+namespace Astro2006\LaravelAudit\Console\Commands;
 
-use Astro2006\LaravelAudit\Console\InstallConsole;
+use Astro2006\LaravelAudit\Console\Output\InstallConsole;
 use Astro2006\LaravelAudit\Services\InstallService;
 use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\Command;

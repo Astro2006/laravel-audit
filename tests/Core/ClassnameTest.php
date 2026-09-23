@@ -7,7 +7,7 @@ use Illuminate\Support\Str;
 
 dataset('classnames', [
     ['Actions', 'Action'],
-    ['Commands', 'Command'],
+    ['Console\Commands', 'Command'],
     ['DTOs', 'Dto'],
     ['Enums', 'Enum'],
     ['Events', 'Event'],
@@ -59,14 +59,14 @@ it('has suffix', function ($namespace, $suffix) {
         ->toHaveSuffix($suffix);
 })->with('classnames')->group('core');
 
-it('keeps artisan commands in Commands', function () {
-    expect('Astro2006\LaravelAudit\Commands')
+it('keeps artisan commands in Console\Commands', function () {
+    expect('Astro2006\LaravelAudit\Console\Commands')
         ->classes()
         ->toExtend(Command::class);
 })->group('core');
 
-it('keeps only console output helpers in Console', function () {
-    expect('Astro2006\LaravelAudit\Console')
+it('keeps only console output helpers in Console\Output', function () {
+    expect('Astro2006\LaravelAudit\Console\Output')
         ->classes()
         ->not->toExtend(Command::class)
         ->not->toHaveSuffix('Command');

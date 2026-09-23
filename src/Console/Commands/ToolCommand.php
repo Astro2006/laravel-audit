@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Commands;
+namespace Astro2006\LaravelAudit\Console\Commands;
 
-use Astro2006\LaravelAudit\Console\AuditConsole;
+use Astro2006\LaravelAudit\Console\Output\AuditConsole;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Run\AuditOptions;
 use Astro2006\LaravelAudit\Support\AuditConfig;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Astro2006\LaravelAudit\Commands;
+namespace Astro2006\LaravelAudit\Console\Commands;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Eval\EvalReport;
