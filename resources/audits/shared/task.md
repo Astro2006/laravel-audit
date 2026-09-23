@@ -18,7 +18,7 @@ The tools already ran. One row per ID; open an ID's detail file only when you ju
 
 ## Your checks
 
-Every finding uses exactly one of these slugs in its `Check` field:
+Every finding uses exactly one of these slugs in its `Check` field; your task instructions below explain them:
 
 {{checks}}
 

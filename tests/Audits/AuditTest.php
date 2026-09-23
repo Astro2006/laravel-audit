@@ -244,7 +244,8 @@ it('fills context, the task checks and the output template', function () {
         ->toContain('**Your task: Injection.**')
         ->toContain('- Shop · Laravel')
         ->toContain('Write all prose in **German (de)**')
-        ->toContain('- `sql-injection` — ')
+        ->toContain("- `sql-injection`\n")
+        ->not->toContain('- `sql-injection` — ')
         ->toContain('- `other` — ')
         ->not->toContain('- `mass-assignment` — ')
         ->toContain('Start your answer directly with the line `## Findings`.')
@@ -366,6 +367,6 @@ it('keeps every task prompt within its size budget', function (AuditType $type) 
             continue;
         }
 
-        expect(strlen($audit->renderTask($task, promptContext())->text))->toBeLessThanOrEqual(7_600, $task->key());
+        expect(strlen($audit->renderTask($task, promptContext())->text))->toBeLessThanOrEqual(7_100, $task->key());
     }
 })->with(AuditType::cases());

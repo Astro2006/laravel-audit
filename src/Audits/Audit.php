@@ -115,8 +115,9 @@ abstract class Audit
      */
     public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = [], ?int $maxFindings = null): RenderedPrompt
     {
-        $text = strtr($this->templates->get(self::BASE_TEMPLATE)."\n\n".$this->templates->get($task->promptFile()), [
-            ...TaskPlaceholders::for($this, $task, $context),
+        $instructions = $this->templates->get($task->promptFile());
+        $text = strtr($this->templates->get(self::BASE_TEMPLATE)."\n\n".$instructions, [
+            ...TaskPlaceholders::for($this, $task, $context, $instructions),
             ...($maxFindings === null ? [] : ['{{max_findings}}' => (string) $maxFindings]),
             '{{snapshot}}' => TaskPlaceholders::snapshots($task, $context),
             '{{dependency_context}}' => TaskPlaceholders::dependencyContext($dependencyContext, $missingDependencies),

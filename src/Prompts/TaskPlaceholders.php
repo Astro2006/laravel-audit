@@ -18,8 +18,11 @@ final class TaskPlaceholders
 
     private const string NO_BOOST_NOTE = 'Laravel Boost is not available in this run. Work from the files.';
 
-    /** @return array<string, string> */
-    public static function for(Audit $audit, AuditTask $task, PromptContext $context): array
+    /**
+     * @param  string  $taskPrompt  the task's own instructions; checks it explains as (`slug`) are listed by slug only
+     * @return array<string, string>
+     */
+    public static function for(Audit $audit, AuditTask $task, PromptContext $context, string $taskPrompt = ''): array
     {
         $customChecks = $context->customChecksFor($audit->type()->value);
 
@@ -43,7 +46,7 @@ final class TaskPlaceholders
             '{{exclude_paths}}' => implode(', ', array_map(fn (string $path): string => '`'.$path.'`', $context->excludePaths)),
             '{{max_findings}}' => (string) $context->maxFindings,
             '{{max_files}}' => (string) $context->maxFiles,
-            '{{checks}}' => self::checkList($audit, $task),
+            '{{checks}}' => self::checkList($audit, $task, $taskPrompt),
             '{{custom_checks}}' => $customChecks === []
                 ? 'None.'
                 : implode("\n", array_map(fn (string $rule): string => '- '.$rule, $customChecks)),
@@ -95,13 +98,14 @@ final class TaskPlaceholders
         return $parts === [] ? '' : "## Context from other tasks\n\nOther tasks of this audit already produced this. Rely on it instead of redoing the work.\n\n".implode("\n\n", $parts);
     }
 
-    private static function checkList(Audit $audit, AuditTask $task): string
+    private static function checkList(Audit $audit, AuditTask $task, string $taskPrompt): string
     {
         $checks = $audit->checks();
         $lines = [];
 
         foreach ([...$task->checks, 'other'] as $slug) {
-            $lines[] = sprintf('- `%s` — %s', $slug, Arr::get($checks, $slug, ''));
+            $explained = $slug !== 'other' && str_contains($taskPrompt, '(`'.$slug.'`)');
+            $lines[] = $explained ? sprintf('- `%s`', $slug) : sprintf('- `%s` — %s', $slug, Arr::get($checks, $slug, ''));
         }
 
         return implode("\n", $lines);

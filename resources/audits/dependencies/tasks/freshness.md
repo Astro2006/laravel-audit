@@ -6,11 +6,11 @@ Check whether the runtime and the direct dependencies are supported and current,
 
 ## Inputs
 
-- The Composer snapshot above — everything Composer can tell, precomputed, one row per fact (`Kind` = advisories, abandoned, outdated_major, unused_candidates …). The detail file of a row adds the package's usage: namespaces, reference counts (production code vs `tests/`), top files, auto-discovered providers/aliases, binaries used in scripts/CI
+- The Composer snapshot above: one row per fact (`Kind` = advisories, abandoned, outdated_major, unused_candidates …). A row's detail file adds where the package is used
 - `composer.json`, `composer.lock`
-
-You cannot run Composer. If a precomputed file is missing, say so under Limitations. npm packages are not part of this audit.
 - The `time` field of packages in `composer.lock`
+
+You cannot run Composer; a missing precomputed file goes under Limitations. npm packages are not part of this audit.
 
 ## Checklist
 
