@@ -9,12 +9,11 @@ use Illuminate\Support\Arr;
 final readonly class AuditConfig
 {
     public const array DEFAULTS = [
+        'tool' => [
+            'wait_timeout' => 100,
+        ],
+
         'agent' => [
-            'orchestrator' => [
-                'timeout' => 7200,
-                'max_turns' => 80,
-                'wait_timeout' => 100,
-            ],
             'drivers' => [
                 'codex' => ['config' => []],
             ],
@@ -81,6 +80,10 @@ final readonly class AuditConfig
     ];
 
     public const array LEGACY_KEYS = [
+        'orchestrator' => null,
+        'agent.orchestrator.timeout' => null,
+        'agent.orchestrator.max_turns' => null,
+        'agent.orchestrator.wait_timeout' => 'tool.wait_timeout',
         'agent.verify.min_severity' => null,
         'agent.binary' => 'agent.drivers.claude_code.binary',
         'agent.effort' => 'agent.drivers.claude_code.effort',

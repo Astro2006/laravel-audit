@@ -23,11 +23,11 @@ class ToolCommand extends Command
     protected $signature = 'audit:tool
         {action : catalog, status, preflight, start, wait or result}
         {items?* : preflight steps (preflight), task keys (start) or one task key (result)}
-        {--run= : Run ID; default: the AUDIT_RUN variable the orchestrator gets}
-        {--timeout= : Seconds wait blocks at most; default agent.orchestrator.wait_timeout}
+        {--run= : Run ID; default: the AUDIT_RUN variable}
+        {--timeout= : Seconds wait blocks at most; default tool.wait_timeout}
         {--sync : Run preflight or tasks in this process instead of in the background}';
 
-    protected $description = 'Tools of the orchestrator agent of php artisan audit --orchestrate (prints JSON)';
+    protected $description = 'Run the audit step by step from an agent session: preflight, tasks, results (prints JSON)';
 
     public function handle(AuditConfig $config): int
     {
@@ -54,7 +54,7 @@ class ToolCommand extends Command
             'status' => $status->handle($run),
             'preflight' => $start->preflight($run, $items, $sync),
             'start' => $start->tasks($run, $items, $sync),
-            'wait' => (new Wait($status))->handle($run, is_numeric($this->option('timeout')) ? (int) $this->option('timeout') : $config->int('agent.orchestrator.wait_timeout')),
+            'wait' => (new Wait($status))->handle($run, is_numeric($this->option('timeout')) ? (int) $this->option('timeout') : $config->int('tool.wait_timeout')),
             'result' => $items === [] ? ['error' => 'Name the task, e.g. `result backend.injection`.'] : (new TaskResult)->handle($run, Arr::first($items)),
             'work' => $this->work($config, $run),
             default => ['error' => sprintf('Unknown action "%s".', $action), 'allowed' => self::ACTIONS],

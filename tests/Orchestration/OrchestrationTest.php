@@ -1,17 +1,9 @@
 <?php
 
-use Astro2006\LaravelAudit\Contracts\Orchestrator;
-use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
-use Astro2006\LaravelAudit\Orchestration\AgentOrchestrator;
-use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
 use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
 use Astro2006\LaravelAudit\Orchestration\OrchestrationState;
-use Astro2006\LaravelAudit\Orchestration\Tools\Catalog;
-use Astro2006\LaravelAudit\Orchestration\Tools\StartWork;
-use Astro2006\LaravelAudit\Orchestration\Tools\Work;
 use Astro2006\LaravelAudit\Orchestration\WorkerLock;
 use Astro2006\LaravelAudit\Run\AuditRun;
-use Astro2006\LaravelAudit\Support\AuditConfig;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
 
@@ -37,7 +29,7 @@ function orchestratedProject(): string
     return $project;
 }
 
-/** A run as `audit --orchestrate` starts it, for the dependencies audit. */
+/** A run opened for audit:tool, for the dependencies audit. */
 function orchestratedRun(string $project): AuditRun
 {
     $run = AuditRun::create($project.'/storage/audit');
@@ -54,15 +46,13 @@ function tool(AuditRun $run, string $action, array $items = [], array $options =
     return json_decode(Artisan::output(), true);
 }
 
-/** Answers the task agents by task and runs $orchestrator as the orchestrator session. */
-function fakeOrchestration(Closure $orchestrator): void
+/** Answers the task agents by task. */
+function fakeTaskAgents(): void
 {
     $answers = dependencyAnswers();
 
     fakeTools([
-        '*pint*run*' => fn ($process) => Process::result(openCodeAnswer(in_array('laravel-audit-orchestrator', (array) $process->command, true)
-            ? $orchestrator($process->environment['AUDIT_RUN'])
-            : $answers[$process->environment['AUDIT_TASK']] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n")),
+        '*pint*run*' => fn ($process) => Process::result(openCodeAnswer($answers[$process->environment['AUDIT_TASK']] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n")),
     ]);
 }
 
@@ -132,7 +122,7 @@ it('starts the worker in the background and returns right away', function () {
 
 it('runs tasks and returns their findings', function () {
     $project = orchestratedProject();
-    fakeOrchestration(fn () => '');
+    fakeTaskAgents();
     $run = orchestratedRun($project);
     tool($run, 'preflight', ['composer'], ['--sync' => true]);
 
@@ -147,60 +137,4 @@ it('runs tasks and returns their findings', function () {
             'dependencies.freshness' => ['status' => 'not_started'],
         ])
         ->and(tool($run, 'result', ['dependencies.hygiene']))->error->toBe('Task "dependencies.hygiene" has no result yet.');
-});
-
-it('lets the orchestrator agent pick the steps and tasks, then writes the reports', function () {
-    $project = orchestratedProject();
-    // The command's output is mocked while `audit` runs, so the session calls the tools directly.
-    fakeOrchestration(function (string $runId): string {
-        $config = app(AuditConfig::class);
-        $run = OrchestratedRun::open($config, $runId);
-        $start = new StartWork($config, new Work($config));
-        (new Catalog($config))->handle($run);
-        $start->preflight($run, ['composer'], sync: true);
-        $start->tasks($run, ['dependencies.security', 'dependencies.necessity'], sync: true);
-
-        return 'Ran composer, security and necessity. Left out freshness and hygiene.';
-    });
-
-    $this->artisan('audit', ['--dependencies' => true, '--orchestrate' => true])
-        ->expectsOutputToContain('Orchestrator')
-        ->expectsOutputToContain('dependencies.security · 3 findings')
-        ->expectsOutputToContain('Left out freshness and hygiene.')
-        ->expectsOutputToContain('dependencies.freshness · skipped: Not started by the orchestrator.')
-        ->assertExitCode(0);
-
-    $run = latestRun($project);
-
-    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')
-        ->and(file_get_contents($run.'/dependencies.md'))->toContain('### DEP-001 — guzzlehttp/psr7')
-        ->and($run.'/logs/orchestrator.prompt.md')->toBeFile()
-        ->and(file_get_contents($run.'/logs/orchestrator.prompt.md'))->toContain('php artisan audit:tool catalog')
-        ->and($run.'/orchestration/answer.md')->toBeFile()
-        ->and($run.'/preflight/summary.json')->toBeFile();
-
-    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'laravel-audit-orchestrator')
-        && $process->environment['AUDIT_RUN'] === basename($run)
-        && str_ends_with($process->environment['OPENCODE_CONFIG'], 'logs/opencode-orchestrator.json'));
-    Process::assertNotRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'artisan test'));
-});
-
-it('picks the orchestrator from the config', function () {
-    orchestratedProject();
-
-    expect(app(Orchestrator::class))->toBeInstanceOf(AuditOrchestrator::class);
-
-    config()->set('audit.orchestrator', 'agent');
-
-    expect(app(Orchestrator::class))->toBeInstanceOf(AgentOrchestrator::class);
-});
-
-it('only orchestrates with OpenCode for now', function () {
-    orchestratedProject();
-    config()->set('audit.agent.driver', 'claude_code');
-    fakeTools();
-
-    $this->artisan('audit', ['--dependencies' => true, '--orchestrate' => true])
-        ->expectsOutputToContain('--orchestrate needs OpenCode for now')
-        ->assertExitCode(3);
 });

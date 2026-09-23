@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents\Drivers;
 
-use Astro2006\LaravelAudit\Contracts\OrchestratingDriver;
 use Astro2006\LaravelAudit\Support\McpServer;
 
 final readonly class OpenCodeConfig
@@ -58,39 +57,6 @@ final readonly class OpenCodeConfig
         }
 
         return $config;
-    }
-
-    /**
-     * The config of the orchestrator: read, glob and list like the audit
-     * agents, plus a shell that runs `php artisan audit:tool …` only.
-     *
-     * @param  list<string>  $extraDirectories
-     * @param  int|null  $steps  tool-call rounds before the orchestrator must answer
-     * @return array<string, mixed>
-     */
-    public function orchestrator(array $extraDirectories, ?int $steps): array
-    {
-        $tools = ['*' => false, 'bash' => true];
-
-        foreach (self::TOOLS as $tool) {
-            $tools[$tool] = true;
-        }
-
-        return [
-            '$schema' => 'https://opencode.ai/config.json',
-            'agent' => [
-                OpenCodeDriver::ORCHESTRATOR_AGENT => [
-                    'description' => 'Orchestrates a Laravel audit through php artisan audit:tool',
-                    'mode' => 'primary',
-                    'tools' => $tools,
-                    'permission' => [
-                        ...$this->permission($extraDirectories),
-                        'bash' => ['*' => 'deny', OrchestratingDriver::TOOL_COMMAND => 'allow'],
-                    ],
-                    ...($steps === null ? [] : ['steps' => $steps]),
-                ],
-            ],
-        ];
     }
 
     /** @return array<string, bool> */

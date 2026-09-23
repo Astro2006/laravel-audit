@@ -9,9 +9,6 @@ use Astro2006\LaravelAudit\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Commands\InstallCommand;
 use Astro2006\LaravelAudit\Commands\ToolCommand;
-use Astro2006\LaravelAudit\Contracts\Orchestrator;
-use Astro2006\LaravelAudit\Orchestration\AgentOrchestrator;
-use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Spatie\LaravelPackageTools\Package;
@@ -36,9 +33,6 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $this->app->bind(AuditConfig::class, fn () => AuditConfig::load((array) config('audit', [])));
-        $this->app->bind(Orchestrator::class, fn ($app) => $app->make(
-            $app->make(AuditConfig::class)->string('orchestrator') === 'agent' ? AgentOrchestrator::class : AuditOrchestrator::class,
-        ));
     }
 
     public function packageBooted(): void

@@ -8,7 +8,6 @@ return [
         'requirements' => 'Requirements',
         'preflight' => 'Preflight',
         'agents' => 'Agents',
-        'orchestrator' => 'Orchestrator',
     ],
 
     'requirements' => [
@@ -100,12 +99,6 @@ return [
         'browser_broken' => 'Almost every browser test fails for the same reason. The server, the assets or the browser look broken.',
         'question' => 'Continue with the audits anyway?',
         'aborted' => 'Aborted at the test gate. The preflight is kept in :path.',
-    ],
-
-    'orchestrator' => [
-        'unsupported' => '--orchestrate needs OpenCode for now; :agent cannot run the audit:tool commands yet. Use --agent=opencode.',
-        'no_preflight' => 'The orchestrator ran no preflight step, so there is nothing to report. See logs/orchestrator.json.',
-        'failed' => 'Orchestrator: :reason',
     ],
 
     'agents' => [

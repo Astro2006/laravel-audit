@@ -7,7 +7,7 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
 use Astro2006\LaravelAudit\Agents\Telemetry;
-use Astro2006\LaravelAudit\Contracts\OrchestratingDriver;
+use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\Json;
@@ -15,15 +15,13 @@ use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Arr;
 
-final class OpenCodeDriver implements OrchestratingDriver
+final class OpenCodeDriver implements AgentDriver
 {
     use RunsCli;
 
     public const string NAME = 'opencode';
 
     public const string AGENT = 'laravel-audit';
-
-    public const string ORCHESTRATOR_AGENT = 'laravel-audit-orchestrator';
 
     /**
      * @param  string  $basePath  project root; deny rules match absolute paths too
@@ -71,19 +69,6 @@ final class OpenCodeDriver implements OrchestratingDriver
     public function command(AgentRequest $request): array
     {
         return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::AGENT, ...$this->modelArguments()];
-    }
-
-    public function writeOrchestratorConfig(string $directory, array $extraDirectories = [], ?int $maxTurns = null): string
-    {
-        $path = $directory.'/opencode-orchestrator.json';
-        Json::writeFile($path, (new OpenCodeConfig($this->basePath, null, [], $this->deniedFiles))->orchestrator($extraDirectories, $maxTurns));
-
-        return $path;
-    }
-
-    public function orchestratorCommand(AgentRequest $request): array
-    {
-        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::ORCHESTRATOR_AGENT, ...$this->modelArguments()];
     }
 
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array

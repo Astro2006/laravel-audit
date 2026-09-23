@@ -22,13 +22,13 @@ final readonly class OrchestratedRun
         public WorkerLock $lock,
     ) {}
 
-    /** @throws InvalidSelection when the run does not exist or was not started with --orchestrate */
+    /** @throws InvalidSelection when the run does not exist or was not opened for audit:tool */
     public static function open(AuditConfig $config, string $runId): self
     {
         $run = AuditRun::open($config->string('output_path'), $runId)
             ?? throw new InvalidSelection(sprintf('Run "%s" not found.', $runId));
         $state = OrchestrationState::read(self::directory($run))
-            ?? throw new InvalidSelection(sprintf('Run "%s" was not started with --orchestrate.', $runId));
+            ?? throw new InvalidSelection(sprintf('Run "%s" was not opened for audit:tool.', $runId));
 
         return self::for($run, $state, (new PlanRun($config))->handle($state->options()));
     }

@@ -116,7 +116,7 @@ final readonly class RunSelection
 
     /**
      * The same audits, but only these preflight steps run (the steps an
-     * orchestrator asked for).
+     * agent session asked for).
      *
      * @param  list<PreflightStep>  $steps
      */

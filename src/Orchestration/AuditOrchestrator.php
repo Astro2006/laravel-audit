@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Orchestration;
 
 use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Contracts\Orchestrator;
 use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\RunStatus;
@@ -19,7 +18,7 @@ use Astro2006\LaravelAudit\Orchestration\Phases\StartRun;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Support\PackageVersion;
 
-final class AuditOrchestrator implements Orchestrator
+final class AuditOrchestrator
 {
     public function __construct(
         private readonly PlanRun $planRun,

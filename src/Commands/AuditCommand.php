@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Commands;
 
 use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Contracts\Orchestrator;
 use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Orchestration\AgentOrchestrator;
+use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
 use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\Command;
 
@@ -32,17 +31,12 @@ class AuditCommand extends Command
         {--reuse-preflight= : Reuse the preflight of the latest run, or of the given run ID}
         {--agent= : Agent CLI for this run: claude_code, opencode, codex or auto}
         {--model= : Model for this run, in the format the agent CLI expects}
-        {--mode= : single (one task at a time) or parallel (up to agent.concurrency tasks at once); default agent.mode}
-        {--orchestrate : Let an agent decide which preflight steps and tasks run, like orchestrator = agent in the config (OpenCode for now)}';
+        {--mode= : single (one task at a time) or parallel (up to agent.concurrency tasks at once); default agent.mode}';
 
     protected $description = 'Audit this app: a deterministic preflight, then headless agents (Claude Code, OpenCode or Codex) for tests, frontend, backend and dependencies';
 
-    public function handle(Orchestrator $orchestrator): int
+    public function handle(AuditOrchestrator $orchestrator): int
     {
-        if ($this->option('orchestrate')) {
-            $orchestrator = app(AgentOrchestrator::class);
-        }
-
         return $orchestrator->run(
             new AuditOptions(
                 audits: array_values(array_filter(AuditType::values(), fn (string $audit): bool => (bool) $this->option($audit))),

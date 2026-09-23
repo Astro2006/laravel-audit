@@ -26,11 +26,11 @@ final class JobPlanner
         private readonly ?string $overridePath = null,
     ) {}
 
-    public const string NOT_STARTED = 'Not started by the orchestrator.';
+    public const string NOT_STARTED = 'Not started in this run.';
 
     /**
      * @param  list<AuditType>  $audits
-     * @param  list<string>|null  $only  task keys to plan (an orchestrator's choice); null = every task
+     * @param  list<string>|null  $only  task keys to plan (what the agent session started); null = every task
      * @param  bool  $withHarnessJobs  plan the summary tasks and the results job too
      */
     public function plan(array $audits, PreflightSummary $preflight, PromptContext $context, ProjectInspector $project, ?array $only = null, bool $withHarnessJobs = true): JobPlan
