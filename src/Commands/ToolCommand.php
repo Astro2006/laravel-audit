@@ -5,20 +5,20 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Commands;
 
 use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
-use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
-use Astro2006\LaravelAudit\Orchestration\Tools\Catalog;
-use Astro2006\LaravelAudit\Orchestration\Tools\ContinuePastGate;
-use Astro2006\LaravelAudit\Orchestration\Tools\Finish;
-use Astro2006\LaravelAudit\Orchestration\Tools\Open;
-use Astro2006\LaravelAudit\Orchestration\Tools\StartWork;
-use Astro2006\LaravelAudit\Orchestration\Tools\Status;
-use Astro2006\LaravelAudit\Orchestration\Tools\TaskResult;
-use Astro2006\LaravelAudit\Orchestration\Tools\Wait;
-use Astro2006\LaravelAudit\Orchestration\Tools\Work;
+use Astro2006\LaravelAudit\Run\AuditOptions;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Messages;
+use Astro2006\LaravelAudit\Tool\Catalog;
+use Astro2006\LaravelAudit\Tool\ContinuePastGate;
+use Astro2006\LaravelAudit\Tool\Finish;
+use Astro2006\LaravelAudit\Tool\Open;
+use Astro2006\LaravelAudit\Tool\OpenedRun;
+use Astro2006\LaravelAudit\Tool\StartWork;
+use Astro2006\LaravelAudit\Tool\Status;
+use Astro2006\LaravelAudit\Tool\TaskResult;
+use Astro2006\LaravelAudit\Tool\Wait;
+use Astro2006\LaravelAudit\Tool\Work;
 use Illuminate\Console\Command;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Arr;
@@ -61,7 +61,7 @@ class ToolCommand extends Command
         }
 
         try {
-            $run = OrchestratedRun::open($config, $runId);
+            $run = OpenedRun::open($config, $runId);
         } catch (InvalidSelection $exception) {
             return $this->json(['error' => $exception->getMessage()], self::FAILURE);
         }
@@ -87,7 +87,7 @@ class ToolCommand extends Command
     }
 
     /** @return array<string, mixed> */
-    private function work(AuditConfig $config, OrchestratedRun $run): array
+    private function work(AuditConfig $config, OpenedRun $run): array
     {
         (new Work($config))->handle($run);
 

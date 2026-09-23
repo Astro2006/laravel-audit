@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Commands;
 
 use Astro2006\LaravelAudit\Console\AuditConsole;
-use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\AuditType;
-use Astro2006\LaravelAudit\Orchestration\AuditOrchestrator;
+use Astro2006\LaravelAudit\Run\AuditOptions;
+use Astro2006\LaravelAudit\Run\AuditOrchestrator;
 use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\Command;
 

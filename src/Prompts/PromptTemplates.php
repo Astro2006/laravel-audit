@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Prompts;
 
+use Astro2006\LaravelAudit\Enums\AuditType;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 
 final readonly class PromptTemplates
 {
-    public const string PUBLISHED_PATH = 'prompts/vendor/laravel-audit';
+    public const string PUBLISHED_PATH = 'audits/vendor/laravel-audit';
 
-    private const array OUTDATED = ['_base.md', 'tests.md', 'frontend.md', 'backend.md', 'dependencies.md', 'summary.md'];
+    private const string OLD_PROMPTS_PATH = 'prompts/vendor/laravel-audit';
 
     /** @param  string|null  $overridePath  published prompts; files there win */
     public function __construct(private ?string $overridePath = null) {}
@@ -21,17 +25,37 @@ final readonly class PromptTemplates
     }
 
     /**
-     * Published copies of prompts the task layout no longer reads.
+     * Published prompts and checks of an older layout, which are not read
+     * any more: everything below resources/prompts/vendor/laravel-audit and
+     * the flat resources/audits/vendor/laravel-audit/<audit>.php files.
      *
-     * @return list<string>
+     * @return list<string> paths relative to the resources directory
      */
-    public static function outdated(?string $overridePath): array
+    public static function outdated(string $resourcesPath): array
     {
-        if ($overridePath === null) {
-            return [];
+        $files = [];
+        $old = $resourcesPath.'/'.self::OLD_PROMPTS_PATH;
+
+        if (is_dir($old)) {
+            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($old, FilesystemIterator::SKIP_DOTS)) as $file) {
+                $files[] = self::OLD_PROMPTS_PATH.'/'.substr((string) $file, strlen($old) + 1);
+            }
         }
 
-        return array_values(array_filter(self::OUTDATED, fn (string $file): bool => is_file($overridePath.'/'.$file)));
+        foreach (AuditType::values() as $audit) {
+            if (is_file($resourcesPath.'/'.self::PUBLISHED_PATH.'/'.$audit.'.php')) {
+                $files[] = self::PUBLISHED_PATH.'/'.$audit.'.php';
+            }
+        }
+
+        sort($files);
+
+        return $files;
+    }
+
+    public static function packagePath(): string
+    {
+        return dirname(__DIR__, 2).'/resources/audits';
     }
 
     public function has(string $file): bool
@@ -53,7 +77,7 @@ final readonly class PromptTemplates
 
     private function path(string $file): ?string
     {
-        foreach (array_filter([$this->overridePath, dirname(__DIR__, 2).'/resources/prompts']) as $directory) {
+        foreach (array_filter([$this->overridePath, self::packagePath()]) as $directory) {
             if (is_file($directory.'/'.$file)) {
                 return $directory.'/'.$file;
             }

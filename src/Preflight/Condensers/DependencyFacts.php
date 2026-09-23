@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
-use Astro2006\LaravelAudit\Data\Composer\UsageMap;
-use Astro2006\LaravelAudit\Data\Composer\ValidateResult;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\UsageMap;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\ValidateResult;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Collection;

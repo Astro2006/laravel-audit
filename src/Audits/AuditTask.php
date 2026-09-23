@@ -48,14 +48,14 @@ final readonly class AuditTask
     public function promptFile(): string
     {
         return match ($this->name) {
-            self::SUMMARY => 'agents/_summary.md',
-            self::CUSTOM => 'agents/_custom.md',
-            default => 'agents/'.$this->audit->value.'/'.$this->name.'.md',
+            self::SUMMARY => 'shared/summary.md',
+            self::CUSTOM => 'shared/custom.md',
+            default => $this->audit->value.'/tasks/'.$this->name.'.md',
         };
     }
 
     public function extraPromptFile(): ?string
     {
-        return $this->isSummary() ? 'agents/'.$this->audit->value.'/summary.md' : null;
+        return $this->isSummary() ? $this->audit->value.'/tasks/summary.md' : null;
     }
 }

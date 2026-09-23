@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Astro2006\LaravelAudit\Prompts;
+
+use Astro2006\LaravelAudit\Support\Language;
+
+final class OverviewPrompt
+{
+    private const string TEMPLATE = 'shared/results.md';
+
+    private readonly PromptTemplates $templates;
+
+    /** @param  string|null  $overridePath  published prompts; files there win */
+    public function __construct(?string $overridePath = null)
+    {
+        $this->templates = new PromptTemplates($overridePath);
+    }
+
+    /** @param  list<string>  $auditDigests  one Markdown block per audit: its title, summary and finding counts */
+    public function render(PromptContext $context, array $auditDigests): RenderedPrompt
+    {
+        $text = strtr($this->templates->get(self::TEMPLATE), [
+            '{{project_name}}' => $context->projectName,
+            '{{laravel_version}}' => $context->laravelVersion,
+            '{{run_id}}' => $context->runId,
+            '{{report_language}}' => Language::label($context->reportLanguage),
+            '{{audits_digest}}' => $auditDigests === [] ? 'No audits ran.' : implode("\n\n", $auditDigests),
+        ]);
+
+        return new RenderedPrompt($text, $this->hash());
+    }
+
+    public function hash(): string
+    {
+        return $this->templates->hash(self::TEMPLATE);
+    }
+}

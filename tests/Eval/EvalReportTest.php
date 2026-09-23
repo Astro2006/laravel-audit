@@ -1,8 +1,8 @@
 <?php
 
-use Astro2006\LaravelAudit\Data\Run\RunRecord;
 use Astro2006\LaravelAudit\Eval\EvalReport;
 use Astro2006\LaravelAudit\Eval\ExpectedSet;
+use Astro2006\LaravelAudit\Run\Data\RunRecord;
 
 function evalRun(string $id, array $findings, array $extra = []): RunRecord
 {

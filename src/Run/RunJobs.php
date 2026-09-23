@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
-use Astro2006\LaravelAudit\Orchestration\RunPlan;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Preflight\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Prompts\PromptContextBuilder;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
-use Astro2006\LaravelAudit\Snapshots\SnapshotWriter;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\McpServer;
 

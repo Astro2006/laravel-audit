@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit;
 
-use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Commands\InstallCommand;
@@ -37,12 +36,20 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
-        $this->publishes([
-            $this->package->basePath('/../resources/prompts') => resource_path(PromptTemplates::PUBLISHED_PATH),
-        ], 'audit-prompts');
+        $this->publishes($this->packageFiles('*.md'), 'audit-prompts');
+        $this->publishes($this->packageFiles('audit.php'), 'audit-checks');
+    }
 
-        $this->publishes([
-            $this->package->basePath('/../resources/audits') => resource_path(AuditDefinition::PUBLISHED_PATH),
-        ], 'audit-checks');
+    /** @return array<string, string> package file => published file, for the files below resources/audits that match $pattern */
+    private function packageFiles(string $pattern): array
+    {
+        $files = [];
+        $root = PromptTemplates::packagePath();
+
+        foreach ([...glob($root.'/*/'.$pattern) ?: [], ...glob($root.'/*/tasks/'.$pattern) ?: []] as $file) {
+            $files[$file] = resource_path(PromptTemplates::PUBLISHED_PATH.'/'.substr($file, strlen($root) + 1));
+        }
+
+        return $files;
     }
 }

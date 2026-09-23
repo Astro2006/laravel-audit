@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\InstalledPackage;
 use Illuminate\Support\Collection;
 
 final class ComposerPackages

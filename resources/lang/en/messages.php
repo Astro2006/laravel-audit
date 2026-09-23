@@ -11,7 +11,7 @@ return [
     ],
 
     'requirements' => [
-        'prompts_outdated' => 'Published prompts from the single-agent layout are ignored now (:files in resources/prompts/vendor/laravel-audit) → republish with --tag=audit-prompts',
+        'prompts_outdated' => 'Published prompts or checks of an older layout are ignored now (:files) → republish with --tag=audit-prompts and --tag=audit-checks',
         'production' => 'APP_ENV is production — laravel-audit never runs in production.',
         'agent' => 'Agent: :agent · model :model',
         'agent_default_model' => 'from the CLI config',
@@ -23,7 +23,7 @@ return [
         'output' => 'Output folder :path',
         'legacy_key' => 'config/audit.php sets :old, which is no longer read. Use :new instead.',
         'legacy_key_removed' => 'config/audit.php sets :old, which is no longer read. You can remove it.',
-        'checks_outdated' => 'The published checks of the :audit audit (resources/audits/vendor/laravel-audit) lack newer checks: :checks. Re-publish with --tag=audit-checks --force or add them.',
+        'checks_outdated' => 'The published checks of the :audit audit (resources/audits/vendor/laravel-audit/:audit/audit.php) lack newer checks: :checks. Re-publish with --tag=audit-checks --force or add them.',
         'output_not_writable' => 'Output folder :path is not writable.',
         'boost' => 'Boost MCP (:count tools allowed)',
         'boost_missing' => 'Laravel Boost not installed — agents work from files only → php artisan audit:install',

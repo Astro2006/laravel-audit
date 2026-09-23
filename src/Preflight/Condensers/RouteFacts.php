@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Routes\RouteFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteFactsReport;
 use Closure;
 use Illuminate\Support\Str;
 

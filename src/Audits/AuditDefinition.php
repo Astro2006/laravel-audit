@@ -6,12 +6,13 @@ namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\Read;
 use RuntimeException;
 
 final readonly class AuditDefinition
 {
-    public const string PUBLISHED_PATH = 'audits/vendor/laravel-audit';
+    public const string PUBLISHED_PATH = PromptTemplates::PUBLISHED_PATH;
 
     /**
      * @param  list<AuditTask>  $tasks  without custom and summary
@@ -29,7 +30,7 @@ final readonly class AuditDefinition
     public static function for(AuditType $type): self
     {
         $published = self::publishedPath();
-        $path = $published !== null && is_file($published.'/'.$type->value.'.php') ? $published.'/'.$type->value.'.php' : self::packageFile($type);
+        $path = $published !== null && is_file($published.'/'.self::relativePath($type)) ? $published.'/'.self::relativePath($type) : self::packageFile($type);
 
         return self::fromFile($type, $path);
     }
@@ -80,12 +81,12 @@ final readonly class AuditDefinition
         $missing = [];
 
         foreach (AuditType::cases() as $type) {
-            if ($published === null || ! is_file($published.'/'.$type->value.'.php')) {
+            if ($published === null || ! is_file($published.'/'.self::relativePath($type))) {
                 continue;
             }
 
             $own = array_keys(self::fromFile($type, self::packageFile($type))->checks);
-            $copy = array_keys(self::fromFile($type, $published.'/'.$type->value.'.php')->checks);
+            $copy = array_keys(self::fromFile($type, $published.'/'.self::relativePath($type))->checks);
             $gone = array_values(array_diff($own, $copy));
 
             if ($gone !== []) {
@@ -103,6 +104,11 @@ final readonly class AuditDefinition
 
     private static function packageFile(AuditType $type): string
     {
-        return dirname(__DIR__, 2).'/resources/audits/'.$type->value.'.php';
+        return PromptTemplates::packagePath().'/'.self::relativePath($type);
+    }
+
+    private static function relativePath(AuditType $type): string
+    {
+        return $type->value.'/audit.php';
     }
 }

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\PhpstanConfig;
 use Astro2006\LaravelAudit\Preflight\Condensers\PhpstanGrouper;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;

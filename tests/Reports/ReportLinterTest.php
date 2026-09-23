@@ -1,7 +1,7 @@
 <?php
 
-use Astro2006\LaravelAudit\Agents\BackendAgent;
-use Astro2006\LaravelAudit\Agents\FrontendAgent;
+use Astro2006\LaravelAudit\Audits\BackendAudit;
+use Astro2006\LaravelAudit\Audits\FrontendAudit;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
@@ -13,12 +13,12 @@ use Astro2006\LaravelAudit\Reports\RequiredFinding;
 function lintReport(string $markdown, $audit = null, array $required = [], ?int $max = 25)
 {
     return (new ReportLinter(fixture('project')))
-        ->lint((new ReportParser)->parse($markdown), ReportSpec::forAudit($audit ?? new BackendAgent, $max), $required);
+        ->lint((new ReportParser)->parse($markdown), ReportSpec::forAudit($audit ?? new BackendAudit, $max), $required);
 }
 
 function lintTask(string $markdown, string $task, array $required = [])
 {
-    $audit = new BackendAgent;
+    $audit = new BackendAudit;
     $task = collect($audit->tasks())->firstWhere('name', $task);
 
     return (new ReportLinter(fixture('project')))->lint((new ReportParser)->parse($markdown), ReportSpec::forTask($audit, $task, 8), $required);
@@ -123,7 +123,7 @@ it('rejects what the audit guard rejects', function () {
     };
 
     $result = (new ReportLinter(fixture('project')))
-        ->lint((new ReportParser)->parse(validBackendReport()), ReportSpec::forAudit(new BackendAgent, 25, $guard));
+        ->lint((new ReportParser)->parse(validBackendReport()), ReportSpec::forAudit(new BackendAudit, 25, $guard));
 
     expect($result->rejected[0]->id)->toBe('BE-002')
         ->and($result->rejected[0]->reason)->toBe('contradicts the preflight.');
@@ -146,7 +146,7 @@ it('fails when a required finding is not covered', function () {
 it('validates checks against the audit it belongs to', function () {
     $report = "## Summary\nx\n\n## Findings\n\n### FE-001 — XSS\n\n| Field | Value |\n|---|---|\n| Severity | high |\n| Confidence | likely |\n| Category | security |\n| Check | xss |\n| Effort | S |\n| Locations | `route:GET /` |\n\n**Evidence**\nx\n\n**Impact**\ny\n\n**Recommendation**\nz\n\n---\n\n## Frontend map\nx\n\n## Route risk table\nx\n\n## UI consistency matrix\nx\n\n## Positive observations\n- a\n\n## Limitations\nNone.\n";
 
-    expect(lintReport($report, new FrontendAgent)->errors)->toBe([]);
+    expect(lintReport($report, new FrontendAudit)->errors)->toBe([]);
 });
 
 function taskFinding(string $check): string

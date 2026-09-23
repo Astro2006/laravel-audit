@@ -339,7 +339,7 @@ Every report has frontmatter and the same structure. Every finding carries a fix
 - Findings from different audits, or from different tasks of one audit, that point to the same place are listed in `run.md` as possible duplicates. They are not merged.
 - There is no grade. `run.md` shows metrics (coverage, PHPStan errors, advisories …) and experimental risk points that you can weight in the config.
 
-The full specification is in [`resources/schemas/report-format.md`](resources/schemas/report-format.md).
+The full specification is in [`resources/audits/shared/report-format.md`](resources/audits/shared/report-format.md).
 
 ### Report language
 
@@ -437,7 +437,7 @@ The prompts are plain Markdown. Publish them to change wording or focus:
 php artisan vendor:publish --tag="audit-prompts"
 ```
 
-They land in `resources/prompts/vendor/laravel-audit` and win over the package prompts: `agents/_task.md` holds the shared rules and output format, `agents/<audit>/<task>.md` the instructions of one task, `agents/_summary.md` the summary. Each audit has a class in `Astro2006\LaravelAudit\Agents` (`BackendAgent`, `FrontendAgent`, `DependenciesAgent`, `TestsAgent`) that renders its prompts and holds its rules (skipped tasks, required findings); its tasks and checks are in `resources/audits/<audit>.php`. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts published before the task layout (`_base.md`, `backend.md` …) are ignored, and the requirements check tells you so.
+They land in `resources/audits/vendor/laravel-audit` and win over the package prompts: `shared/task.md` holds the shared rules and output format, `<audit>/tasks/<task>.md` the instructions of one task, `shared/summary.md` the summary. Each audit has a class in `Astro2006\LaravelAudit\Audits` (`BackendAudit`, `FrontendAudit`, `DependenciesAudit`, `TestsAudit`) that renders its prompts and holds its rules (skipped tasks, required findings); its tasks and checks are in `resources/audits/<audit>/audit.php`. The report format is enforced by the harness, whatever the prompt says. Each report records a hash of the prompts it was produced with; the task hashes are in `run.md`. Prompts and checks published in an older layout (`resources/prompts/vendor/laravel-audit`, `resources/audits/vendor/laravel-audit/<audit>.php`) are ignored, and the requirements check tells you so.
 
 ### Customizing checks
 
@@ -447,7 +447,7 @@ Every audit's tasks and checks are listed in one plain PHP file: per task its ti
 php artisan vendor:publish --tag="audit-checks"
 ```
 
-They land in `resources/audits/vendor/laravel-audit/<audit>.php` and win over the package files. When a package update adds checks that a published copy lacks, the requirements check names them. A new task needs its prompt in `resources/prompts/…/agents/<audit>/<task>.md`. For project rules without touching the tasks, use `custom_checks`.
+They land in `resources/audits/vendor/laravel-audit/<audit>/audit.php` and win over the package files. When a package update adds checks that a published copy lacks, the requirements check names them. A new task needs its prompt in `resources/audits/vendor/laravel-audit/<audit>/tasks/<task>.md`. For project rules without touching the tasks, use `custom_checks`.
 
 To change the console texts, publish the translations with `php artisan vendor:publish --tag="audit-translations"`.
 

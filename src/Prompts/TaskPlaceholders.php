@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Prompts;
 
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
-use Astro2006\LaravelAudit\Contracts\Audit;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Support\Language;
 use Illuminate\Support\Arr;

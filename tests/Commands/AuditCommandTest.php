@@ -1,6 +1,6 @@
 <?php
 
-use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
+use Astro2006\LaravelAudit\Run\Data\RunFrontmatter;
 use Astro2006\LaravelAudit\Run\PreflightReuse;
 use Illuminate\Support\Facades\Process;
 

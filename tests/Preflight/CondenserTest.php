@@ -1,12 +1,5 @@
 <?php
 
-use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
-use Astro2006\LaravelAudit\Data\Composer\PackageCandidate;
-use Astro2006\LaravelAudit\Data\Phpstan\FileCount;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
@@ -16,6 +9,13 @@ use Astro2006\LaravelAudit\Preflight\Condensers\RouteFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteTestMapper;
 use Astro2006\LaravelAudit\Preflight\Condensers\TranslationDiff;
 use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\PackageCandidate;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\FileCount;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\ClassCoverage;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 

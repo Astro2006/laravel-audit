@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Eval;
 
-use Astro2006\LaravelAudit\Data\Run\FindingRecord;
-use Astro2006\LaravelAudit\Data\Run\OutcomeRecord;
-use Astro2006\LaravelAudit\Data\Run\RunRecord;
+use Astro2006\LaravelAudit\Run\Data\FindingRecord;
+use Astro2006\LaravelAudit\Run\Data\OutcomeRecord;
+use Astro2006\LaravelAudit\Run\Data\RunRecord;
 
 final class EvalReport
 {

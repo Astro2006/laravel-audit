@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Eval;
 
-use Astro2006\LaravelAudit\Data\Run\RunRecord;
+use Astro2006\LaravelAudit\Run\Data\RunRecord;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Json;
 use Closure;

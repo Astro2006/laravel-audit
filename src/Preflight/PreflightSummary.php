@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
-use Astro2006\LaravelAudit\Agents\DependenciesAgent;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
 
@@ -47,7 +47,7 @@ final readonly class PreflightSummary
             return null;
         }
 
-        $data = Json::readFile($this->directory.'/'.DependenciesAgent::FACTS_FILE);
+        $data = Json::readFile($this->directory.'/'.DependenciesAudit::FACTS_FILE);
 
         return $data === [] ? null : DependencyFactsReport::fromArray($data);
     }

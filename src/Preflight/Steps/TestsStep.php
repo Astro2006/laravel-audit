@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteTestMapper;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuardResult;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;

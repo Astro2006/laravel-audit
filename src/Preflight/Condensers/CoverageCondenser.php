@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
-use Astro2006\LaravelAudit\Data\Tests\CoverageReport;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\ClassCoverage;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\CoverageReport;
 use Astro2006\LaravelAudit\Support\Xml;
 use SimpleXMLElement;
 

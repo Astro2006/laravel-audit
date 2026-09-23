@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\ResultsAgent;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
-use Astro2006\LaravelAudit\Contracts\Audit;
+use Astro2006\LaravelAudit\Prompts\OverviewPrompt;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
@@ -117,7 +117,7 @@ final class TaskRequests
             );
         }
 
-        return $this->request(JobPlanner::RESULTS_KEY, (new ResultsAgent($this->overridePath))->render($this->context, $digests));
+        return $this->request(JobPlanner::RESULTS_KEY, (new OverviewPrompt($this->overridePath))->render($this->context, $digests));
     }
 
     private function request(string $key, RenderedPrompt $prompt): AgentRequest

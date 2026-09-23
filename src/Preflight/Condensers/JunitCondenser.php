@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Tests\FailureGroup;
-use Astro2006\LaravelAudit\Data\Tests\JunitReport;
-use Astro2006\LaravelAudit\Data\Tests\SkippedTest;
-use Astro2006\LaravelAudit\Data\Tests\SlowTest;
-use Astro2006\LaravelAudit\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\FailureGroup;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\JunitReport;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\SkippedTest;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\SlowTest;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\TestFailure;
 use Astro2006\LaravelAudit\Support\Regex;
 use Astro2006\LaravelAudit\Support\Xml;
 use Illuminate\Support\Collection;

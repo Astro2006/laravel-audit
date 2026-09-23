@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
-use Astro2006\LaravelAudit\Agents\DependenciesAgent;
+use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
@@ -87,7 +87,7 @@ final class ComposerStep implements Step
             licenseAllowlist: $context->config->strings('preflight.license_allowlist'),
         );
 
-        $context->writeJson(DependenciesAgent::FACTS_FILE, $facts);
+        $context->writeJson(DependenciesAudit::FACTS_FILE, $facts);
 
         return StepResult::ok($this->step(), new ComposerDTO(
             direct: count($project->composer()->directPackages()),

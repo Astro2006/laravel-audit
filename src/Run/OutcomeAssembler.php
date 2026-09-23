@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
-use Astro2006\LaravelAudit\Agents\Agent;
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
@@ -92,7 +92,7 @@ final class OutcomeAssembler
             }
         }
 
-        $hash = Agent::auditHash(array_map(fn (AuditTask $task): string => $audit->taskHash($task), $planned->tasks));
+        $hash = Audit::auditHash(array_map(fn (AuditTask $task): string => $audit->taskHash($task), $planned->tasks));
 
         return AuditOutcome::fromTasks($type, $taskOutcomes, $report, $validated->body, $validated->lint, $hash);
     }

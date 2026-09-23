@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Translations\MissingTranslations;
-use Astro2006\LaravelAudit\Data\Translations\TranslationReport;
+use Astro2006\LaravelAudit\Preflight\Data\Translations\MissingTranslations;
+use Astro2006\LaravelAudit\Preflight\Data\Translations\TranslationReport;
 use Illuminate\Support\Collection;
 
 final class TranslationDiff

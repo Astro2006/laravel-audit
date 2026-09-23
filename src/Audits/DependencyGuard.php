@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Audits;
 
-use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\Location;

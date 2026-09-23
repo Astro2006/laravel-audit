@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Console;
 
-use Astro2006\LaravelAudit\Data\Steps\AboutDTO;
-use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
-use Astro2006\LaravelAudit\Data\Steps\CandidatesDTO;
-use Astro2006\LaravelAudit\Data\Steps\ComposerDTO;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeDTO;
-use Astro2006\LaravelAudit\Data\Steps\MigrationsDTO;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanDTO;
-use Astro2006\LaravelAudit\Data\Steps\PintDTO;
-use Astro2006\LaravelAudit\Data\Steps\RoutesDTO;
-use Astro2006\LaravelAudit\Data\Steps\StackDTO;
-use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
-use Astro2006\LaravelAudit\Data\Steps\TranslationsDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\AboutDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\CandidatesDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\ComposerDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\MigrationsDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PhpstanDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PintDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\RoutesDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\StackDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TranslationsDTO;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Messages;
 

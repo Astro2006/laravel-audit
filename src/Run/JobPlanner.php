@@ -6,11 +6,11 @@ namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\ResultsAgent;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Prompts\OverviewPrompt;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
@@ -132,7 +132,7 @@ final class JobPlanner
             audit: null,
             spec: new ReportSpec(self::RESULTS_KEY, 'RES', [], ['Summary']),
             request: fn (array $finished): AgentRequest => $this->requests->results($planned, $skipped, $finished),
-            promptHash: (new ResultsAgent($this->overridePath))->hash(),
+            promptHash: (new OverviewPrompt($this->overridePath))->hash(),
             dependsOn: $dependsOn,
         );
     }

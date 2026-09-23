@@ -3,12 +3,12 @@
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Contracts\Step;
 use Astro2006\LaravelAudit\Contracts\StepDTO;
-use Astro2006\LaravelAudit\Data\Steps\BrowserDTO;
-use Astro2006\LaravelAudit\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\GateMode;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\PreflightRunner;
 use Astro2006\LaravelAudit\Preflight\StepResult;

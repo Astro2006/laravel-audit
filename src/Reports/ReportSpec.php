@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
-use Astro2006\LaravelAudit\Contracts\Audit;
 use Illuminate\Support\Arr;
 
 final readonly class ReportSpec

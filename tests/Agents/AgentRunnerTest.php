@@ -3,10 +3,10 @@
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
-use Astro2006\LaravelAudit\Agents\BackendAgent;
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\ReportLinter;
@@ -23,7 +23,7 @@ function runner(string $logs, int $concurrency = 2): AgentRunner
 
 function backendJob(array $required = []): AgentJob
 {
-    return new AgentJob('backend', AuditType::Backend, ReportSpec::forAudit(new BackendAgent), new AgentRequest('backend', 'Audit the backend.', fixture('project')), 'abc12345', $required);
+    return new AgentJob('backend', AuditType::Backend, ReportSpec::forAudit(new BackendAudit), new AgentRequest('backend', 'Audit the backend.', fixture('project')), 'abc12345', $required);
 }
 
 function taskJob(string $key, array $dependsOn = [], ?Closure $request = null): AgentJob

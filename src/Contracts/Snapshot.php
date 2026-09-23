@@ -6,7 +6,7 @@ namespace Astro2006\LaravelAudit\Contracts;
 
 use Astro2006\LaravelAudit\Enums\SnapshotType;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
-use Astro2006\LaravelAudit\Snapshots\SnapshotManifest;
+use Astro2006\LaravelAudit\Preflight\Snapshots\SnapshotManifest;
 
 interface Snapshot
 {
