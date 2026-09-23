@@ -4,6 +4,17 @@ All notable changes to `laravel-audit` will be documented in this file.
 
 ## Unreleased
 
+### MVP2
+
+- **Boost skill and guideline.** The package ships `resources/boost/guidelines/core.blade.php` and the skill `laravel-audit`, which tells your own Claude Code or OpenCode session how to run the audit with `php artisan audit:tool`. `audit:install` registers both with Boost: interactive through `boost:update --discover`, with `--yes` by adding the package to `boost.json`.
+- **`audit:tool open`, `continue` and `finish`** create a run, continue past failing tests after the user agreed, and write the reports. `start` accepts `task:skill,skill`.
+- **Project skills per task.** The harness finds the skills Boost installed, one agent call per run assigns at most `skills_per_task` of them to the tasks they fit, and each task gets their text in its prompt. The choice is reused while skills and tasks stay the same (`--reselect-skills` asks again); `agent.skills` = `none` or a map switches it off or fixes it.
+- **Removed:** the headless orchestrator (`orchestrator => agent`, `--orchestrate`). `agent.orchestrator.*` and `orchestrator` are reported as no longer read.
+- **`agent.max_concurrency`** (default 1) and `--concurrency` replace `agent.mode`, `agent.concurrency` and `--mode`.
+- **Verify calls** are limited to `agent.verify_max_turns` (6) tool calls.
+- **Layout:** each audit's definition and prompts live in `resources/audits/<audit>/` (`audit.php`, `tasks/`), shared prompts in `resources/audits/shared/`. Both publish tags publish into `resources/audits/vendor/laravel-audit`; copies of the old layout are ignored with a warning. The audit classes are `Audits\BackendAudit` etc.
+- **Fixed:** Codex kept the read-only sandbox only on the first call of a task. `deny_read` globs now support `**` (default `storage/**/*.key`). The database guard read `.env.testing` whenever it existed; it now follows Laravel (`.env.<APP_ENV>`) and reads `DB_URL` and `DB_PORT`. The test run lost variables exported in the shell when `.env` named them too. Locations like `file.php:12–14` or `file.php#L12` were rejected as hallucinated. Lines with characters such as ✅ were split in the evidence check. Guest-only routes counted as authenticated. PHPStan showed "no errors" when it crashed. Background tools could stall on a full output pipe. The `audit:tool` state files could be read half-written.
+
 ### Changed
 
 - Agents run through drivers named like Laravel Boost's agents: `claude_code`, `opencode` and `codex`. `agent.driver = auto` picks the first installed agent from `boost.json`; `--agent` and `--model` override it per run. Models, including self-hosted ones, are configured in the agent CLI.
