@@ -330,6 +330,27 @@ function hygieneFinding(string $id, string $title, string $constraint): string
     return "### {$id} — {$title}\n\n| Field | Value |\n|---|---|\n| Severity | medium |\n| Confidence | suspected |\n| Category | dependency |\n| Check | loose-constraint |\n| Effort | S |\n| Locations | `composer.json:8` |\n\n**Evidence**\n```json\n{$constraint}\n```\n\n**Impact**\nAny version can be installed.\n\n**Recommendation**\nPin a range.\n\n---\n";
 }
 
+it('picks skills for the tasks once and gives them to the tasks', function () {
+    $project = auditProject();
+    @mkdir($project.'/.claude/skills/composer-rules', 0777, true);
+    file_put_contents($project.'/.claude/skills/composer-rules/SKILL.md', "---\nname: composer-rules\ndescription: How this team pins Composer packages.\n---\nPin every package to a caret constraint.\n");
+    fakeAgent([...dependencyAnswers(), 'skills' => '{"dependencies.hygiene": ["composer-rules"]}']);
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('Skills: 1 installed · assigned to 1 tasks (agent)')
+        ->assertExitCode(0);
+
+    $run = latestRun($project);
+
+    expect(file_get_contents($run.'/logs/dependencies.hygiene.prompt.md'))->toContain('### Skill `composer-rules`')
+        ->and(file_get_contents($run.'/logs/dependencies.security.prompt.md'))->not->toContain('## Skills')
+        ->and(json_decode(file_get_contents($run.'/skills.json'), true)['tasks'])->toBe(['dependencies.hygiene' => ['composer-rules']]);
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('assigned to 1 tasks (cache)')
+        ->assertExitCode(0);
+});
+
 it('writes the summary itself and applies the verify pass', function () {
     $project = auditProject();
     config()->set('audit.summary', 'generated');

@@ -49,6 +49,7 @@ final class TaskPlaceholders
                 : implode("\n", array_map(fn (string $rule): string => '- '.$rule, $customChecks)),
             '{{tools_note}}' => $context->toolsNote !== '' ? $context->toolsNote : self::TOOLS_NOTE,
             '{{boost_note}}' => $context->boostAvailable ? self::BOOST_NOTE : self::NO_BOOST_NOTE,
+            '{{skills}}' => (string) Arr::get($context->skills, $task->key(), ''),
         ];
     }
 

@@ -14,6 +14,7 @@ use Astro2006\LaravelAudit\Prompts\TaskPlaceholders;
 use Astro2006\LaravelAudit\Reports\FindingGuard;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Illuminate\Support\Arr;
 
 abstract class Audit
 {
@@ -122,7 +123,9 @@ abstract class Audit
             '{{sections_template}}' => implode('', array_map(fn (string $title): string => "## {$title}\n<see your task instructions>\n\n", $task->sections)),
         ]);
 
-        return new RenderedPrompt($text, $this->taskHash($task));
+        $skills = (string) Arr::get($context->skills, $task->key(), '');
+
+        return new RenderedPrompt($text, $skills === '' ? $this->taskHash($task) : substr(sha1($this->taskHash($task)."\0".$skills), 0, 8));
     }
 
     /**

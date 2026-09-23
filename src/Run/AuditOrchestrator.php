@@ -14,6 +14,7 @@ use Astro2006\LaravelAudit\Run\Phases\FinalizeRun;
 use Astro2006\LaravelAudit\Run\Phases\PlanRun;
 use Astro2006\LaravelAudit\Run\Phases\Preflight;
 use Astro2006\LaravelAudit\Run\Phases\RunAgents;
+use Astro2006\LaravelAudit\Run\Phases\SelectSkills;
 use Astro2006\LaravelAudit\Run\Phases\StartRun;
 use Astro2006\LaravelAudit\Support\PackageVersion;
 
@@ -24,6 +25,7 @@ final class AuditOrchestrator
         private readonly CheckRequirements $checkRequirements,
         private readonly StartRun $startRun,
         private readonly Preflight $preflight,
+        private readonly SelectSkills $selectSkills,
         private readonly RunAgents $runAgents,
         private readonly FinalizeRun $finalizeRun,
     ) {}
@@ -69,6 +71,7 @@ final class AuditOrchestrator
             return AuditExit::Ok;
         }
 
+        $this->selectSkills->handle($context);
         $outcomes = $this->runAgents->handle($context, $summary);
 
         return $this->finalizeRun->handle($context, $summary, $outcomes);

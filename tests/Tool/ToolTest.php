@@ -211,3 +211,20 @@ it('does not finish while the worker runs or before the preflight', function () 
 
     expect(tool($run, 'finish'))->error->toBe('busy');
 });
+
+it('lists the installed skills and hands the chosen ones to the task', function () {
+    $project = orchestratedProject();
+    @mkdir($project.'/.claude/skills/composer-rules', 0777, true);
+    file_put_contents($project.'/.claude/skills/composer-rules/SKILL.md', "---\nname: composer-rules\ndescription: How this team pins Composer packages.\n---\nPin every package to a caret constraint.\n");
+    fakeTaskAgents();
+    $run = AuditRun::open($project.'/storage/audit', openRun(['--audits' => ['dependencies']])['run']);
+
+    expect(tool($run, 'catalog'))->toMatchArray(['skills' => ['composer-rules' => 'How this team pins Composer packages.'], 'skills_per_task' => 2]);
+
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+    $started = tool($run, 'start', ['dependencies.hygiene:composer-rules,made-up'], ['--sync' => true]);
+
+    expect($started['started'])->toBe(['dependencies.hygiene'])
+        ->and($started['warnings'])->toBe(['Skills left out: unknown skill "made-up" for dependencies.hygiene.'])
+        ->and(file_get_contents($run->logsDir().'/dependencies.hygiene.prompt.md'))->toContain("### Skill `composer-rules`\n\nPin every package to a caret constraint.");
+});

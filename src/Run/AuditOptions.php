@@ -22,5 +22,6 @@ final readonly class AuditOptions
         public ?string $agent = null,
         public ?string $model = null,
         public ?string $mode = null,
+        public bool $reselectSkills = false,
     ) {}
 }

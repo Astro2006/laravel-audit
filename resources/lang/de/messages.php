@@ -109,6 +109,8 @@ return [
         'failed' => 'gescheitert: :reason',
         'skipped' => 'übersprungen: :reason',
         'rejected' => ':count verworfen',
+        'skills' => 'Skills: :installed installiert · :tasks Tasks zugeordnet (:source)',
+        'no_skills' => 'Skills: keine installiert',
     ],
 
     'board' => [

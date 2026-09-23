@@ -14,6 +14,7 @@ final readonly class AuditConfig
         ],
 
         'agent' => [
+            'skills' => 'auto',
             'drivers' => [
                 'codex' => ['config' => []],
             ],
@@ -69,6 +70,8 @@ final readonly class AuditConfig
 
         'max_findings_per_task' => 5,
         'max_files_per_task' => 25,
+        'skills_per_task' => 2,
+        'skill_max_chars' => 2000,
         'snapshot_rows' => 10,
         'summary' => 'generated',
         'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],

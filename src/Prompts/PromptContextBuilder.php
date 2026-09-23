@@ -15,8 +15,9 @@ final class PromptContextBuilder
 {
     /**
      * @param  array<string, string>  $snapshots  snapshot type => markdown (SnapshotWriter::write())
+     * @param  array<string, string>  $skills  task key => skills section (SkillSection::render())
      */
-    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, AuditConfig $config, string $locale, bool $boostAvailable, string $toolsNote = '', array $snapshots = []): PromptContext
+    public function build(PreflightSummary $summary, AuditRun $run, ProjectInspector $project, AuditConfig $config, string $locale, bool $boostAvailable, string $toolsNote = '', array $snapshots = [], array $skills = []): PromptContext
     {
         $steps = $summary->steps;
         $about = $steps->about();
@@ -48,6 +49,7 @@ final class PromptContextBuilder
             toolsNote: $toolsNote,
             maxFiles: max(1, $config->int('max_files_per_task')),
             snapshots: $snapshots,
+            skills: $skills,
         );
     }
 

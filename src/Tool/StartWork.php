@@ -6,6 +6,8 @@ namespace Astro2006\LaravelAudit\Tool;
 
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Skills\SkillInventory;
+use Astro2006\LaravelAudit\Skills\SkillSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Process;
@@ -73,6 +75,7 @@ final class StartWork
         }
 
         $tasks = RunTasks::for($run, $this->config);
+        [$keys, $skills] = self::splitSkills($keys);
         $start = [];
         $skipped = [];
         $warnings = [];
@@ -110,7 +113,51 @@ final class StartWork
             return ['started' => [], 'skipped' => $skipped];
         }
 
+        $warnings = [...$warnings, ...$this->assignSkills($run, $skills, $start)];
+
         return $this->launch($run, WorkerLock::TASKS, $start, $sync, ['skipped' => $skipped, 'warnings' => $warnings]);
+    }
+
+    /**
+     * `backend.data:models,php` starts backend.data with the skills models and php.
+     *
+     * @param  list<string>  $items
+     * @return array{list<string>, array<string, list<string>>} task keys, task key => skill names
+     */
+    private static function splitSkills(array $items): array
+    {
+        $keys = [];
+        $skills = [];
+
+        foreach ($items as $item) {
+            [$key, $names] = array_pad(explode(':', $item, 2), 2, '');
+            $keys[] = $key;
+
+            if ($names !== '') {
+                $skills[$key] = array_values(array_filter(array_map('trim', explode(',', $names))));
+            }
+        }
+
+        return [$keys, $skills];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $skills
+     * @param  list<string>  $start
+     * @return list<string> warnings about skills that were left out
+     */
+    private function assignSkills(OpenedRun $run, array $skills, array $start): array
+    {
+        if ($skills === []) {
+            return [];
+        }
+
+        $inventory = SkillInventory::scan($run->plan->project->basePath);
+        $path = $run->run->dir().'/'.SkillSelection::FILE;
+        [$valid, $dropped] = SkillSelection::validate($skills, $start, $inventory, max(1, $this->config->int('skills_per_task')));
+        (SkillSelection::read($path) ?? new SkillSelection([], $inventory->hash(), '', 'agent'))->with($valid)->write($path);
+
+        return $dropped === [] ? [] : ['Skills left out: '.implode('; ', $dropped).'.'];
     }
 
     /**

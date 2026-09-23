@@ -24,6 +24,8 @@ Every finding uses exactly one of these slugs in its `Check` field:
 
 {{dependency_context}}
 
+{{skills}}
+
 ## How to work
 
 1. A preflight step with status `error` or `skipped` goes under Limitations.

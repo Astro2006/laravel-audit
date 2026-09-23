@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Tool;
 
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Skills\Skill;
+use Astro2006\LaravelAudit\Skills\SkillInventory;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Illuminate\Support\Arr;
 
@@ -56,6 +58,8 @@ final class Catalog
             'without' => $selection->withoutValues(),
             'preflight_steps' => $steps,
             'tasks' => $catalog,
+            'skills' => array_map(fn (Skill $skill): string => $skill->description, SkillInventory::scan($run->plan->project->basePath)->skills),
+            'skills_per_task' => max(1, $this->config->int('skills_per_task')),
         ];
     }
 }
