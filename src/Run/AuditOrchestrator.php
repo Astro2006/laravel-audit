@@ -41,7 +41,7 @@ final class AuditOrchestrator
         }
 
         $checks = $this->checkRequirements->handle($plan, $console->messages, ! $options->preflightOnly);
-        $console->header(PackageVersion::get(), $plan->driver, $console->messages->get('modes.'.$plan->mode->value, ['count' => $plan->concurrency]), $plan->selection);
+        $console->header(PackageVersion::get(), $plan->driver, $console->messages->get($plan->concurrency === 1 ? 'modes.single' : 'modes.parallel', ['count' => $plan->concurrency]), $plan->selection);
         $console->checks($checks);
 
         if (RequirementChecker::hasFailures($checks)) {

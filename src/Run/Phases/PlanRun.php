@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Run\Phases;
 
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
-use Astro2006\LaravelAudit\Enums\AgentMode;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\AuditOptions;
@@ -22,15 +21,23 @@ final class PlanRun
     public function handle(AuditOptions $options): RunPlan
     {
         $project = ProjectInspector::fromConfig($this->config);
-        $mode = AgentMode::resolve($options->mode ?? $this->config->string('agent.mode'));
 
         return new RunPlan(
             project: $project,
             selection: RunSelection::resolve($this->config->array('audits'), $options->audits, $options->without),
             driver: (new DriverRegistry($this->config, $project))->resolve($options->agent, $options->model),
-            mode: $mode,
-            concurrency: $mode->concurrency($this->config->int('agent.concurrency')),
+            concurrency: self::concurrency($options->concurrency ?? (string) $this->config->int('agent.max_concurrency')),
             guard: DatabaseGuard::forApp($project),
         );
+    }
+
+    /** @throws InvalidSelection */
+    private static function concurrency(string $value): int
+    {
+        if (preg_match('/^\s*\d+\s*$/', $value) !== 1 || (int) $value < 1) {
+            throw InvalidSelection::invalidConcurrency($value);
+        }
+
+        return (int) $value;
     }
 }

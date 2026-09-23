@@ -122,8 +122,8 @@ return [
     ],
 
     'modes' => [
-        'single' => 'single, one task at a time',
-        'parallel' => 'parallel, :count tasks at once',
+        'single' => 'one task at a time',
+        'parallel' => 'up to :count tasks at once',
     ],
 
     'summary' => [

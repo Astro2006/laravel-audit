@@ -26,7 +26,7 @@ The audit has two parts. A **preflight** runs the project's own tools (tests, PH
 3. **Run the preflight in one call** with the steps the tasks you plan need: `php artisan audit:tool preflight composer routes tests --run=<id>`. Light steps take seconds; `tests`, `browser` and `phpstan` take minutes. Then `php artisan audit:tool wait --run=<id>` until `"done": true`.
 4. **The test gate.** If `gate` is `aborted`, tests fail. Tell the user how many (`failing_tests`) and where the details are (`storage/audit/<run>/preflight/details/tests/`), and ask whether to continue anyway. Only on a yes: `php artisan audit:tool continue --run=<id>`. On a no: stop and say so.
 5. **Pick skills per task.** Call `catalog` again: `skip_reason` now names tasks with nothing to audit; leave them out. For each task, pick at most `skills_per_task` skills whose description covers what the task checks (a models skill for model hygiene, a PHPStan skill for the PHPStan task). Most tasks need none.
-6. **Start the tasks in batches.** `php artisan audit:tool start backend.conventions backend.data:models,php --run=<id>`: a task key, optionally followed by `:` and its skills. Start tasks listed in another task's `depends_on` first. Then `wait` until `"done": true`. The harness runs the batch one task at a time, or several at once when `agent.mode` is `parallel`; you do not need to split batches for that.
+6. **Start the tasks in batches.** `php artisan audit:tool start backend.conventions backend.data:models,php --run=<id>`: a task key, optionally followed by `:` and its skills. Start tasks listed in another task's `depends_on` first. Then `wait` until `"done": true`. The harness runs at most `agent.max_concurrency` tasks of a batch at once (1 by default); you do not need to split batches for that.
 7. **Check the results.** `status` shows every task; `php artisan audit:tool result <task> --run=<id>` shows its findings. A `failed` task may be started once more.
 8. **Finish.** `php artisan audit:tool finish --run=<id>` writes one report per audit and `run.md`. Tasks you never started are listed as not started.
 
@@ -39,4 +39,4 @@ The audit has two parts. A **preflight** runs the project's own tools (tests, PH
 
 ## Local models
 
-A local model server usually answers one request at a time. Keep `agent.mode` at `single` (the default) for it; `parallel` is for hosted APIs.
+A local model server usually answers one request at a time. Keep `agent.max_concurrency` at `1` (the default) for it; raise it only for a hosted API or a server that serves requests in parallel.

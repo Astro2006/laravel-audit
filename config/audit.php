@@ -34,11 +34,10 @@ return [
         // e.g. ollama/qwen3-coder:30b.
         'model' => env('AUDIT_MODEL'),
 
-        // single: one task at a time, for self-hosted models and subscription
-        // CLIs with rate limits. parallel: up to `concurrency` tasks at once,
-        // for a hosted API or a model server that serves concurrent requests.
-        'mode' => env('AUDIT_MODE', 'single'),
-        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4),
+        // Tasks at once. 1 = one after the other: for self-hosted models and
+        // subscription CLIs with rate limits. Raise it for a hosted API or a
+        // model server that serves concurrent requests.
+        'max_concurrency' => (int) env('AUDIT_CONCURRENCY', 1),
 
         'timeout' => 900,   // seconds per task
 

@@ -87,6 +87,8 @@ final readonly class AuditConfig
         'agent.orchestrator.timeout' => null,
         'agent.orchestrator.max_turns' => null,
         'agent.orchestrator.wait_timeout' => 'tool.wait_timeout',
+        'agent.mode' => 'agent.max_concurrency',
+        'agent.concurrency' => 'agent.max_concurrency',
         'agent.verify.min_severity' => null,
         'agent.binary' => 'agent.drivers.claude_code.binary',
         'agent.effort' => 'agent.drivers.claude_code.effort',

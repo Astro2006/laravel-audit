@@ -295,25 +295,40 @@ it('runs one task at a time by default and shows every task as it starts', funct
     fakeAgent(dependencyAnswers());
 
     $this->artisan('audit', ['--dependencies' => true])
-        ->expectsOutputToContain('Mode: single, one task at a time')
+        ->expectsOutputToContain('Mode: one task at a time')
         ->expectsOutputToContain('dependencies · 5 tasks: security, necessity, freshness, hygiene, summary')
         ->expectsOutputToContain('dependencies.security started')
         ->expectsOutputToContain('dependencies.summary started')
         ->assertExitCode(0);
 });
 
-it('runs tasks in parallel with --mode=parallel and rejects unknown modes', function () {
+it('runs several tasks at once with --concurrency or agent.max_concurrency and rejects nonsense', function () {
     auditProject();
-    config()->set('audit.agent.concurrency', 3);
     fakeTools();
 
-    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true, '--mode' => 'parallel'])
-        ->expectsOutputToContain('Mode: parallel, 3 tasks at once')
+    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true, '--concurrency' => '3'])
+        ->expectsOutputToContain('Mode: up to 3 tasks at once')
         ->assertExitCode(0);
 
-    $this->artisan('audit', ['--mode' => 'turbo'])
-        ->expectsOutputToContain('Unknown agent mode "turbo". Allowed: single, parallel.')
+    config()->set('audit.agent.max_concurrency', 4);
+
+    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true])
+        ->expectsOutputToContain('Mode: up to 4 tasks at once')
+        ->assertExitCode(0);
+
+    $this->artisan('audit', ['--concurrency' => '0'])
+        ->expectsOutputToContain('--concurrency must be a whole number of at least 1, "0" given.')
         ->assertExitCode(3);
+});
+
+it('warns about the mode keys that max_concurrency replaced', function () {
+    auditProject();
+    fakeTools();
+    config()->set('audit.agent.mode', 'parallel');
+
+    $this->artisan('audit', ['--dependencies' => true, '--preflight-only' => true])
+        ->expectsOutputToContain('config/audit.php sets agent.mode, which is no longer read. Use agent.max_concurrency instead.')
+        ->assertExitCode(0);
 });
 
 it('rejects unknown agents', function () {

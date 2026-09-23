@@ -187,7 +187,7 @@ Other options:
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
 | `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
 | `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
-| `--mode=MODE` | `single` (one task at a time, the default) or `parallel` (up to `agent.concurrency` tasks at once) |
+| `--concurrency=N` | Tasks at once for this run; `1` runs them one after the other (the default, `agent.max_concurrency`) |
 | `--reselect-skills` | Ask the agent again which project skills each task gets |
 
 ### Running the audit from your agent
@@ -205,7 +205,7 @@ The package ships a Laravel Boost guideline and a skill. The guideline, a few li
 | `audit:tool result TASK --run=ID` | The findings of one task |
 | `audit:tool finish --run=ID` | Writes the reports and `run.md` |
 
-Every command prints JSON. The tasks themselves run exactly as in `php artisan audit`: read-only, one short session each, at `agent.mode`.
+Every command prints JSON. The tasks themselves run exactly as in `php artisan audit`: read-only, one short session each, at most `agent.max_concurrency` at once.
 
 ### The test gate
 
@@ -237,7 +237,7 @@ php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
 
 ### Tasks
 
-Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 1–5 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt, limited to `agent.max_turns` tool calls. Where a check depends on finding code (raw SQL, `env()` calls, `{!!` …), the preflight already found the lines, so the agent opens them instead of searching. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings (`keep`, `downgrade` or `drop`). Which ones depends on severity and confidence: critical findings always, high ones unless confirmed, medium ones only when suspected, low and info never. Findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
+Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 1–5 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt, limited to `agent.max_turns` tool calls. Where a check depends on finding code (raw SQL, `env()` calls, `{!!` …), the preflight already found the lines, so the agent opens them instead of searching. With `agent.max_concurrency` at `1` (the default) they run one after the other; above `1`, that many run at once. One at a time is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Raise it (`AUDIT_CONCURRENCY=4` or `--concurrency=4`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings (`keep`, `downgrade` or `drop`). Which ones depends on severity and confidence: critical findings always, high ones unless confirmed, medium ones only when suspected, low and info never. Findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
 
@@ -397,8 +397,7 @@ return [
     'agent' => [
         'driver' => env('AUDIT_AGENT', 'auto'),         // claude_code, opencode, codex or auto
         'model' => env('AUDIT_MODEL'),                  // null = the CLI's default model
-        'mode' => env('AUDIT_MODE', 'single'),          // single: one task at a time; parallel: up to concurrency
-        'concurrency' => (int) env('AUDIT_CONCURRENCY', 4),
+        'max_concurrency' => (int) env('AUDIT_CONCURRENCY', 1), // tasks at once; 1 = one after the other
         'timeout' => 900,                               // seconds per task
         'max_turns' => 15,                              // tool calls per agent session before it must answer; null = no limit
         'verify' => true,                               // second call per task that checks its findings
@@ -421,7 +420,7 @@ return [
 ];
 ```
 
-**Precedence.** A command option (`--agent`, `--model`, `--mode`) wins over `config/audit.php` (and the `AUDIT_*` variables in it), which wins over the package default. There is one place for each value: one `agent.model` for every driver, no per-driver models.
+**Precedence.** A command option (`--agent`, `--model`, `--concurrency`) wins over `config/audit.php` (and the `AUDIT_*` variables in it), which wins over the package default. There is one place for each value: one `agent.model` for every driver, no per-driver models.
 
 **Rarely changed settings** live in `Astro2006\LaravelAudit\Support\AuditConfig::DEFAULTS`. Set any of them in `config/audit.php` with the same key to change it:
 
@@ -454,6 +453,8 @@ Lists replace the default, they are not merged: `'exclude_paths' => ['vendor']` 
 | `agent.max_budget_usd` | `agent.drivers.claude_code.max_budget_usd` |
 | `agent.drivers.<driver>.model` | `agent.model` |
 | `agent.verify.min_severity` | none: severity and confidence decide together which findings are verified |
+| `agent.mode`, `agent.concurrency` | `agent.max_concurrency`: `1` for single, the old concurrency for parallel |
+| `orchestrator`, `agent.orchestrator.*` | none: run the audit from your agent session with the Boost skill; `tool.wait_timeout` replaces `agent.orchestrator.wait_timeout` |
 
 ### Customizing prompts
 
@@ -479,7 +480,7 @@ To change the console texts, publish the translations with `php artisan vendor:p
 
 ## Costs
 
-A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and stay in `single` mode or lower `agent.concurrency` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
+A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and keep `agent.max_concurrency` at `1` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
 
 ## Evaluating prompt changes
 

@@ -11,7 +11,7 @@ it('fills every key a published config leaves out from the package defaults', fu
 
     expect($config->string('agent.driver'))->toBe('opencode')
         ->and($config->int('agent.timeout'))->toBe(900)
-        ->and($config->string('agent.mode'))->toBe('single')
+        ->and($config->int('agent.max_concurrency'))->toBe(1)
         ->and($config->bool('agent.verify.enabled'))->toBeTrue()
         ->and($config->string('preflight.tests.gate'))->toBe('abort')
         ->and($config->bool('preflight.tests.coverage'))->toBeTrue()

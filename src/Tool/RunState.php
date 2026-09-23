@@ -23,12 +23,12 @@ final readonly class RunState
         public bool $force,
         public ?string $agent,
         public ?string $model,
-        public ?string $mode,
+        public ?string $concurrency,
     ) {}
 
     public static function fromOptions(AuditOptions $options, RunPlan $plan): self
     {
-        return new self($plan->selection->auditValues(), $plan->selection->withoutValues(), $options->force, $plan->driver->name(), $options->model, $options->mode);
+        return new self($plan->selection->auditValues(), $plan->selection->withoutValues(), $options->force, $plan->driver->name(), $options->model, $options->concurrency);
     }
 
     public static function read(string $directory): ?self
@@ -45,7 +45,7 @@ final readonly class RunState
             Read::bool($data, 'force'),
             Read::nullableString($data, 'agent'),
             Read::nullableString($data, 'model'),
-            Read::nullableString($data, 'mode'),
+            Read::nullableString($data, 'concurrency'),
         );
     }
 
@@ -57,7 +57,7 @@ final readonly class RunState
             'force' => $this->force,
             'agent' => $this->agent,
             'model' => $this->model,
-            'mode' => $this->mode,
+            'concurrency' => $this->concurrency,
         ]);
     }
 
@@ -69,7 +69,7 @@ final readonly class RunState
             force: $this->force,
             agent: $this->agent,
             model: $this->model,
-            mode: $this->mode,
+            concurrency: $this->concurrency,
         );
     }
 }

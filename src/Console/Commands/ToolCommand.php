@@ -37,7 +37,7 @@ class ToolCommand extends Command
         {--without=* : open: audits and steps to leave out}
         {--agent= : open: agent CLI for the tasks}
         {--model= : open: model for the tasks}
-        {--mode= : open: single or parallel}
+        {--concurrency= : open: tasks at once; 1 = one after the other}
         {--timeout= : Seconds wait blocks at most; default tool.wait_timeout}
         {--sync : Run preflight or tasks in this process instead of in the background}';
 
@@ -111,7 +111,7 @@ class ToolCommand extends Command
             without: $list('without'),
             agent: $this->stringOption('agent'),
             model: $this->stringOption('model'),
-            mode: $this->stringOption('mode'),
+            concurrency: $this->stringOption('concurrency'),
         );
     }
 
