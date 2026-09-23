@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Agents;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
+use Astro2006\LaravelAudit\Reports\EvidenceChecker;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
@@ -144,7 +145,7 @@ final class AgentRunner
         }
 
         foreach ($findings as $finding) {
-            if (! str_starts_with(trim($finding->evidence), 'preflight:') && array_filter($finding->locations, fn (Location $location): bool => $location->isFile()) !== []) {
+            if (! EvidenceChecker::isPreflightReference($finding->evidence) && array_filter($finding->locations, fn (Location $location): bool => $location->isFile()) !== []) {
                 return true;
             }
         }

@@ -27,7 +27,7 @@ final class FindingRejector
                 continue;
             }
 
-            if (! $location->isFile()) {
+            if (! $location->isPath()) {
                 continue;
             }
 

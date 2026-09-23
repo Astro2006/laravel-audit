@@ -332,7 +332,7 @@ Every report has frontmatter and the same structure. Every finding carries a fix
 …
 ```
 
-- **Severity** `critical` · `high` · `medium` · `low` · `info`. **Confidence** `confirmed` · `likely` · `suspected`. **Effort** `XS` – `XL`.
+- **Severity** `critical` · `high` · `medium` · `low` · `info`. **Confidence** `confirmed` · `likely` · `suspected`. **Effort** `S` (< 1 hour) · `M` (< 1 day) · `L` (more).
 - Locations are files with lines, `route:METHOD /uri`, `package:vendor/name`, or `missing:path` when the absence of a file is the finding.
 - The harness drops findings it can disprove, without a repair pass: a file that does not exist, a `missing:` file that does exist, quoted code that is not in the file, or a dependency finding that composer contradicts (an advisory or abandoned package composer does not report, a package that is not locked). `run.md` lists them under "Rejected findings".
 - Each finding gets a stable key (audit, check and targets, without line numbers). Keys let you compare runs. Findings that would share a key within one report are told apart by their line, then their title.

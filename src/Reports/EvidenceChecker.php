@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
+use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Support\Arr;
 
 final class EvidenceChecker
@@ -41,7 +42,7 @@ final class EvidenceChecker
             return null;
         }
 
-        $haystack = implode('', array_map($this->normalize(...), preg_split('/\R/', implode("\n", $contents)) ?: []));
+        $haystack = implode('', array_map($this->normalize(...), Regex::lines(implode("\n", $contents))));
         $found = count(array_filter($compared, fn (string $line): bool => str_contains($haystack, $this->normalize($line))));
 
         return $found / count($compared) >= self::MIN_SHARE;
@@ -79,8 +80,8 @@ final class EvidenceChecker
     {
         $lines = [];
 
-        foreach (preg_split('/\R/', $code) ?: [] as $line) {
-            $line = trim((string) preg_replace('/^\s*\d+\s*[:|]\s/', '', $line));
+        foreach (Regex::lines($code) as $line) {
+            $line = trim((string) preg_replace('/^\s*\d+\s*[:|]\s?/', '', $line));
 
             if (mb_strlen($this->normalize($line)) < self::MIN_LINE_LENGTH || $this->isFiller($line)) {
                 continue;

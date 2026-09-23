@@ -76,6 +76,12 @@ final class FindingLinter
             $errors[] = sprintf('%s: no parseable location. Use `<path>:<line>`, `route:<METHOD> <uri>`, `package:<vendor>/<name>` or `missing:<path>`.', $id);
         }
 
+        foreach ($locations as $location) {
+            if ($location->isFile() && ! $location->isPath()) {
+                $errors[] = sprintf('%s: location `%s` is not a path. Write one location per backtick pair: `<path>`, `<path>:<line>` or `<path>:<first>-<last>`.', $id, $location->file);
+            }
+        }
+
         $occurrences = 1;
         $rawOccurrences = $parsed->field('occurrences');
 

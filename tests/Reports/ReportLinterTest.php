@@ -88,6 +88,13 @@ it('rejects findings in files that do not exist and warns about lines past the e
         ->and($long->warnings)->toContain('BE-001: `app/Services/OrderService.php` has 13 lines, but the location points to line 40.');
 });
 
+it('asks for a repair instead of rejecting a location that is not a path', function () {
+    $result = lintReport(str_replace('`app/Services/OrderService.php:7-12`', '`app/Services/OrderService.php (lines 7 to 12)`', validBackendReport()));
+
+    expect($result->rejected)->toBe([])
+        ->and($result->errors)->toContain('BE-001: location `app/Services/OrderService.php (lines 7 to 12)` is not a path. Write one location per backtick pair: `<path>`, `<path>:<line>` or `<path>:<first>-<last>`.');
+});
+
 it('rejects a finding whose quoted code is not in its file', function () {
     $report = str_replace('$order->fill($data)->save();', '$order->update($request->all());', validBackendReport());
     $result = lintReport($report);

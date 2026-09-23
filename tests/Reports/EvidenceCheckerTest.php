@@ -72,3 +72,14 @@ it('reads code in code and pre elements', function () use ($controller) {
 it('compares boilerplate when the quote has nothing else', function () use ($controller) {
     expect((new EvidenceChecker)->matches("```php\nfinal class SaveFleetyardsLoginController extends Controller\n```", [$controller]))->toBeTrue();
 });
+
+it('keeps lines with multi-byte characters such as ✅ whole', function () {
+    $file = "<?php\n\n\$status = '✅ done';\n\$label = strtoupper(\$status);\n";
+
+    expect((new EvidenceChecker)->matches("```php\n\$status = '✅ done';\n\$label = strtoupper(\$status);\n```", [$file]))->toBeTrue()
+        ->and((new EvidenceChecker)->matches("```php\n\$status = '✅ open';\n\$label = strtolower(\$status);\n```", [$file]))->toBeFalse();
+});
+
+it('strips line numbers without a space after them', function () use ($file) {
+    expect((new EvidenceChecker)->matches("```php\n9:\$order->fill(\$data)->save();\n11:return \$order;\n```", [$file]))->toBeTrue();
+});

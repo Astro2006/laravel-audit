@@ -74,7 +74,7 @@ final readonly class Location implements Stringable
             return new self(missing: self::normalizePath($value));
         }
 
-        $lines = Regex::groups('/^(.+?):(\d+)(?:\s*-\s*(\d+))?$/', $raw);
+        $lines = Regex::groups('/^(.+?)(?::|#L)(\d+)(?:\s*[-–—]\s*L?(\d+))?(?:\s*,\s*\d+)*$/u', $raw);
 
         if ($lines !== null) {
             [$file, $line, $endLine] = $lines;
@@ -102,6 +102,11 @@ final readonly class Location implements Stringable
     public function isFile(): bool
     {
         return $this->file !== null;
+    }
+
+    public function isPath(): bool
+    {
+        return $this->file !== null && preg_match('#^[\w@.~+{}\[\]$-]+(/[\w@.~+{}\[\]$-]+)*$#u', $this->file) === 1;
     }
 
     public function isMissing(): bool
