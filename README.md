@@ -59,6 +59,7 @@ First, a **deterministic preflight** runs the tools you already trust: your test
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Running the audit from your agent](#running-the-audit-from-your-agent)
 - [Agents](#agents)
 - [The four audits](#the-four-audits)
 - [The preflight](#the-preflight)
@@ -137,6 +138,9 @@ The installer checks what is missing and shows you the plan before it changes an
 - Upgrades are never implied. Moving from PHPUnit to Pest, or from Pest 3 to Pest 4+, is asked separately. Pest runs your existing PHPUnit tests unchanged. If you decline, only the browser step is left out.
 - An existing `phpstan.neon` is never overwritten. If there is none, a Larastan config at `stub_level` (default 5) is created for `app/`.
 - Reports are written below `storage/audit`, which gets its own `.gitignore` (`*` / `!.gitignore`) because reports describe concrete weaknesses.
+- Last, it registers the package's Boost guideline and skill (see [Running the audit from your agent](#running-the-audit-from-your-agent)). Interactive, it asks first and runs `php artisan boost:update --discover`, so Boost shows its own package prompt. With `--yes` and without interaction (CI), it adds `astro2006/laravel-audit` to the `packages` in `boost.json` and runs `php artisan boost:update --no-discover`. Without Boost, or before `boost:install`, it only tells you so.
+
+Composer never runs scripts of a dependency, so none of this happens on `composer require`. Run `php artisan audit:install` once after installing, and again after updates that add Boost resources.
 
 Options:
 
@@ -184,6 +188,24 @@ Other options:
 | `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode`, `codex` or `auto` |
 | `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
 | `--mode=MODE` | `single` (one task at a time, the default) or `parallel` (up to `agent.concurrency` tasks at once) |
+| `--reselect-skills` | Ask the agent again which project skills each task gets |
+
+### Running the audit from your agent
+
+The package ships a Laravel Boost guideline and a skill. The guideline, a few lines in `CLAUDE.md` / `AGENTS.md`, points your agent to the `laravel-audit` skill. The skill tells your own Claude Code or OpenCode session how to run the audit step by step with `php artisan audit:tool`, so the agent can pick steps and tasks, ask you at the test gate and report progress:
+
+| Command | What it does |
+|---|---|
+| `audit:tool open [--audits=…] [--without=…]` | Checks the requirements and creates a run; prints its ID |
+| `audit:tool catalog --run=ID` | Preflight steps, tasks and the project's installed skills |
+| `audit:tool preflight STEP … --run=ID` | Runs these preflight steps in the background |
+| `audit:tool wait --run=ID` / `status` | Waits for the background work / shows the state; `gate: aborted` when tests fail |
+| `audit:tool continue --run=ID` | Continues past failing tests, after you agreed |
+| `audit:tool start TASK[:SKILL,…] … --run=ID` | Starts tasks, optionally with the project skills each one gets |
+| `audit:tool result TASK --run=ID` | The findings of one task |
+| `audit:tool finish --run=ID` | Writes the reports and `run.md` |
+
+Every command prints JSON. The tasks themselves run exactly as in `php artisan audit`: read-only, one short session each, at `agent.mode`.
 
 ### The test gate
 
@@ -218,6 +240,8 @@ php artisan audit --agent=opencode --model=ollama/qwen3-coder:30b
 Small models get lost in long sessions with dozens of checks. So every audit is split into tasks of 1–5 related checks that read the same code, for example `backend.injection` (SQL, command injection, deserialization, SSRF, path traversal) or `tests.phpstan`. Each task is one short agent session with its own prompt, limited to `agent.max_turns` tool calls. Where a check depends on finding code (raw SQL, `env()` calls, `{!!` …), the preflight already found the lines, so the agent opens them instead of searching. In `single` mode (the default) they run one after the other; in `parallel` mode up to `agent.concurrency` at once. Single is the default because a self-hosted model server usually answers one request at a time, and parallel sessions against it queue up, time out or fail; subscription CLIs run into their rate limits. Switch to `parallel` (`AUDIT_MODE=parallel` or `--mode=parallel`) for a hosted API or a model server that serves concurrent requests. While the agents run, the console lists every task up front, shows the running ones with their time, what still waits, and each task as it finishes. Only tasks that need another task's result wait for it and get that result in their prompt: the backend conventions baseline and the frontend map. After each task, a verify call with the same agent checks its findings (`keep`, `downgrade` or `drop`). Which ones depends on severity and confidence: critical findings always, high ones unless confirmed, medium ones only when suspected, low and info never. Findings backed by a preflight fact are not verified. The harness writes each audit's summary from the findings (`summary => 'agent'` brings back a summary task). Tasks with nothing to audit, such as the advisories task without advisories or the PHPStan task without errors, are skipped without an agent call.
 
 The harness assembles the audit report: findings in task order with new IDs, each audit-specific section from the task that owns it, merged positive observations and limitations. When a task fails, the audit is **partial**: the report is still written, lists the failed task and the checks it did not cover, and the run exits with `3`.
+
+**Skills.** Boost installs skills into `.claude/skills` and `.agents/skills`: short documents with the conventions of your project and its packages. The task agents cannot load skills themselves (they have no skill tool, and listing every skill in every turn would cost more tokens than the tasks). Instead, before the first task, one agent call reads the task list and the names and descriptions of the installed skills and assigns at most `skills_per_task` (2) skills to the tasks they fit. Each task gets the text of its skills in its prompt, cut at `skill_max_chars` (2000). The choice is kept in `skills.json` and reused by later runs while the skills and tasks stay the same; `--reselect-skills` asks again. Set `agent.skills` to `'none'` to switch this off, or to a map such as `['backend.data' => ['models']]` to choose yourself.
 
 Once every selected audit is done, one more agent call writes the run's overview: it reads each audit's own summary and finding counts and calls out patterns a single audit could not see on its own (the same root cause showing up in more than one audit, for example). It always runs, at no extra config, and its answer becomes the `## Overview` at the top of `run.md`.
 
@@ -412,6 +436,8 @@ return [
 | `preflight.phpstan.*` | `level` `null` (from phpstan.neon), `stub_level` `5`, `memory_limit` `2G`, `timeout` `1800`, `parallel` `true` (next to the tests) |
 | `preflight.composer.*` / `preflight.license_allowlist` | `outdated` and `licenses` on / common open-source licenses |
 | `max_findings_per_task` / `max_files_per_task` | `5` / `25` |
+| `agent.skills` / `skills_per_task` / `skill_max_chars` | `auto` (one agent call picks the skills per task) / `2` / `2000` |
+| `tool.wait_timeout` | `100`, seconds `audit:tool wait` blocks at most |
 | `snapshot_rows` | `10` |
 | `summary` | `generated` (no agent call) or `agent` |
 | `exclude_paths` | `vendor`, `node_modules`, `storage`, `public/build`, `bootstrap/cache` |

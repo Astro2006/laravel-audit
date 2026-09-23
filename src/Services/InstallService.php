@@ -10,6 +10,7 @@ use Astro2006\LaravelAudit\Actions\Install\PublishConfigAction;
 use Astro2006\LaravelAudit\Actions\Install\VerifyInstallAction;
 use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Console\Output\InstallConsole;
+use Astro2006\LaravelAudit\Install\BoostHandoff;
 use Astro2006\LaravelAudit\Install\InstallPlan;
 use Astro2006\LaravelAudit\Install\InstallPlanner;
 use Astro2006\LaravelAudit\Install\PlanExecutor;
@@ -48,15 +49,19 @@ final class InstallService
 
         $console->plan($plan, $executor, $stubLevel);
 
+        $tty = $console->interactive && SymfonyProcess::isTtySupported();
+
         if ($plan->isEmpty()) {
             $console->line('  <fg=green>✔</> '.$console->messages->get('install.nothing_missing'));
             $result = $this->verifyInstall->handle($project, $outputPath, $plan, [], ['failed' => [], 'manual' => []], $stubLevel);
             $console->result($result, $project, $driver);
+            $handedOff = (new BoostHandoff($project, $executor))->handle($console, $yes, $dryRun, $tty);
 
-            return self::SUCCESS;
+            return $handedOff ? self::SUCCESS : self::FAILURE;
         }
 
         if ($dryRun) {
+            (new BoostHandoff($project, $executor))->handle($console, $yes, true, $tty);
             $console->note('install.dry_run');
 
             return self::SUCCESS;
@@ -87,15 +92,16 @@ final class InstallService
             $selected,
             $executor,
             $stubLevel,
-            $console->interactive && SymfonyProcess::isTtySupported(),
+            $tty,
             $console->command(...),
             $console->write(...),
         );
 
         $result = $this->verifyInstall->handle($project, $outputPath, $selected, $declined, $executed, $stubLevel);
         $console->result($result, $project, $driver);
+        $handedOff = (new BoostHandoff(ProjectInspector::fromConfig($this->config), $executor))->handle($console, $yes, false, $tty);
 
-        return $result->succeeded() ? self::SUCCESS : self::FAILURE;
+        return $result->succeeded() && $handedOff ? self::SUCCESS : self::FAILURE;
     }
 
     /** @return list<string> every planned package that is not an upgrade */

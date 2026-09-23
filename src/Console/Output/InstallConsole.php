@@ -163,6 +163,12 @@ final class InstallConsole
         }
     }
 
+    /** @param  array<string, string>  $replace */
+    public function confirm(string $key, array $replace = []): bool
+    {
+        return confirm($this->messages->get($key, $replace), default: true);
+    }
+
     public function confirmSideEffects(): bool
     {
         return confirm($this->messages->get('install.side_effects_question'), default: true);

@@ -142,6 +142,10 @@ return [
     ],
 
     'install' => [
+        'boost_missing' => 'Laravel Boost ist nicht installiert, deshalb werden Guideline und Skill des Audits nicht registriert.',
+        'boost_not_set_up' => 'Laravel Boost ist noch nicht eingerichtet → `php artisan boost:install` ausführen, danach `php artisan audit:install` erneut, um den Audit-Skill zu registrieren.',
+        'boost_question' => 'Guideline und Skill von laravel-audit jetzt bei Boost registrieren? (führt :command aus)',
+        'boost_would_run' => 'Boost: würde :command ausführen',
         'header' => 'laravel-audit · Setup',
         'present' => 'Bereits vorhanden',
         'need' => 'Ich brauche diese Pakete:',
