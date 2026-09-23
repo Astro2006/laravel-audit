@@ -29,7 +29,7 @@ Every finding uses exactly one of these slugs in its `Check` field; your task in
 ## How to work
 
 1. A preflight step with status `error` or `skipped` goes under Limitations.
-2. Open the detail files and the few project files that matter. Open at most {{max_files}} project files in total.
+2. Open the detail files and the few project files that matter. Open at most {{max_files}} project files in total. Read ~60 lines around a known line (offset, limit), never whole large files.
 3. Report only a problem you saw in a file you opened. Before answering, re-read each finding and delete it if its evidence does not support its title.
 4. Stop as soon as your checks are covered.
 

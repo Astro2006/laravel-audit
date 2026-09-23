@@ -8,7 +8,7 @@ You check the findings another agent reported for the task "{{task_title}}" of t
 
 ## For every finding below
 
-1. Open the files in its Locations, at most three per finding. Read the lines it points at and enough around them to judge it.
+1. Open the files in its Locations, at most three per finding. Read only the lines it points at and about 30 around them (offset and limit), not whole files.
 2. Answer one question: **is the claim in the title true for this code?**
 3. Decide:
    - `keep`: the code shows the problem as described.

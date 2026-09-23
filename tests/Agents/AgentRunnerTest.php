@@ -21,6 +21,14 @@ function runner(string $logs, int $concurrency = 2): AgentRunner
     return new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, concurrency: $concurrency, pollMicroseconds: 1000);
 }
 
+function openCodeAnswerLine(string $text): string
+{
+    return implode("\n", [
+        json_encode(['type' => 'text', 'timestamp' => 2, 'sessionID' => 'ses_slow', 'part' => ['messageID' => 'm1', 'text' => $text]]),
+        json_encode(['type' => 'step_finish', 'timestamp' => 3, 'sessionID' => 'ses_slow', 'part' => ['messageID' => 'm1', 'reason' => 'stop', 'tokens' => ['input' => 10, 'output' => 5]]]),
+    ])."\n";
+}
+
 function backendJob(array $required = []): AgentJob
 {
     return new AgentJob('backend', AuditType::Backend, ReportSpec::forAudit(new BackendAudit), new AgentRequest('backend', 'Audit the backend.', fixture('project')), 'abc12345', $required);
@@ -79,6 +87,21 @@ it('stops an agent that runs past the timeout and fails its task', function () {
         ->and($logs.'/backend.json')->toBeFile();
 
     Process::assertRanTimes(fn () => true, 1);
+});
+
+it('asks an agent that ran out of time for its report in the same session', function () {
+    $session = json_encode(['type' => 'step_start', 'timestamp' => 1, 'sessionID' => 'ses_slow', 'part' => []])."\n";
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::describe()->output($session)->runsFor(iterations: 1000))
+        ->push(Process::result(openCodeAnswerLine(file_get_contents(fixture('reports/backend-valid.md')))))]);
+    $runner = new AgentRunner(new OpenCodeDriver(fixture('project')), new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), timeout: 0, pollMicroseconds: 1000);
+
+    [$outcome] = $runner->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed)
+        ->and($outcome->repaired)->toBeTrue();
+
+    Process::assertRan(fn ($process) => in_array('ses_slow', (array) $process->command, true) && str_contains((string) $process->input, 'You ran out of time'));
 });
 
 it('removes the variables loaded from .env from the agent environment', function () {

@@ -45,9 +45,19 @@ final class AgentProcesses
             }
 
             $this->stop($attempt->process);
-            $this->logs->write($this->logName($attempt), $attempt->process->output(), $attempt->process->errorOutput());
+            $output = $attempt->process->output();
+            $this->logs->write($this->logName($attempt), $output, $attempt->process->errorOutput());
+            $partial = $this->driver->parse($output, 1);
+            $telemetry = $partial->telemetry;
 
-            return AgentResult::failed(AgentExit::Timeout, sprintf('Agent timed out after %d seconds.', $this->timeout), (int) ($elapsed * 1000));
+            return new AgentResult(
+                '',
+                $partial->sessionId,
+                $partial->model,
+                new Telemetry($telemetry->inputTokens, $telemetry->outputTokens, $telemetry->cacheReadTokens, $telemetry->costUsd, $telemetry->turns, (int) ($elapsed * 1000)),
+                AgentExit::Timeout,
+                error: sprintf('Agent timed out after %d seconds.', $this->timeout),
+            );
         }
 
         $result = $attempt->process->wait();

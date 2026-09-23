@@ -25,6 +25,8 @@ final class AgentRunner
 
     private const string OPEN_FILES_MESSAGE = 'You reported findings about project files without opening a single file. Open the files you cite now, check every finding against the code, drop the ones you cannot confirm, and return the complete report, starting with the `## %s` line.';
 
+    private const string OUT_OF_TIME_MESSAGE = 'You ran out of time. Do not open any more files. Write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
+
     private const string ANSWER_NOW_MESSAGE = 'You reached the turn limit. Stop investigating and write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
 
     private readonly AgentProcesses $processes;
@@ -211,8 +213,8 @@ final class AgentRunner
         $job = $attempt->job;
         $telemetry = $attempt->telemetry->plus($result->telemetry);
 
-        if ($result->exit === AgentExit::MaxTurns && ! $attempt->repair && $result->sessionId !== null) {
-            $message = sprintf(self::ANSWER_NOW_MESSAGE, $job->spec->firstSection());
+        if (in_array($result->exit, [AgentExit::MaxTurns, AgentExit::Timeout], true) && ! $attempt->repair && $result->sessionId !== null) {
+            $message = sprintf($result->exit === AgentExit::Timeout ? self::OUT_OF_TIME_MESSAGE : self::ANSWER_NOW_MESSAGE, $job->spec->firstSection());
 
             return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
         }
