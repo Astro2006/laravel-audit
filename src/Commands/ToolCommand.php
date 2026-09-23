@@ -4,26 +4,40 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Commands;
 
+use Astro2006\LaravelAudit\Console\AuditConsole;
+use Astro2006\LaravelAudit\Data\AuditOptions;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
 use Astro2006\LaravelAudit\Orchestration\Tools\Catalog;
+use Astro2006\LaravelAudit\Orchestration\Tools\ContinuePastGate;
+use Astro2006\LaravelAudit\Orchestration\Tools\Finish;
+use Astro2006\LaravelAudit\Orchestration\Tools\Open;
 use Astro2006\LaravelAudit\Orchestration\Tools\StartWork;
 use Astro2006\LaravelAudit\Orchestration\Tools\Status;
 use Astro2006\LaravelAudit\Orchestration\Tools\TaskResult;
 use Astro2006\LaravelAudit\Orchestration\Tools\Wait;
 use Astro2006\LaravelAudit\Orchestration\Tools\Work;
 use Astro2006\LaravelAudit\Support\AuditConfig;
+use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\Command;
+use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Arr;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 class ToolCommand extends Command
 {
-    public const array ACTIONS = ['catalog', 'status', 'preflight', 'start', 'wait', 'result'];
+    public const array ACTIONS = ['open', 'catalog', 'status', 'preflight', 'continue', 'start', 'wait', 'result', 'finish'];
 
     protected $signature = 'audit:tool
-        {action : catalog, status, preflight, start, wait or result}
+        {action : open, catalog, status, preflight, continue, start, wait, result or finish}
         {items?* : preflight steps (preflight), task keys (start) or one task key (result)}
         {--run= : Run ID; default: the AUDIT_RUN variable}
+        {--audits=* : open: the audits to run (tests, frontend, backend, dependencies); default: the configured ones}
+        {--without=* : open: audits and steps to leave out}
+        {--agent= : open: agent CLI for the tasks}
+        {--model= : open: model for the tasks}
+        {--mode= : open: single or parallel}
         {--timeout= : Seconds wait blocks at most; default tool.wait_timeout}
         {--sync : Run preflight or tasks in this process instead of in the background}';
 
@@ -33,6 +47,13 @@ class ToolCommand extends Command
     {
         $action = (string) $this->argument('action');
         $items = array_values(array_filter(array_map('strval', (array) $this->argument('items')), fn (string $item): bool => $item !== ''));
+
+        if ($action === 'open') {
+            $result = app(Open::class)->handle($this->openOptions(), Messages::fromConfig());
+
+            return $this->json($result, Arr::has($result, 'error') ? self::FAILURE : self::SUCCESS);
+        }
+
         $runId = $this->stringOption('run') ?? (getenv('AUDIT_RUN') ?: null);
 
         if ($runId === null) {
@@ -53,9 +74,11 @@ class ToolCommand extends Command
             'catalog' => (new Catalog($config))->handle($run),
             'status' => $status->handle($run),
             'preflight' => $start->preflight($run, $items, $sync),
+            'continue' => (new ContinuePastGate)->handle($run),
             'start' => $start->tasks($run, $items, $sync),
             'wait' => (new Wait($status))->handle($run, is_numeric($this->option('timeout')) ? (int) $this->option('timeout') : $config->int('tool.wait_timeout')),
             'result' => $items === [] ? ['error' => 'Name the task, e.g. `result backend.injection`.'] : (new TaskResult)->handle($run, Arr::first($items)),
+            'finish' => app(Finish::class)->handle($run, $this->quietConsole()),
             'work' => $this->work($config, $run),
             default => ['error' => sprintf('Unknown action "%s".', $action), 'allowed' => self::ACTIONS],
         };
@@ -77,6 +100,24 @@ class ToolCommand extends Command
         $this->output->writeln((string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
         return $exit;
+    }
+
+    private function openOptions(): AuditOptions
+    {
+        $list = fn (string $name): array => array_values(array_filter(array_map('trim', explode(',', implode(',', array_map('strval', (array) $this->option($name)))))));
+
+        return new AuditOptions(
+            audits: $list('audits'),
+            without: $list('without'),
+            agent: $this->stringOption('agent'),
+            model: $this->stringOption('model'),
+            mode: $this->stringOption('mode'),
+        );
+    }
+
+    private function quietConsole(): AuditConsole
+    {
+        return new AuditConsole(new OutputStyle(new ArrayInput([]), new BufferedOutput), Messages::fromConfig(), false);
     }
 
     private function stringOption(string $name): ?string

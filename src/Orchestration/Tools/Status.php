@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
 use Astro2006\LaravelAudit\Orchestration\WorkerLock;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Arr;
@@ -47,6 +48,10 @@ final class Status
                 'running_for_s' => time() - Arr::get($lock, 'started_at'),
             ],
             'gate' => $preflight === null ? GateDecision::NotRun->value : $preflight->gate->value,
+            ...($preflight?->gate === GateDecision::Aborted ? [
+                'failing_tests' => TestGate::failures($preflight->steps),
+                'gate_hint' => 'Tests fail. Show the user the failures (preflight/details/tests/) and ask whether to continue. Only on a yes: `continue`.',
+            ] : []),
             'preflight' => $steps,
             'tasks' => $tasks,
         ];

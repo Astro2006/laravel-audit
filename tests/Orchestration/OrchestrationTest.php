@@ -1,5 +1,6 @@
 <?php
 
+use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
 use Astro2006\LaravelAudit\Orchestration\OrchestratedRun;
 use Astro2006\LaravelAudit\Orchestration\OrchestrationState;
 use Astro2006\LaravelAudit\Orchestration\WorkerLock;
@@ -137,4 +138,76 @@ it('runs tasks and returns their findings', function () {
             'dependencies.freshness' => ['status' => 'not_started'],
         ])
         ->and(tool($run, 'result', ['dependencies.hygiene']))->error->toBe('Task "dependencies.hygiene" has no result yet.');
+});
+
+/** @return array<string, mixed> */
+function openRun(array $options = []): array
+{
+    Artisan::call('audit:tool', ['action' => 'open', ...$options]);
+
+    return json_decode(Artisan::output(), true);
+}
+
+it('opens a run for the chosen audits', function () {
+    $project = orchestratedProject();
+    fakeTools();
+
+    $opened = openRun(['--audits' => ['dependencies']]);
+
+    expect($opened)->toMatchArray(['audits' => ['dependencies'], 'agent' => 'OpenCode', 'concurrency' => 1])
+        ->and($opened['next'])->toBe('php artisan audit:tool catalog --run='.$opened['run'])
+        ->and($project.'/storage/audit/'.$opened['run'].'/run.md')->toBeFile()
+        ->and(tool(AuditRun::open($project.'/storage/audit', $opened['run']), 'catalog')['audits'])->toBe(['dependencies']);
+});
+
+it('refuses to open a run with unknown audits', function () {
+    orchestratedProject();
+    fakeTools();
+
+    expect(openRun(['--audits' => ['nope']]))->toHaveKey('error');
+});
+
+it('writes the reports of the tasks that ran when the session finishes', function () {
+    $project = orchestratedProject();
+    fakeTaskAgents();
+    $run = AuditRun::open($project.'/storage/audit', openRun(['--audits' => ['dependencies']])['run']);
+
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+    tool($run, 'start', ['dependencies.security', 'dependencies.necessity'], ['--sync' => true]);
+    $finished = tool($run, 'finish');
+
+    expect($finished)->toMatchArray(['status' => 'completed'])
+        ->and($finished['audits'][0])->toMatchArray(['audit' => 'dependencies', 'status' => 'completed'])
+        ->and(RunFrontmatter::read($run->manifestPath()))->status->toBe('completed')
+        ->and(file_get_contents($run->dir().'/dependencies.md'))->toContain('### DEP-001 — guzzlehttp/psr7')
+        ->and(file_get_contents($run->dir().'/dependencies.md'))->toContain('dependencies.freshness');
+});
+
+it('stops at the test gate until the user agrees to continue', function () {
+    $project = orchestratedProject();
+    fakeTools(['*artisan*test*--log-junit*' => fn ($process) => redTestRun($process->command)]);
+    config()->set('audit.audits.dependencies.preflight', ['about', 'stack', 'composer', 'tests']);
+    $run = AuditRun::open($project.'/storage/audit', openRun(['--audits' => ['dependencies']])['run']);
+
+    tool($run, 'preflight', ['composer', 'tests'], ['--sync' => true]);
+    $status = tool($run, 'status');
+
+    expect($status)->toMatchArray(['gate' => 'aborted', 'failing_tests' => 1])
+        ->and($status['gate_hint'])->toContain('ask whether to continue')
+        ->and(tool($run, 'start', ['dependencies.security']))->error->toContain('test gate')
+        ->and(tool($run, 'continue'))->toBe(['gate' => 'forced', 'next' => 'Start the tasks with `start <task> …`.'])
+        ->and(tool($run, 'status')['gate'])->toBe('forced')
+        ->and(tool($run, 'continue'))->toHaveKey('error');
+});
+
+it('does not finish while the worker runs or before the preflight', function () {
+    $project = orchestratedProject();
+    fakeTools();
+    $run = AuditRun::open($project.'/storage/audit', openRun(['--audits' => ['dependencies']])['run']);
+
+    expect(tool($run, 'finish'))->error->toBe('There is no preflight yet, so there is nothing to report.');
+
+    (new WorkerLock(OrchestratedRun::directory($run).'/worker.lock'))->acquire(WorkerLock::TASKS, ['dependencies.security']);
+
+    expect(tool($run, 'finish'))->error->toBe('busy');
 });
