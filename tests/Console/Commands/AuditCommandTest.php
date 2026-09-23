@@ -333,8 +333,11 @@ it('picks skills for the tasks once and gives them to the tasks', function () {
     fakeAgent([...dependencyAnswers(), 'skills' => '{"dependencies.hygiene": ["composer-rules"]}']);
 
     $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('Picking skills for the tasks from 1 installed (one agent call) …')
         ->expectsOutputToContain('Skills: 1 installed · assigned to 1 tasks (agent)')
         ->assertExitCode(0);
+
+    Process::assertRan(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'skills' && str_contains(implode(' ', (array) $process->command), '--tools  --max-turns 1'));
 
     $run = latestRun($project);
 

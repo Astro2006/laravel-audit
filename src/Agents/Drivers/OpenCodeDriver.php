@@ -24,6 +24,8 @@ final class OpenCodeDriver implements AgentDriver
 
     public const string VERIFY_AGENT = 'laravel-audit-verify';
 
+    public const string ANSWER_AGENT = 'laravel-audit-answer';
+
     /**
      * @param  string  $basePath  project root; deny rules match absolute paths too
      * @param  list<string>  $boostTools  allowed Boost MCP tools
@@ -65,7 +67,11 @@ final class OpenCodeDriver implements AgentDriver
 
     public function command(AgentRequest $request): array
     {
-        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', $request->verify ? self::VERIFY_AGENT : self::AGENT, ...$this->modelArguments()];
+        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', match (true) {
+            $request->answerOnly => self::ANSWER_AGENT,
+            $request->verify => self::VERIFY_AGENT,
+            default => self::AGENT,
+        }, ...$this->modelArguments()];
     }
 
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array

@@ -108,6 +108,7 @@ return [
         'skipped' => 'skipped: :reason',
         'rejected' => ':count dropped',
         'skills' => 'Skills: :installed installed · assigned to :tasks tasks (:source)',
+        'selecting_skills' => 'Picking skills for the tasks from :installed installed (one agent call) …',
         'no_skills' => 'Skills: none installed',
     ],
 

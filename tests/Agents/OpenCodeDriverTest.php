@@ -59,6 +59,14 @@ it('runs verify calls as their own agent with fewer steps', function () {
         ->and($driver->command(new AgentRequest('k', 'p', '/app')))->toContain('laravel-audit');
 });
 
+it('has an agent without tools that answers in one step', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-answer'])->toMatchArray(['tools' => ['*' => false], 'steps' => 1])
+        ->and($driver->command(new AgentRequest('skills', 'p', '/app', answerOnly: true)))->toContain('laravel-audit-answer');
+});
+
 it('parses the json event stream of a real run', function () {
     $driver = new OpenCodeDriver('/app', model: 'opencode/big-pickle');
     $result = $driver->parse(file_get_contents(fixture('agents/opencode-run.jsonl')), 0);

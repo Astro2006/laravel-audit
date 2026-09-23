@@ -13,6 +13,7 @@ use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
+use Closure;
 use Illuminate\Support\Facades\Process;
 use Throwable;
 
@@ -22,6 +23,8 @@ final class SkillSelector
 
     private const string TEMPLATE = 'shared/skills.md';
 
+    private const int DESCRIPTION_CHARS = 160;
+
     public function __construct(private readonly AuditConfig $config) {}
 
     /**
@@ -29,9 +32,10 @@ final class SkillSelector
      * run with the same skills and tasks, or from one agent call.
      *
      * @param  list<AuditTask>  $tasks
+     * @param  (Closure(): void)|null  $onAsk  called right before the agent call
      * @return array{SkillSelection, list<string>} the selection and warnings
      */
-    public function select(array $tasks, SkillInventory $inventory, AgentDriver $driver, AuditRun $run, ProjectInspector $project, bool $reselect = false): array
+    public function select(array $tasks, SkillInventory $inventory, AgentDriver $driver, AuditRun $run, ProjectInspector $project, bool $reselect = false, ?Closure $onAsk = null): array
     {
         $taskKeys = array_map(fn (AuditTask $task): string => $task->key(), $tasks);
         $tasksHash = self::tasksHash($tasks);
@@ -53,6 +57,8 @@ final class SkillSelector
         if ($cached !== null) {
             return [new SkillSelection($cached->tasks, $inventory->hash(), $tasksHash, 'cache'), []];
         }
+
+        $onAsk?->__invoke();
 
         try {
             $answer = $this->ask($tasks, $inventory, $perTask, $driver, $run, $project);
@@ -83,7 +89,7 @@ final class SkillSelector
     {
         $prompt = strtr((new PromptTemplates(PromptTemplates::publishedPath()))->get(self::TEMPLATE), [
             '{{tasks}}' => implode("\n", array_map(fn (AuditTask $task): string => sprintf('- `%s` — %s: %s', $task->key(), $task->title, implode(', ', $task->checks)), $tasks)),
-            '{{skills}}' => implode("\n", array_map(fn (Skill $skill): string => sprintf('- `%s` — %s', $skill->name, $skill->description), $inventory->skills)),
+            '{{skills}}' => implode("\n", array_map(fn (Skill $skill): string => sprintf('- `%s` — %s', $skill->name, mb_strimwidth($skill->description, 0, self::DESCRIPTION_CHARS, '…')), $inventory->skills)),
             '{{per_task}}' => (string) $perTask,
         ]);
 
@@ -92,7 +98,7 @@ final class SkillSelector
         }
 
         file_put_contents($run->logsDir().'/'.self::KEY.'.prompt.md', $prompt);
-        $request = new AgentRequest(self::KEY, $prompt, $project->basePath, $driver->writeConfig($run->logsDir()));
+        $request = new AgentRequest(self::KEY, $prompt, $project->basePath, $driver->writeConfig($run->logsDir()), answerOnly: true);
 
         $result = Process::path($project->basePath)
             ->timeout($this->config->int('agent.timeout'))

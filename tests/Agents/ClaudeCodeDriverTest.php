@@ -46,6 +46,12 @@ it('gives verify calls fewer turns', function () {
         ->and(implode(' ', $driver->command(new AgentRequest('k', 'p', '/app'))))->toContain('--max-turns 15');
 });
 
+it('answers without tools in one turn when only an answer is wanted', function () {
+    $command = (new ClaudeCodeDriver(model: 'haiku', maxTurns: 15, boostTools: ['application-info']))->command(new AgentRequest('skills', 'p', '/app', '/logs/mcp.json', answerOnly: true));
+
+    expect($command)->toBe(['claude', '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config', '--tools', '', '--model', 'haiku', '--max-turns', '1']);
+});
+
 it('allows no mcp tools without an mcp config', function () {
     $command = (new ClaudeCodeDriver(boostTools: ['application-info']))->command(new AgentRequest('tests', 'p', '/app'));
 

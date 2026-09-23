@@ -46,6 +46,10 @@ final readonly class OpenCodeConfig
             'agent' => [
                 OpenCodeDriver::AGENT => $agent('Read-only Laravel audit agent', $this->steps),
                 OpenCodeDriver::VERIFY_AGENT => $agent('Read-only agent that verifies Laravel audit findings', $this->verifySteps ?? $this->steps),
+                OpenCodeDriver::ANSWER_AGENT => [
+                    ...$agent('Answers from the prompt alone, without tools', 1),
+                    'tools' => ['*' => false],
+                ],
             ],
         ];
 

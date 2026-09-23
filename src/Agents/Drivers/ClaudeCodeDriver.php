@@ -73,6 +73,10 @@ final class ClaudeCodeDriver implements AgentDriver
 
     public function command(AgentRequest $request): array
     {
+        if ($request->answerOnly) {
+            return [$this->binary, '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config', '--tools', '', ...$this->modelArguments(), '--max-turns', '1'];
+        }
+
         $command = [
             $this->binary,
             '-p',

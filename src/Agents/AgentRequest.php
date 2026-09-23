@@ -13,6 +13,7 @@ final readonly class AgentRequest
      * @param  list<string>  $extraDirectories  directories outside the project the agent may read
      * @param  array<string, string>  $environment  extra variables for the agent process
      * @param  bool  $verify  a verify call, which gets fewer turns
+     * @param  bool  $answerOnly  no tools, one turn: the agent answers from the prompt alone
      */
     public function __construct(
         public string $key,
@@ -22,5 +23,6 @@ final readonly class AgentRequest
         public array $extraDirectories = [],
         public array $environment = [],
         public bool $verify = false,
+        public bool $answerOnly = false,
     ) {}
 }

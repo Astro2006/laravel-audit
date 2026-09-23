@@ -30,6 +30,7 @@ final class SelectSkills
             $context->run,
             $plan->project,
             $context->options->reselectSkills,
+            fn () => $console->line('  '.$console->messages->get('agents.selecting_skills', ['installed' => count($inventory->skills)])),
         );
 
         $selection->write($context->run->dir().'/'.SkillSelection::FILE);

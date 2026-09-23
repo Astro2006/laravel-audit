@@ -108,6 +108,7 @@ return [
         'skipped' => 'übersprungen: :reason',
         'rejected' => ':count verworfen',
         'skills' => 'Skills: :installed installiert · :tasks Tasks zugeordnet (:source)',
+        'selecting_skills' => 'Wähle Skills für die Tasks aus :installed installierten (ein Agent-Aufruf) …',
         'no_skills' => 'Skills: keine installiert',
     ],
 
