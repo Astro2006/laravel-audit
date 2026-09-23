@@ -27,7 +27,7 @@ final class AgentProcesses
     public function start(AgentJob $job, AgentRequest $request, string $input, array $command, bool $repair, float $jobStartedAt, ?Telemetry $previous = null): Attempt
     {
         $process = Process::path($request->workingDirectory)
-            ->timeout($this->timeout + 60)
+            ->forever()
             ->env([...$this->environment->overrides(), ...$this->driver->environment($request), ...$request->environment, 'AUDIT_TASK' => $job->key])
             ->input($input)
             ->start($command);

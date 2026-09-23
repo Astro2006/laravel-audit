@@ -92,6 +92,18 @@ it('marks baselined PHPStan identifiers and keeps the examples in the details', 
         ->and(file_get_contents($preflight->directory.'/details/phpstan/P-01.md'))->toContain('`app/A.php:7` — Parameter #1 expects int.');
 });
 
+it('does not call PHPStan clean when it could not analyse everything', function () {
+    $preflight = snapshotPreflight(['phpstan/phpstan-grouped.json' => [
+        'level' => '6', 'errors' => 0, 'baselined' => 0, 'identifiers' => [], 'baselined_identifiers' => [],
+        'general_errors' => ['Child process error: PHPStan process crashed because it reached configured PHP memory limit: 128M'],
+    ]]);
+
+    $prompt = (new SnapshotWriter([new PhpstanSnapshot]))->write($preflight, 'pre')['phpstan'];
+
+    expect($prompt)->toContain('### PHPStan (level 6) — 🔴 PHPStan could not analyse everything, see general errors')
+        ->not->toContain('no errors');
+});
+
 it('adds the usage map to the details of a composer fact', function () {
     $preflight = snapshotPreflight([
         DependenciesAgent::FACTS_FILE => [

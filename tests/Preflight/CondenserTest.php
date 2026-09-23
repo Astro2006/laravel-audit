@@ -97,6 +97,26 @@ it('handles unauthenticated write routes without a name', function () {
     expect(uris((new RouteFacts)->facts($routes)->unauthenticatedWrite))->toBe(['/webhook']);
 });
 
+it('counts only middleware that turns guests away as authentication', function () {
+    $route = fn (string $uri, array $middleware) => ['method' => 'POST', 'uri' => $uri, 'name' => null, 'action' => 'Closure', 'middleware' => $middleware];
+    $routes = RouteDefinition::listFromJson([
+        $route('guest-only', ['web', 'Illuminate\\Auth\\Middleware\\RedirectIfAuthenticated']),
+        $route('session-only', ['web', 'Illuminate\\Session\\Middleware\\AuthenticateSession']),
+        $route('authenticated', ['web', 'Illuminate\\Auth\\Middleware\\Authenticate:sanctum']),
+        $route('aliased', ['web', 'auth:web']),
+        $route('policy', ['web', 'Illuminate\\Auth\\Middleware\\Authorize:update,order']),
+        $route('custom', ['App\\Http\\Middleware\\AuthenticateApiKey']),
+    ]);
+
+    expect(uris((new RouteFacts)->facts($routes)->unauthenticatedWrite))->toBe(['/guest-only', '/session-only']);
+});
+
+it('keeps middleware parameters with commas together', function () {
+    [$route] = RouteDefinition::listFromJson([['method' => 'POST', 'uri' => 'login', 'name' => null, 'action' => 'Closure', 'middleware' => "web\nthrottle:60,1"]]);
+
+    expect($route->middleware)->toBe(['web', 'throttle:60,1']);
+});
+
 it('condenses clover coverage for app classes only, lowest first', function () {
     $report = (new CoverageCondenser)->condense(fixture('tools/clover.xml'), '/app');
     [$lowest, $highest] = $report->classes;

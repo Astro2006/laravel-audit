@@ -43,6 +43,13 @@ final class Json
             mkdir(dirname($path), 0777, true);
         }
 
-        file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+        self::replaceSoReadersNeverSeeHalfAFile($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+    }
+
+    private static function replaceSoReadersNeverSeeHalfAFile(string $path, string $contents): void
+    {
+        $temporary = $path.'.'.getmypid().'.tmp';
+        file_put_contents($temporary, $contents);
+        rename($temporary, $path);
     }
 }

@@ -29,7 +29,7 @@ final readonly class RouteDefinition implements Arrayable
         $middleware = data_get($data, 'middleware', []);
 
         if (is_string($middleware)) {
-            $middleware = preg_split('/[\n,]+/', $middleware) ?: [];
+            $middleware = preg_split('/\n+/', $middleware) ?: [];
         }
 
         return new self(

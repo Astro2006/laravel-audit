@@ -26,7 +26,18 @@ final class WorkerLock
             return false;
         }
 
-        Json::writeFile($this->path, ['kind' => $kind, 'items' => $items, 'pid' => null, 'started_at' => time()]);
+        if (! is_dir(dirname($this->path))) {
+            mkdir(dirname($this->path), 0777, true);
+        }
+
+        $handle = @fopen($this->path, 'x');
+
+        if ($handle === false) {
+            return false;
+        }
+
+        fwrite($handle, (string) json_encode(['kind' => $kind, 'items' => $items, 'pid' => null, 'started_at' => time()]));
+        fclose($handle);
 
         return true;
     }

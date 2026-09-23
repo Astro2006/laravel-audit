@@ -46,12 +46,18 @@ final class PhpstanSnapshot extends PreflightSnapshot
         ), $groups);
 
         $general = Read::strings($report, 'general_errors');
+        $errors = Read::int($report, 'errors');
+        $state = match (true) {
+            $errors > 0 => '🔴 '.$errors.' errors',
+            $general !== [] => '🔴 PHPStan could not analyse everything, see general errors',
+            default => '🟢 no errors',
+        };
 
         return new SnapshotManifest(
             SnapshotType::Phpstan,
-            sprintf('PHPStan (level %s) — %s', Read::string($report, 'level', '?'), Read::int($report, 'errors') > 0 ? '🔴 '.Read::int($report, 'errors').' errors' : '🟢 no errors'),
+            sprintf('PHPStan (level %s) — %s', Read::string($report, 'level', '?'), $state),
             [
-                'Errors '.Read::int($report, 'errors'),
+                'Errors '.$errors,
                 'Baselined '.Read::int($report, 'baselined'),
                 'Identifiers '.count($groups),
                 'General errors '.count($general),

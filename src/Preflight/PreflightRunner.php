@@ -98,6 +98,7 @@ final class PreflightRunner
 
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
+            $this->drain($running);
         }
 
         foreach ([PreflightStep::Tests, PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
@@ -115,6 +116,20 @@ final class PreflightRunner
 
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
+        }
+    }
+
+    /**
+     * Reads what the background processes wrote so far. A process whose
+     * output pipe is full stops until someone reads it, and Symfony only
+     * reads while it is asked for the status.
+     *
+     * @param  array<string, array{AsyncStep, InvokedProcess, float}>  $running
+     */
+    private function drain(array $running): void
+    {
+        foreach ($running as [, $process]) {
+            $process->running();
         }
     }
 

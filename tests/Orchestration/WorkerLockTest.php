@@ -46,3 +46,16 @@ it('drops a lock whose worker process is gone', function () {
 
     expect((new WorkerLock($path))->current())->toBeNull();
 })->skip(! function_exists('posix_kill'), 'needs posix_kill');
+
+it('refuses the lock when another process created the file first', function () {
+    $path = tempDir('lock').'/worker.lock';
+    $lock = new WorkerLock($path);
+    $other = new WorkerLock($path);
+
+    expect($lock->acquire(WorkerLock::TASKS, ['a']))->toBeTrue();
+
+    file_put_contents($path, json_encode(['kind' => 'tasks', 'items' => ['a'], 'pid' => getmypid(), 'started_at' => time()]));
+
+    expect($other->acquire(WorkerLock::TASKS, ['b']))->toBeFalse()
+        ->and($lock->current())->items->toBe(['a']);
+});

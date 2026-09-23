@@ -88,7 +88,7 @@ final class PhpstanStep implements AsyncStep
         $context->writeJson('phpstan/phpstan.json', $json);
 
         $config = new PhpstanConfig($configPath);
-        $level = $override ?? $this->dumpedLevel($context) ?? $config->level() ?? 'unknown';
+        $level = $override ?? $config->level() ?? $this->dumpedLevel($context) ?? 'unknown';
 
         $report = $this->grouper->group(
             $level,
