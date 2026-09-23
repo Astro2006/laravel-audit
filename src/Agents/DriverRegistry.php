@@ -97,6 +97,7 @@ final class DriverRegistry
                 binary: $this->binary($name),
                 model: $model,
                 maxTurns: $this->maxTurns(),
+                verifyMaxTurns: $this->maxTurns('agent.verify_max_turns'),
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
@@ -114,6 +115,7 @@ final class DriverRegistry
                 model: $model,
                 effort: $this->config->nullableString("agent.drivers.{$name}.effort"),
                 maxTurns: $this->maxTurns(),
+                verifyMaxTurns: $this->maxTurns('agent.verify_max_turns'),
                 maxBudgetUsd: $this->config->nullableFloat("agent.drivers.{$name}.max_budget_usd"),
                 boost: $boost,
                 boostTools: $boostTools,
@@ -122,9 +124,9 @@ final class DriverRegistry
         };
     }
 
-    private function maxTurns(): ?int
+    private function maxTurns(string $key = 'agent.max_turns'): ?int
     {
-        $turns = $this->config->int('agent.max_turns');
+        $turns = $this->config->int($key);
 
         return $turns > 0 ? $turns : null;
     }

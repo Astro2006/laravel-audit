@@ -83,6 +83,7 @@ final class TaskRequests
         return $this->request(
             $task->key().TaskOutcome::VERIFY_SUFFIX,
             $audit->renderVerify($task, $this->context, $this->editor->blocks($outcome->body, array_values($ids))),
+            verify: true,
         );
     }
 
@@ -120,11 +121,11 @@ final class TaskRequests
         return $this->request(JobPlanner::RESULTS_KEY, (new OverviewPrompt($this->overridePath))->render($this->context, $digests));
     }
 
-    private function request(string $key, RenderedPrompt $prompt): AgentRequest
+    private function request(string $key, RenderedPrompt $prompt, bool $verify = false): AgentRequest
     {
         file_put_contents($this->run->logsDir().'/'.$key.'.prompt.md', $prompt->text);
 
-        return new AgentRequest($key, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories);
+        return new AgentRequest($key, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories, verify: $verify);
     }
 
     /**

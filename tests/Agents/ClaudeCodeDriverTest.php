@@ -41,6 +41,13 @@ it('limits the turns', function () {
         ->and(implode(' ', (new ClaudeCodeDriver)->command(new AgentRequest('k', 'p', '/app'))))->not->toContain('--max-turns');
 });
 
+it('gives verify calls fewer turns', function () {
+    $driver = new ClaudeCodeDriver(maxTurns: 15, verifyMaxTurns: 6);
+
+    expect(implode(' ', $driver->command(new AgentRequest('k.verify', 'p', '/app', verify: true))))->toContain('--max-turns 6')
+        ->and(implode(' ', $driver->command(new AgentRequest('k', 'p', '/app'))))->toContain('--max-turns 15');
+});
+
 it('allows no mcp tools without an mcp config', function () {
     $command = (new ClaudeCodeDriver(boostTools: ['application-info']))->command(new AgentRequest('tests', 'p', '/app'));
 

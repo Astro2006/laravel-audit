@@ -24,6 +24,7 @@ final readonly class OpenCodeConfig
         private array $boostTools,
         private array $deniedFiles,
         private ?int $steps = null,
+        private ?int $verifySteps = null,
     ) {}
 
     /**
@@ -32,16 +33,19 @@ final readonly class OpenCodeConfig
      */
     public function toArray(array $extraDirectories): array
     {
+        $agent = fn (string $description, ?int $steps): array => [
+            'description' => $description,
+            'mode' => 'primary',
+            'tools' => $this->tools(),
+            'permission' => $this->permission($extraDirectories),
+            ...($steps === null ? [] : ['steps' => $steps]),
+        ];
+
         $config = [
             '$schema' => 'https://opencode.ai/config.json',
             'agent' => [
-                OpenCodeDriver::AGENT => [
-                    'description' => 'Read-only Laravel audit agent',
-                    'mode' => 'primary',
-                    'tools' => $this->tools(),
-                    'permission' => $this->permission($extraDirectories),
-                    ...($this->steps === null ? [] : ['steps' => $this->steps]),
-                ],
+                OpenCodeDriver::AGENT => $agent('Read-only Laravel audit agent', $this->steps),
+                OpenCodeDriver::VERIFY_AGENT => $agent('Read-only agent that verifies Laravel audit findings', $this->verifySteps ?? $this->steps),
             ],
         ];
 

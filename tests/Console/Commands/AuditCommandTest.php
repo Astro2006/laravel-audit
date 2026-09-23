@@ -382,6 +382,9 @@ it('writes the summary itself and applies the verify pass', function () {
 
     $this->artisan('audit', ['--dependencies' => true])->assertExitCode(0);
 
+    Process::assertRan(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.hygiene.verify' && str_contains(implode(' ', (array) $process->command), '--max-turns 6'));
+    Process::assertRan(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.hygiene' && str_contains(implode(' ', (array) $process->command), '--max-turns 15'));
+
     $run = latestRun($project);
     $report = file_get_contents($run.'/dependencies.md');
     $manifest = file_get_contents($run.'/run.md');

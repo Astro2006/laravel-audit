@@ -12,6 +12,7 @@ final readonly class AgentRequest
      * @param  string|null  $configFile  the driver's per-run config (see AgentDriver::writeConfig())
      * @param  list<string>  $extraDirectories  directories outside the project the agent may read
      * @param  array<string, string>  $environment  extra variables for the agent process
+     * @param  bool  $verify  a verify call, which gets fewer turns
      */
     public function __construct(
         public string $key,
@@ -20,5 +21,6 @@ final readonly class AgentRequest
         public ?string $configFile = null,
         public array $extraDirectories = [],
         public array $environment = [],
+        public bool $verify = false,
     ) {}
 }

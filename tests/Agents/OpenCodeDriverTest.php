@@ -51,6 +51,16 @@ it('limits the steps of the audit agent', function () {
         ->and($unlimited['agent']['laravel-audit'])->not->toHaveKey('steps');
 });
 
+it('runs verify calls as their own agent with fewer steps', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, verifyMaxTurns: 6);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-verify']['steps'])->toBe(6)
+        ->and($config['agent']['laravel-audit-verify']['permission'])->toBe($config['agent']['laravel-audit']['permission'])
+        ->and($driver->command(new AgentRequest('k.verify', 'p', '/app', verify: true)))->toContain('laravel-audit-verify')
+        ->and($driver->command(new AgentRequest('k', 'p', '/app')))->toContain('laravel-audit');
+});
+
 it('parses the json event stream of a real run', function () {
     $driver = new OpenCodeDriver('/app', model: 'opencode/big-pickle');
     $result = $driver->parse(file_get_contents(fixture('agents/opencode-run.jsonl')), 0);

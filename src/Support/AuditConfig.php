@@ -15,6 +15,7 @@ final readonly class AuditConfig
 
         'agent' => [
             'skills' => 'auto',
+            'verify_max_turns' => 6,
             'drivers' => [
                 'codex' => ['config' => []],
             ],

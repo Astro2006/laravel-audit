@@ -23,6 +23,8 @@ final class OpenCodeDriver implements AgentDriver
 
     public const string AGENT = 'laravel-audit';
 
+    public const string VERIFY_AGENT = 'laravel-audit-verify';
+
     /**
      * @param  string  $basePath  project root; deny rules match absolute paths too
      * @param  list<string>  $boostTools  allowed Boost MCP tools
@@ -33,6 +35,7 @@ final class OpenCodeDriver implements AgentDriver
         private readonly string $binary = 'opencode',
         private readonly ?string $model = null,
         private readonly ?int $maxTurns = null,
+        private readonly ?int $verifyMaxTurns = null,
         private readonly ?McpServer $boost = null,
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
@@ -61,14 +64,14 @@ final class OpenCodeDriver implements AgentDriver
     public function writeConfig(string $directory, array $extraDirectories = []): string
     {
         $path = $directory.'/opencode.json';
-        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns))->toArray($extraDirectories));
+        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns, $this->verifyMaxTurns))->toArray($extraDirectories));
 
         return $path;
     }
 
     public function command(AgentRequest $request): array
     {
-        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::AGENT, ...$this->modelArguments()];
+        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', $request->verify ? self::VERIFY_AGENT : self::AGENT, ...$this->modelArguments()];
     }
 
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array
