@@ -147,6 +147,10 @@ final class OpenCodeDriver implements AgentDriver
             return AgentResult::failed(AgentExit::Error, sprintf('OpenCode returned no events (exit code %d).', $exitCode));
         }
 
+        if ($answer === '' && $output === 0) {
+            return new AgentResult('', $sessionId, $this->model, $telemetry, AgentExit::Error, error: sprintf('The model sent %d empty replies. Check the provider: it may be overloaded or not serve this model.', $turns));
+        }
+
         return new AgentResult(
             answer: $answer,
             sessionId: $sessionId,

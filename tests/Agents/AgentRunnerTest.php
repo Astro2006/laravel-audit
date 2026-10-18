@@ -291,3 +291,18 @@ it('reports every poll round and the start of a repair pass', function () {
     expect($ticks)->toBeGreaterThanOrEqual(3)
         ->and($repairs)->toBe(['backend']);
 });
+
+it('starts no more tasks after two agent calls in a row failed', function () {
+    Process::fake(['*' => Process::result('{"type":"error","timestamp":1,"sessionID":"ses_1","error":{"name":"APIError","data":{"message":"Too many queued requests"}}}', exitCode: 1)]);
+    $runner = new AgentRunner(new OpenCodeDriver('/app'), new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), concurrency: 1, pollMicroseconds: 1000);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b'), taskJob('backend.c'), taskJob('backend.d')]);
+    $byKey = collect($outcomes)->keyBy('key');
+
+    expect($outcomes)->toHaveCount(4)
+        ->and($byKey['backend.a']->reason)->toContain('Too many queued requests')
+        ->and($byKey['backend.c']->reason)->toBe('Not started: the last 2 agent calls failed, so the model is not answering.')
+        ->and($byKey['backend.d']->status)->toBe(AuditStatus::Failed);
+
+    Process::assertRanTimes(fn () => true, 2);
+});

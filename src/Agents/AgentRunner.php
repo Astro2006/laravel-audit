@@ -7,33 +7,21 @@ namespace Astro2006\LaravelAudit\Agents;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
-use Astro2006\LaravelAudit\Reports\EvidenceChecker;
-use Astro2006\LaravelAudit\Reports\Finding;
-use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Closure;
-use Illuminate\Support\Arr;
 
 final class AgentRunner
 {
-    private const string REPAIR_MESSAGE = <<<'TEXT'
-        Your report did not pass validation. Fix exactly these errors and return the complete corrected report as your final answer, starting with the `## %s` line. Do not audit again and do not change findings that are not affected.
-
-        Errors:
-        TEXT;
-
-    private const string OPEN_FILES_MESSAGE = 'You reported findings about project files without opening a single file. Open the files you cite now, check every finding against the code, drop the ones you cannot confirm, and return the complete report, starting with the `## %s` line.';
-
-    private const string OUT_OF_TIME_MESSAGE = 'You ran out of time. Do not open any more files. Write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
-
-    private const string ANSWER_NOW_MESSAGE = 'You reached the turn limit. Stop investigating and write your complete report now from what you found, starting with the `## %s` line. Put what you could not check under `## Limitations`.';
+    private const int MAX_ERRORS_IN_A_ROW = 2;
 
     private readonly AgentProcesses $processes;
 
+    private readonly FollowUp $followUp;
+
     public function __construct(
         private readonly AgentDriver $driver,
-        private readonly ReportValidator $validator,
+        ReportValidator $validator,
         string $logsDir,
         private readonly int $concurrency = 4,
         int $timeout = 1800,
@@ -41,6 +29,7 @@ final class AgentRunner
         ChildEnvironment $environment = new ChildEnvironment,
     ) {
         $this->processes = new AgentProcesses($driver, $logsDir, $timeout, $environment);
+        $this->followUp = new FollowUp($validator);
     }
 
     /**
@@ -54,44 +43,35 @@ final class AgentRunner
      */
     public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null, array $earlier = []): array
     {
-        $keys = array_map(fn (AgentJob $job): string => $job->key, $jobs);
-        $pending = self::criticalFirst($jobs);
+        $queue = new JobQueue($jobs);
         $running = [];
         $finished = $earlier;
         $outcomes = [];
+        $errorsInARow = 0;
 
-        while ($pending !== [] || $running !== []) {
-            foreach ($pending as $index => $job) {
-                if (count($running) >= max(1, $this->concurrency)) {
-                    break;
+        while (! $queue->isEmpty() || $running !== []) {
+            if ($errorsInARow >= self::MAX_ERRORS_IN_A_ROW) {
+                foreach ($queue->drain() as $job) {
+                    $this->record(TaskOutcome::immediate($job, AuditStatus::Failed, sprintf('Not started: the last %d agent calls failed, so the model is not answering.', $errorsInARow)), $finished, $outcomes, $onFinished);
                 }
+            }
 
-                if (! $this->ready($job, $finished, $keys)) {
-                    continue;
-                }
-
-                Arr::forget($pending, $index);
+            while (count($running) < max(1, $this->concurrency) && ($job = $queue->take($finished)) !== null) {
                 $request = $job->request($finished);
 
                 if ($request === null) {
-                    $outcome = TaskOutcome::immediate($job, AuditStatus::Completed, 'Nothing to do.');
-                    $finished[$job->key] = $outcome;
-                    $outcomes[] = $outcome;
+                    $this->record(TaskOutcome::immediate($job, AuditStatus::Completed, 'Nothing to do.'), $finished, $outcomes, null);
 
                     continue;
                 }
 
                 $onStarted?->__invoke($job);
-                $now = microtime(true);
-                $running[] = $this->processes->start($job, $request, $request->prompt, $this->driver->command($request), false, $now);
+                $running[] = $this->processes->start($job, $request, $request->prompt, $this->driver->command($request), false, microtime(true));
             }
 
-            if ($running === [] && $pending !== []) {
-                foreach ($pending as $job) {
-                    $outcome = TaskOutcome::immediate($job, AuditStatus::Failed, 'Waiting for tasks that never finished: '.implode(', ', $job->dependsOn).'.');
-                    $finished[$job->key] = $outcome;
-                    $outcomes[] = $outcome;
-                    $onFinished?->__invoke($outcome);
+            if ($running === [] && ! $queue->isEmpty()) {
+                foreach ($queue->drain() as $job) {
+                    $this->record(TaskOutcome::immediate($job, AuditStatus::Failed, 'Waiting for tasks that never finished: '.implode(', ', $job->dependsOn).'.'), $finished, $outcomes, $onFinished);
                 }
 
                 break;
@@ -108,18 +88,18 @@ final class AgentRunner
                     continue;
                 }
 
-                $next = $this->handle($attempt, $result);
+                $errorsInARow = $result->exit === AgentExit::Error ? $errorsInARow + 1 : 0;
+                $telemetry = $attempt->telemetry->plus($result->telemetry);
+                $next = $this->followUp->decide($attempt, $result, $telemetry);
 
-                if ($next instanceof Attempt) {
-                    $stillRunning[] = $next;
-                    $onRepair?->__invoke($next->job);
+                if (is_string($next)) {
+                    $stillRunning[] = $this->processes->start($attempt->job, $attempt->request, $next, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
+                    $onRepair?->__invoke($attempt->job);
 
                     continue;
                 }
 
-                $finished[$next->key] = $next;
-                $outcomes[] = $next;
-                $onFinished?->__invoke($next);
+                $this->record($next, $finished, $outcomes, $onFinished);
             }
 
             $running = $stillRunning;
@@ -134,115 +114,14 @@ final class AgentRunner
     }
 
     /**
-     * Findings about project files from an answer that took a single turn,
-     * so the agent never opened a file. Small models do this; the harness
-     * cannot tell a guess from a finding by the excerpt alone.
-     *
-     * @param  list<Finding>  $findings
-     */
-    private static function unread(AgentResult $result, array $findings): bool
-    {
-        if ($result->telemetry->turns !== 1) {
-            return false;
-        }
-
-        foreach ($findings as $finding) {
-            if (! EvidenceChecker::isPreflightReference($finding->evidence) && array_filter($finding->locations, fn (Location $location): bool => $location->isFile()) !== []) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * The jobs ordered by the length of the longest chain that waits on them,
-     * longest first; jobs with equal chains keep their order.
-     *
-     * @param  list<AgentJob>  $jobs
-     * @return list<AgentJob>
-     */
-    private static function criticalFirst(array $jobs): array
-    {
-        $dependents = [];
-
-        foreach ($jobs as $job) {
-            foreach ($job->dependsOn as $dependency) {
-                $dependents[$dependency][] = $job->key;
-            }
-        }
-
-        $chains = [];
-        $chain = function (string $key, array $seen = []) use (&$chain, &$chains, $dependents): int {
-            if (Arr::has($chains, $key)) {
-                return Arr::get($chains, $key);
-            }
-
-            $longest = 0;
-
-            foreach (Arr::get($dependents, $key, []) as $dependent) {
-                $longest = in_array($dependent, $seen, true) ? $longest : max($longest, $chain($dependent, [...$seen, $key]));
-            }
-
-            return $chains[$key] = $longest + 1;
-        };
-
-        $order = array_keys($jobs);
-        usort($order, fn (int $a, int $b): int => [$chain(Arr::get($jobs, $b)->key), $a] <=> [$chain(Arr::get($jobs, $a)->key), $b]);
-
-        return array_map(fn (int $index): AgentJob => Arr::get($jobs, $index), $order);
-    }
-
-    /**
      * @param  array<string, TaskOutcome>  $finished
-     * @param  list<string>  $keys  all job keys; dependencies outside this run are ignored
+     * @param  list<TaskOutcome>  $outcomes
+     * @param  (Closure(TaskOutcome): void)|null  $onFinished
      */
-    private function ready(AgentJob $job, array $finished, array $keys): bool
+    private function record(TaskOutcome $outcome, array &$finished, array &$outcomes, ?Closure $onFinished): void
     {
-        foreach ($job->dependsOn as $dependency) {
-            if (in_array($dependency, $keys, true) && ! Arr::has($finished, $dependency)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function handle(Attempt $attempt, AgentResult $result): Attempt|TaskOutcome
-    {
-        $job = $attempt->job;
-        $telemetry = $attempt->telemetry->plus($result->telemetry);
-
-        if (in_array($result->exit, [AgentExit::MaxTurns, AgentExit::Timeout], true) && ! $attempt->repair && $result->sessionId !== null) {
-            $message = sprintf($result->exit === AgentExit::Timeout ? self::OUT_OF_TIME_MESSAGE : self::ANSWER_NOW_MESSAGE, $job->spec->firstSection());
-
-            return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
-        }
-
-        if (! $result->succeeded()) {
-            $reason = $result->truncated ? 'Answer truncated (output token limit).' : ($result->error ?? $result->exit->value);
-
-            return TaskOutcome::fromAttempt($attempt, AuditStatus::Failed, $reason, null, $telemetry, $result);
-        }
-
-        $validated = $this->validator->validate($result->answer, $job->spec, $job->required);
-
-        if ($validated->lint->isValid() && ! $attempt->repair && $result->sessionId !== null && self::unread($result, $validated->lint->findings)) {
-            $message = sprintf(self::OPEN_FILES_MESSAGE, $job->spec->firstSection());
-
-            return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
-        }
-
-        if ($validated->lint->isValid()) {
-            return TaskOutcome::fromAttempt($attempt, AuditStatus::Completed, null, $validated, $telemetry, $result);
-        }
-
-        if ($attempt->repair || $result->sessionId === null) {
-            return TaskOutcome::fromAttempt($attempt, AuditStatus::Failed, 'Report failed validation'.($attempt->repair ? ' after the repair pass.' : '.'), $validated, $telemetry, $result);
-        }
-
-        $message = sprintf(self::REPAIR_MESSAGE, $job->spec->firstSection())."\n".implode("\n", array_map(fn (string $error): string => '- '.$error, $validated->lint->errors));
-
-        return $this->processes->start($job, $attempt->request, $message, $this->driver->resumeCommand($result, $attempt->request), true, $attempt->jobStartedAt, $telemetry);
+        $finished[$outcome->key] = $outcome;
+        $outcomes[] = $outcome;
+        $onFinished?->__invoke($outcome);
     }
 }

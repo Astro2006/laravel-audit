@@ -91,3 +91,13 @@ it('resumes the session and reports errors', function () {
         ->and($driver->parse($error, 1))->exit->toBe(AgentExit::Error)->error->toBe('Model hy3-free is not supported')
         ->and($driver->parse('', 1)->exit)->toBe(AgentExit::Error);
 });
+
+it('fails a run in which the model only sent empty replies', function () {
+    $empty = implode("\n", array_map(fn (int $step): string => json_encode(['type' => 'step_finish', 'timestamp' => $step, 'sessionID' => 'ses_1', 'part' => ['messageID' => 'm'.$step, 'reason' => 'unknown', 'tokens' => ['input' => 0, 'output' => 0]]]), range(1, 30)));
+
+    $result = (new OpenCodeDriver('/app'))->parse($empty, 0);
+
+    expect($result->exit)->toBe(AgentExit::Error)
+        ->and($result->error)->toContain('30 empty replies')
+        ->and($result->telemetry->turns)->toBe(30);
+});
