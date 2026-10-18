@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Tool;
 
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Enums\Stage;
 use Astro2006\LaravelAudit\Skills\Skill;
 use Astro2006\LaravelAudit\Skills\SkillInventory;
 use Astro2006\LaravelAudit\Support\AuditConfig;
@@ -40,10 +41,13 @@ final class Catalog
         }
 
         $catalog = [];
+        $stages = array_fill_keys(Stage::values(), []);
 
         foreach ($tasks->tasks as $key => $task) {
+            $stages[$task->stage->value][] = $key;
             $catalog[$key] = array_filter([
                 'title' => $task->title,
+                'stage' => $task->stage->value,
                 'checks' => $task->checks,
                 'depends_on' => $task->dependencyKeys(),
                 'reads_steps' => RunTasks::values($tasks->steps($task)),
@@ -57,9 +61,11 @@ final class Catalog
             'audits' => $selection->auditValues(),
             'without' => $selection->withoutValues(),
             'preflight_steps' => $steps,
+            'stages' => $stages,
             'tasks' => $catalog,
             'skills' => array_map(fn (Skill $skill): string => $skill->description, SkillInventory::scan($run->plan->project->basePath)->skills),
             'skills_per_task' => max(1, $this->config->int('skills_per_task')),
+            'next' => (new NextStep($this->config))->for($run),
         ];
     }
 }

@@ -11,6 +11,8 @@
 | depends_on: tasks whose sections this task gets as context.
 | sections: report sections the task writes.
 | snapshots: preflight data in the prompt (the status of all steps is always there).
+| stage: analyse, standards or security (default standards); the order an
+|   orchestrating agent works in. See docs/MVP3.md.
 */
 
 return [
@@ -23,6 +25,7 @@ return [
     'tasks' => [
         'results' => [
             'title' => 'Test results',
+            'stage' => 'analyse',
             'sections' => ['Test results'],
             'snapshots' => ['tests', 'browser'],
             'checks' => [
@@ -33,6 +36,7 @@ return [
         ],
         'coverage' => [
             'title' => 'Coverage map',
+            'stage' => 'analyse',
             'sections' => ['Coverage map'],
             'snapshots' => ['coverage', 'route-tests', 'browser'],
             'checks' => [
@@ -42,6 +46,7 @@ return [
         ],
         'gaps' => [
             'title' => 'Missing security and edge-case tests',
+            'stage' => 'security',
             'snapshots' => ['route-tests', 'routes'],
             'checks' => [
                 'missing-authz-test' => 'No test proving another user or a guest gets 403/404 for a protected resource.',
@@ -52,6 +57,7 @@ return [
         ],
         'quality' => [
             'title' => 'Test quality',
+            'stage' => 'standards',
             'checks' => [
                 'weak-assertion' => 'Tests without assertions or only status assertions on endpoints that change data.',
                 'implementation-coupling' => 'Tests that test implementation instead of behaviour, or mock Eloquent / the class under test.',
@@ -61,6 +67,7 @@ return [
         ],
         'suite' => [
             'title' => 'Test suite structure',
+            'stage' => 'standards',
             'checks' => [
                 'factory-quality' => 'Unrealistic factory defaults, missing states, huge object graphs.',
                 'duplicate-test' => 'Duplicate tests, tests for removed code, commented-out tests.',
@@ -69,6 +76,7 @@ return [
         ],
         'phpstan' => [
             'title' => 'PHPStan',
+            'stage' => 'analyse',
             'sections' => ['PHPStan overview'],
             'snapshots' => ['phpstan'],
             'checks' => [
@@ -80,6 +88,7 @@ return [
         ],
         'tooling' => [
             'title' => 'Tooling and CI',
+            'stage' => 'analyse',
             'checks' => [
                 'ci-quality-gate' => 'Tests, PHPStan or Pint missing from CI, no coverage minimum.',
             ],

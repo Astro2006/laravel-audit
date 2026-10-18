@@ -4,6 +4,7 @@ use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Enums\Stage;
 
 function publishedChecks(string $code): string
 {
@@ -46,3 +47,29 @@ it('lets a published copy win and names the checks it lacks', function () {
 it('rejects unknown snapshots', function () {
     AuditDefinition::fromFile(AuditType::Backend, publishedChecks("<?php return ['tasks' => ['x' => ['checks' => [], 'snapshots' => ['nope']]]];"));
 })->throws(RuntimeException::class, 'Unknown snapshot "nope"');
+
+it('reads the stage of a task and defaults to standards', function () {
+    $byName = collect(AuditDefinition::for(AuditType::Backend)->tasks)->keyBy('name');
+    $published = AuditDefinition::fromFile(AuditType::Backend, publishedChecks("<?php return ['tasks' => ['x' => ['checks' => []]]];"));
+
+    expect($byName['conventions']->stage)->toBe(Stage::Analyse)
+        ->and($byName['injection']->stage)->toBe(Stage::Security)
+        ->and($byName['jobs']->stage)->toBe(Stage::Standards)
+        ->and($published->tasks[0]->stage)->toBe(Stage::Standards);
+});
+
+it('rejects unknown stages', function () {
+    AuditDefinition::fromFile(AuditType::Backend, publishedChecks("<?php return ['tasks' => ['x' => ['checks' => [], 'stage' => 'later']]];"));
+})->throws(RuntimeException::class, 'Unknown stage "later"');
+
+it('splits the shipped tasks into ten analyse, fourteen standards and ten security tasks', function () {
+    $counts = ['analyse' => 0, 'standards' => 0, 'security' => 0];
+
+    foreach (AuditType::cases() as $type) {
+        foreach (AuditDefinition::for($type)->tasks as $task) {
+            $counts[$task->stage->value]++;
+        }
+    }
+
+    expect($counts)->toBe(['analyse' => 10, 'standards' => 14, 'security' => 10]);
+});

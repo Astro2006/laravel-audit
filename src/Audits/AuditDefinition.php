@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Enums\Stage;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\Read;
 use RuntimeException;
@@ -63,6 +64,8 @@ final readonly class AuditDefinition
                         ?? throw new RuntimeException(sprintf('Unknown snapshot "%s" in task "%s" of [%s].', $snapshot, $name, $path)),
                     Read::strings($task, 'snapshots'),
                 ),
+                Stage::tryFrom(Read::string($task, 'stage', Stage::Standards->value))
+                    ?? throw new RuntimeException(sprintf('Unknown stage "%s" in task "%s" of [%s]. Allowed: %s.', Read::string($task, 'stage'), $name, $path, implode(', ', Stage::values()))),
             );
         }
 

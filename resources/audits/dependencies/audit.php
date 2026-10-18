@@ -11,6 +11,8 @@
 | depends_on: tasks whose sections this task gets as context.
 | sections: report sections the task writes.
 | snapshots: preflight data in the prompt (the status of all steps is always there).
+| stage: analyse, standards or security (default standards); the order an
+|   orchestrating agent works in. See docs/MVP3.md.
 */
 
 return [
@@ -20,6 +22,7 @@ return [
     'tasks' => [
         'security' => [
             'title' => 'Advisories and abandoned packages',
+            'stage' => 'analyse',
             'snapshots' => ['composer'],
             'checks' => [
                 'vulnerable-dependency' => 'A package with a security advisory (one finding per package).',
@@ -28,6 +31,7 @@ return [
         ],
         'necessity' => [
             'title' => 'Necessity and placement',
+            'stage' => 'analyse',
             'sections' => ['Dependency inventory'],
             'snapshots' => ['composer'],
             'checks' => [
@@ -39,6 +43,7 @@ return [
         ],
         'freshness' => [
             'title' => 'Freshness and support',
+            'stage' => 'analyse',
             'sections' => ['Upgrade plan'],
             'snapshots' => ['composer'],
             'checks' => [
@@ -49,6 +54,7 @@ return [
         ],
         'hygiene' => [
             'title' => 'Constraints, Composer config and licenses',
+            'stage' => 'analyse',
             'snapshots' => ['composer'],
             'checks' => [
                 'loose-constraint' => 'Constraints like *, dev-*, >= without upper bound, or pins that block patches.',

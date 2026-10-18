@@ -74,9 +74,9 @@ it('runs only the requested preflight steps and keeps them across calls', functi
     fakeTools();
     $run = orchestratedRun($project);
 
-    expect(tool($run, 'preflight', ['composer'], ['--sync' => true]))->toBe(['started' => ['about', 'stack', 'loc', 'composer']])
-        ->and(tool($run, 'preflight', ['composer'], ['--sync' => true]))->toBe(['started' => [], 'already_done' => ['composer']])
-        ->and(tool($run, 'preflight', ['routes'], ['--sync' => true]))->toBe(['started' => ['routes']]);
+    expect(tool($run, 'preflight', ['composer'], ['--sync' => true]))->toMatchArray(['started' => ['about', 'stack', 'loc', 'composer']])
+        ->and(tool($run, 'preflight', ['composer'], ['--sync' => true]))->toMatchArray(['started' => [], 'already_done' => ['composer']])
+        ->and(tool($run, 'preflight', ['routes'], ['--sync' => true]))->toMatchArray(['started' => ['routes']]);
 
     $status = tool($run, 'status');
 
@@ -113,7 +113,7 @@ it('starts the worker in the background and returns right away', function () {
 
     $started = tool($run, 'preflight', ['composer']);
 
-    expect($started)->toBe(['started' => ['about', 'stack', 'loc', 'composer'], 'hint' => 'Running in the background. Run `wait` to block until it is done.'])
+    expect($started)->toBe(['started' => ['about', 'stack', 'loc', 'composer'], 'hint' => 'Running in the background. Run `wait` to block until it is done.', 'next' => 'php artisan audit:tool wait --run='.$run->id])
         ->and(tool($run, 'status')['worker'])->toMatchArray(['working_on' => 'preflight', 'items' => ['about', 'stack', 'loc', 'composer']]);
 
     Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'nohup')
@@ -130,7 +130,7 @@ it('runs tasks and returns their findings', function () {
     $started = tool($run, 'start', ['dependencies.necessity', 'dependencies.security'], ['--sync' => true]);
     $result = tool($run, 'result', ['dependencies.security']);
 
-    expect($started)->toBe(['started' => ['dependencies.necessity', 'dependencies.security']])
+    expect($started)->toMatchArray(['started' => ['dependencies.necessity', 'dependencies.security']])
         ->and($result['status'])->toBe('completed')
         ->and($result['findings'])->toHaveCount(3)
         ->and($result['findings'][0])->toHaveKeys(['id', 'severity', 'confidence', 'check', 'locations'])
@@ -227,4 +227,91 @@ it('lists the installed skills and hands the chosen ones to the task', function 
     expect($started['started'])->toBe(['dependencies.hygiene'])
         ->and($started['warnings'])->toBe(['Skills left out: unknown skill "made-up" for dependencies.hygiene.'])
         ->and(file_get_contents($run->logsDir().'/dependencies.hygiene.prompt.md'))->toContain("### Skill `composer-rules`\n\nPin every package to a caret constraint.");
+});
+
+it('groups the tasks by stage and proposes the next command', function () {
+    $project = orchestratedProject();
+    fakeTools();
+    $run = orchestratedRun($project);
+
+    $catalog = tool($run, 'catalog');
+
+    expect($catalog['tasks']['dependencies.security']['stage'])->toBe('analyse')
+        ->and($catalog['stages'])->toBe(['analyse' => ['dependencies.security', 'dependencies.necessity', 'dependencies.freshness', 'dependencies.hygiene'], 'standards' => [], 'security' => []])
+        ->and($catalog['next'])->toBe('php artisan audit:tool preflight composer --run='.$run->id);
+});
+
+it('starts the tasks of a stage and tells what finished since the last wait', function () {
+    $project = orchestratedProject();
+    fakeTaskAgents();
+    $run = orchestratedRun($project);
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+
+    $started = tool($run, 'start', [], ['--stage' => 'analyse', '--sync' => true]);
+    $first = tool($run, 'wait');
+    $second = tool($run, 'wait');
+    $status = tool($run, 'status');
+
+    expect($started['started'])->toBe(['dependencies.security', 'dependencies.necessity', 'dependencies.freshness', 'dependencies.hygiene'])
+        ->and($started['next'])->toBe('php artisan audit:tool finish --run='.$run->id)
+        ->and(array_keys($first['finished_since']))->toEqualCanonicalizing(['dependencies.security', 'dependencies.necessity', 'dependencies.freshness', 'dependencies.hygiene'])
+        ->and($first['finished_since']['dependencies.security'])->toMatchArray(['status' => 'completed', 'findings' => 3])
+        ->and($first)->not->toHaveKey('failed_since')
+        ->and($second)->not->toHaveKey('finished_since')
+        ->and($status['stages'])->toBe(['analyse' => ['done' => 4, 'total' => 4], 'standards' => ['done' => 0, 'total' => 0], 'security' => ['done' => 0, 'total' => 0]])
+        ->and($status['spend_usd'])->toEqual(0)
+        ->and($status['next'])->toBe('php artisan audit:tool finish --run='.$run->id)
+        ->and(tool($run, 'start', [], ['--pending' => true, '--sync' => true]))->toMatchArray(['started' => []])
+        ->and(tool($run, 'start', [], ['--stage' => 'later']))->toMatchArray(['error' => 'Unknown stage "later". Allowed: analyse, standards, security.']);
+});
+
+it('starts failed tasks again and refuses a third attempt', function () {
+    $project = orchestratedProject();
+    config()->set('audit.agent.max_attempts', 2);
+    $answers = dependencyAnswers();
+    $answers['dependencies.hygiene'] = "## Oops\nNothing to see.\n";
+    fakeTools(['*pint*run*' => fn ($process) => Process::result(openCodeAnswer($answers[$process->environment['AUDIT_TASK']] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n"))]);
+    $run = orchestratedRun($project);
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+    tool($run, 'start', [], ['--stage' => 'analyse', '--sync' => true]);
+
+    expect(tool($run, 'status')['tasks']['dependencies.hygiene']['status'])->toBe('failed')
+        ->and(tool($run, 'wait')['failed_since'])->toBe(['dependencies.hygiene'])
+        ->and(tool($run, 'status')['next'])->toBe('php artisan audit:tool start --failed --run='.$run->id)
+        ->and(tool($run, 'start', [], ['--failed' => true, '--sync' => true])['started'])->toBe(['dependencies.hygiene'])
+        ->and(tool($run, 'start', ['dependencies.hygiene'], ['--sync' => true]))->toMatchArray(['error' => 'attempts exhausted'])
+        ->and(tool($run, 'start', ['dependencies.necessity'], ['--sync' => true])['started'])->toBe(['dependencies.necessity']);
+});
+
+it('stops serving commands once the call budget is spent', function () {
+    $project = orchestratedProject();
+    config()->set('audit.tool.max_calls', 2);
+    fakeTools();
+    $run = orchestratedRun($project);
+
+    tool($run, 'catalog');
+    tool($run, 'catalog');
+
+    expect(tool($run, 'catalog'))->toMatchArray(['error' => 'call budget exhausted'])
+        ->and(tool($run, 'status'))->toHaveKey('run');
+});
+
+it('picks skills for the tasks the session did not assign', function () {
+    $project = orchestratedProject();
+    @mkdir($project.'/.claude/skills/composer-rules', 0777, true);
+    file_put_contents($project.'/.claude/skills/composer-rules/SKILL.md', "---\nname: composer-rules\ndescription: How this team pins Composer packages.\n---\nPin every package to a caret constraint.\n");
+    $answers = dependencyAnswers();
+    fakeTools(['*pint*run*' => fn ($process) => Process::result(openCodeAnswer(in_array('laravel-audit-answer', (array) $process->command, true)
+        ? '{"dependencies.hygiene": ["composer-rules"]}'
+        : ($answers[$process->environment['AUDIT_TASK']] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n")))]);
+    $run = orchestratedRun($project);
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+
+    $started = tool($run, 'start', ['dependencies.hygiene', 'dependencies.necessity'], ['--sync' => true]);
+
+    expect($started['skills'])->toBe(['dependencies.hygiene' => ['composer-rules']])
+        ->and(file_get_contents($run->logsDir().'/dependencies.hygiene.prompt.md'))->toContain('### Skill `composer-rules`')
+        ->and(file_get_contents($run->logsDir().'/dependencies.necessity.prompt.md'))->not->toContain('### Skill');
+
+    Process::assertRanTimes(fn ($process) => in_array('laravel-audit-answer', (array) $process->command, true), 1);
 });

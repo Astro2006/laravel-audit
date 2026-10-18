@@ -60,6 +60,18 @@ final class TaskStore
         return array_values(array_filter($this->keys(), fn (string $key): bool => ! str_ends_with($key, TaskOutcome::VERIFY_SUFFIX)));
     }
 
+    /** @return float what every stored job cost so far, in USD */
+    public function spendUsd(): float
+    {
+        $total = 0.0;
+
+        foreach ($this->keys() as $key) {
+            $total += Read::float($this->record($key) ?? [], 'telemetry.cost_usd');
+        }
+
+        return round($total, 4);
+    }
+
     /**
      * The stored job as written, for status output.
      *

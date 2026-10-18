@@ -11,6 +11,8 @@
 | depends_on: tasks whose sections this task gets as context.
 | sections: report sections the task writes.
 | snapshots: preflight data in the prompt (the status of all steps is always there).
+| stage: analyse, standards or security (default standards); the order an
+|   orchestrating agent works in. See docs/MVP3.md.
 */
 
 return [
@@ -20,12 +22,14 @@ return [
     'tasks' => [
         'map' => [
             'title' => 'Frontend map',
+            'stage' => 'analyse',
             'sections' => ['Frontend map'],
             'snapshots' => ['routes'],
             'checks' => [],
         ],
         'access' => [
             'title' => 'Route access control',
+            'stage' => 'security',
             'sections' => ['Route risk table'],
             'snapshots' => ['routes'],
             'checks' => [
@@ -37,6 +41,7 @@ return [
         ],
         'routes' => [
             'title' => 'Route hygiene',
+            'stage' => 'security',
             'snapshots' => ['routes'],
             'checks' => [
                 'state-changing-get' => 'A GET route that changes state.',
@@ -48,6 +53,7 @@ return [
         ],
         'injection' => [
             'title' => 'Rendering, redirects and uploads',
+            'stage' => 'security',
             'snapshots' => ['code-candidates'],
             'checks' => [
                 'xss' => 'Unescaped output of untrusted data in Blade, Vue, React, Alpine or JS.',
@@ -57,6 +63,7 @@ return [
         ],
         'client' => [
             'title' => 'Livewire, Inertia and client secrets',
+            'stage' => 'security',
             'checks' => [
                 'livewire-security' => 'Livewire properties that must be locked, missing authorization in actions, unsafe uploads.',
                 'inertia-props-leak' => 'Inertia shared data or props leaking models, permissions or config.',
@@ -65,6 +72,7 @@ return [
         ],
         'config' => [
             'title' => 'Headers, session and CORS',
+            'stage' => 'security',
             'checks' => [
                 'security-headers' => 'Missing CSP, frame-ancestors or similar headers.',
                 'session-cookie-config' => 'Insecure session or cookie settings.',
@@ -73,6 +81,7 @@ return [
         ],
         'errors' => [
             'title' => 'Error and state handling',
+            'stage' => 'standards',
             'snapshots' => ['browser'],
             'checks' => [
                 'error-handling-ui' => 'Inconsistent validation errors, missing loading/empty/error states, double submits.',
@@ -81,6 +90,7 @@ return [
         ],
         'ui' => [
             'title' => 'UI consistency',
+            'stage' => 'standards',
             'depends_on' => ['map'],
             'sections' => ['UI consistency matrix'],
             'snapshots' => ['translations'],
@@ -93,6 +103,7 @@ return [
         ],
         'a11y' => [
             'title' => 'Accessibility',
+            'stage' => 'standards',
             'depends_on' => ['map'],
             'checks' => [
                 'accessibility' => 'WCAG 2.2 AA issues visible in the markup.',
@@ -100,6 +111,7 @@ return [
         ],
         'performance' => [
             'title' => 'Frontend performance',
+            'stage' => 'standards',
             'checks' => [
                 'asset-performance' => 'Unoptimized images and assets, huge imports.',
                 'view-query' => 'Lazy loading triggered from Blade or Livewire views.',
@@ -107,6 +119,7 @@ return [
         ],
         'dead-code' => [
             'title' => 'Dead frontend code',
+            'stage' => 'standards',
             'checks' => [
                 'dead-frontend-code' => 'Unused views, components, JS/CSS files or translation keys.',
             ],

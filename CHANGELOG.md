@@ -4,6 +4,12 @@ All notable changes to `laravel-audit` will be documented in this file.
 
 ## Unreleased
 
+### MVP3 (in progress, see `docs/MVP3.md`)
+
+- **Stages.** Every task in `audit.php` has a `stage`: `analyse`, `standards` or `security` (default `standards`). `audit:tool catalog` groups the tasks by stage, `status` shows the progress per stage, and `start --stage=<stage>` starts every task of a stage that has not run. `start --pending` and `start --failed` start every task that has not run, or every failed task once more.
+- **Orchestrator primitives.** Every `audit:tool` answer carries `next`, the command the harness would run now. `wait` reports only what finished since the last `wait` (`finished_since`, `failed_since`); `status` keeps the full table and adds `spend_usd` and `pending`. A task can be started at most `agent.max_attempts` (2) times per run; a run accepts at most `tool.max_calls` (400) `audit:tool` calls, after which only `status`, `wait` and `finish` work. Tasks started without `:skills` get the harness's own skill selection, one agent call per run.
+- **Internals.** `AgentRunner` is split into the loop, `JobQueue` (critical-first order, readiness) and `FollowUp` (repair, answer-now and open-files decisions). A new arch test keeps every source file at or below 250 lines.
+
 ### MVP2
 
 - **Boost skill and guideline.** The package ships `resources/boost/guidelines/core.blade.php` and the skill `laravel-audit`, which tells your own Claude Code or OpenCode session how to run the audit with `php artisan audit:tool`. `audit:install` registers both with Boost: interactive through `boost:update --discover`, with `--yes` by adding the package to `boost.json`.

@@ -11,10 +11,12 @@ final readonly class AuditConfig
     public const array DEFAULTS = [
         'tool' => [
             'wait_timeout' => 100,
+            'max_calls' => 400,
         ],
 
         'agent' => [
             'skills' => 'auto',
+            'max_attempts' => 2,
             'verify_max_turns' => 6,
             'boost_tools' => [
                 'application-info',

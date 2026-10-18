@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Tool;
 
+use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Enums\Stage;
+use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
+use Astro2006\LaravelAudit\Run\Phases\SelectSkills;
 use Astro2006\LaravelAudit\Skills\SkillInventory;
 use Astro2006\LaravelAudit\Skills\SkillSelection;
+use Astro2006\LaravelAudit\Skills\SkillSelector;
 use Astro2006\LaravelAudit\Support\AuditConfig;
+use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Process;
 
@@ -48,17 +54,14 @@ final class StartWork
         $already = array_values(array_filter($steps, fn (PreflightStep $step): bool => $done?->get($step) !== null));
 
         if ($todo === []) {
-            return ['started' => [], 'already_done' => RunTasks::values($already)];
+            return ['started' => [], 'already_done' => RunTasks::values($already), 'next' => $this->next($run)];
         }
 
         return $this->launch($run, WorkerLock::PREFLIGHT, RunTasks::values($todo), $sync, ['already_done' => RunTasks::values($already)]);
     }
 
-    /**
-     * @param  list<string>  $keys  task keys, e.g. backend.injection
-     * @return array<string, mixed>
-     */
-    public function tasks(OpenedRun $run, array $keys, bool $sync = false): array
+    /** @return array<string, mixed> */
+    public function tasks(OpenedRun $run, TaskSelection $selection, bool $sync = false): array
     {
         $preflight = $run->preflight();
 
@@ -70,26 +73,43 @@ final class StartWork
             return ['error' => 'The test gate stopped the run: tests or browser tests fail.', 'hint' => 'End the session; the user can restart with --force.'];
         }
 
-        if ($keys === []) {
-            return ['error' => 'Name the tasks to start.', 'hint' => 'See `catalog` for the task keys.'];
+        if ($selection->isEmpty()) {
+            return ['error' => 'Name the tasks to start, or pass --stage, --pending or --failed.', 'hint' => 'See `catalog` for the task keys.'];
         }
 
         $tasks = RunTasks::for($run, $this->config);
-        [$keys, $skills] = self::splitSkills($keys);
-        $start = [];
-        $skipped = [];
-        $warnings = [];
+        $skipReason = fn (AuditTask $task): ?string => Arr::get($tasks->audits, $task->key())->skipReason($task, $preflight);
 
-        foreach (array_values(array_unique($keys)) as $key) {
+        foreach ($selection->keys() as $key) {
             if (! $tasks->has($key)) {
                 return ['error' => sprintf('Unknown task "%s".', $key), 'allowed' => array_keys($tasks->tasks)];
             }
+        }
 
+        try {
+            $keys = array_values(array_unique([...$selection->keys(), ...$selection->expand($tasks, $run->store, $skipReason)]));
+        } catch (InvalidSelection $exception) {
+            return ['error' => $exception->getMessage(), 'allowed' => Stage::values()];
+        }
+
+        $maxAttempts = max(1, $this->config->int('agent.max_attempts'));
+        $start = [];
+        $skipped = [];
+        $exhausted = [];
+        $warnings = [];
+
+        foreach ($keys as $key) {
             $task = Arr::get($tasks->tasks, $key);
-            $reason = Arr::get($tasks->audits, $key)->skipReason($task, $preflight);
+            $reason = $skipReason($task);
 
             if ($reason !== null) {
                 $skipped[$key] = $reason;
+
+                continue;
+            }
+
+            if ($run->attempts->of($key) >= $maxAttempts) {
+                $exhausted[$key] = sprintf('%d attempts; last reason: %s', $run->attempts->of($key), Read::string($run->store->record($key) ?? [], 'reason', 'none'));
 
                 continue;
             }
@@ -109,55 +129,51 @@ final class StartWork
             $start[] = $key;
         }
 
+        if ($start === [] && $exhausted !== []) {
+            return ['error' => 'attempts exhausted', 'exhausted' => $exhausted, 'hint' => 'These tasks were started '.$maxAttempts.' times already. Leave them out and `finish`.'];
+        }
+
         if ($start === []) {
-            return ['started' => [], 'skipped' => $skipped];
+            return ['started' => [], ...($skipped === [] ? [] : ['skipped' => $skipped]), 'next' => $this->next($run)];
         }
 
-        $warnings = [...$warnings, ...$this->assignSkills($run, $skills, $start)];
+        [$skillWarnings, $skills] = $this->assignSkills($run, $selection->skills(), $start);
+        $run->attempts->count($start);
 
-        return $this->launch($run, WorkerLock::TASKS, $start, $sync, ['skipped' => $skipped, 'warnings' => $warnings]);
+        return $this->launch($run, WorkerLock::TASKS, $start, $sync, ['skipped' => $skipped, 'exhausted' => $exhausted, 'warnings' => [...$warnings, ...$skillWarnings], 'skills' => $skills]);
     }
 
     /**
-     * `backend.data:models,php` starts backend.data with the skills models and php.
+     * The skills of the started tasks: the ones the session named, and the
+     * harness's own selection (one agent call per run) for the others.
      *
-     * @param  list<string>  $items
-     * @return array{list<string>, array<string, list<string>>} task keys, task key => skill names
-     */
-    private static function splitSkills(array $items): array
-    {
-        $keys = [];
-        $skills = [];
-
-        foreach ($items as $item) {
-            [$key, $names] = array_pad(explode(':', $item, 2), 2, '');
-            $keys[] = $key;
-
-            if ($names !== '') {
-                $skills[$key] = array_values(array_filter(array_map('trim', explode(',', $names))));
-            }
-        }
-
-        return [$keys, $skills];
-    }
-
-    /**
-     * @param  array<string, list<string>>  $skills
+     * @param  array<string, list<string>>  $named  task key => skill names
      * @param  list<string>  $start
-     * @return list<string> warnings about skills that were left out
+     * @return array{list<string>, array<string, list<string>>} warnings, and the skills per started task
      */
-    private function assignSkills(OpenedRun $run, array $skills, array $start): array
+    private function assignSkills(OpenedRun $run, array $named, array $start): array
     {
-        if ($skills === []) {
-            return [];
+        $plan = $run->plan;
+        $inventory = SkillInventory::scan($plan->project->basePath);
+        $path = $run->run->dir().'/'.SkillSelection::FILE;
+        $selection = SkillSelection::read($path);
+        $warnings = [];
+
+        if (array_diff($start, array_keys($named)) !== [] && ($selection === null || $selection->source === 'none')) {
+            [$selection, $warnings] = (new SkillSelector($this->config))->select(SelectSkills::tasks($plan->selection->audits), $inventory, $plan->driver, $run->run, $plan->project);
         }
 
-        $inventory = SkillInventory::scan($run->plan->project->basePath);
-        $path = $run->run->dir().'/'.SkillSelection::FILE;
-        [$valid, $dropped] = SkillSelection::validate($skills, $start, $inventory, max(1, $this->config->int('skills_per_task')));
-        (SkillSelection::read($path) ?? new SkillSelection([], $inventory->hash(), '', 'agent'))->with($valid)->write($path);
+        $selection ??= new SkillSelection([], $inventory->hash(), '', 'agent');
 
-        return $dropped === [] ? [] : ['Skills left out: '.implode('; ', $dropped).'.'];
+        if ($named !== []) {
+            [$valid, $dropped] = SkillSelection::validate($named, $start, $inventory, max(1, $this->config->int('skills_per_task')));
+            $selection = $selection->with($valid);
+            $warnings = $dropped === [] ? $warnings : [...$warnings, 'Skills left out: '.implode('; ', $dropped).'.'];
+        }
+
+        $selection->write($path);
+
+        return [$warnings, array_intersect_key($selection->tasks, array_flip($start))];
     }
 
     /**
@@ -191,6 +207,12 @@ final class StartWork
             'started' => $items,
             ...$extra,
             'hint' => $sync ? null : 'Running in the background. Run `wait` to block until it is done.',
+            'next' => $this->next($run),
         ], fn (mixed $value): bool => $value !== null && $value !== []);
+    }
+
+    private function next(OpenedRun $run): string
+    {
+        return (new NextStep($this->config))->for($run);
     }
 }

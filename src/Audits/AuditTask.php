@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Enums\Stage;
 
 final readonly class AuditTask
 {
@@ -18,6 +19,7 @@ final readonly class AuditTask
      * @param  list<string>  $sections  audit-specific report sections this task writes
      * @param  list<string>  $dependsOn  names of tasks in the same audit whose output this task needs
      * @param  list<SnapshotType>  $snapshots  preflight data shown in the prompt (the status of all steps is always shown)
+     * @param  Stage  $stage  when an orchestrating agent runs the task: analyse, standards or security
      */
     public function __construct(
         public AuditType $audit,
@@ -27,6 +29,7 @@ final readonly class AuditTask
         public array $sections = [],
         public array $dependsOn = [],
         public array $snapshots = [],
+        public Stage $stage = Stage::Standards,
     ) {}
 
     public function key(): string

@@ -11,6 +11,8 @@
 | depends_on: tasks whose sections this task gets as context.
 | sections: report sections the task writes.
 | snapshots: preflight data in the prompt (the status of all steps is always there).
+| stage: analyse, standards or security (default standards); the order an
+|   orchestrating agent works in. See docs/MVP3.md.
 */
 
 return [
@@ -20,6 +22,7 @@ return [
     'tasks' => [
         'conventions' => [
             'title' => 'Conventions baseline',
+            'stage' => 'analyse',
             'sections' => ['Conventions baseline', 'Convention scorecard'],
             'snapshots' => ['pint'],
             'checks' => [
@@ -29,6 +32,7 @@ return [
         ],
         'laravel' => [
             'title' => 'Laravel conventions',
+            'stage' => 'standards',
             'depends_on' => ['conventions'],
             'snapshots' => ['code-candidates'],
             'checks' => [
@@ -38,6 +42,7 @@ return [
         ],
         'structure' => [
             'title' => 'Structure and responsibilities',
+            'stage' => 'standards',
             'depends_on' => ['conventions'],
             'snapshots' => ['routes'],
             'checks' => [
@@ -47,6 +52,7 @@ return [
         ],
         'data' => [
             'title' => 'Models and data exposure',
+            'stage' => 'security',
             'depends_on' => ['conventions'],
             'snapshots' => ['code-candidates'],
             'checks' => [
@@ -57,6 +63,7 @@ return [
         ],
         'jobs' => [
             'title' => 'Queues and scheduler',
+            'stage' => 'standards',
             'checks' => [
                 'queue-robustness' => 'Jobs that are not idempotent or lack tries, backoff, timeout, uniqueness or failed() handling.',
                 'scheduler-overlap' => 'Long or critical scheduled tasks without withoutOverlapping() / onOneServer().',
@@ -64,6 +71,7 @@ return [
         ],
         'errors' => [
             'title' => 'Error handling and logging',
+            'stage' => 'standards',
             'snapshots' => ['code-candidates'],
             'checks' => [
                 'swallowed-exception' => 'Exceptions caught without rethrow or log, catching Throwable broadly.',
@@ -73,6 +81,7 @@ return [
         ],
         'injection' => [
             'title' => 'Injection',
+            'stage' => 'security',
             'snapshots' => ['routes', 'code-candidates'],
             'checks' => [
                 'sql-injection' => 'Interpolated input in raw SQL, including sort and filter parameters.',
@@ -84,6 +93,7 @@ return [
         ],
         'auth' => [
             'title' => 'Authorization, auth and secrets',
+            'stage' => 'security',
             'snapshots' => ['routes', 'code-candidates'],
             'checks' => [
                 'authorization-gap' => 'An action or service with several entry points where only some check permissions.',
@@ -95,6 +105,7 @@ return [
         ],
         'logic' => [
             'title' => 'Logic and transactions',
+            'stage' => 'security',
             'snapshots' => ['routes'],
             'checks' => [
                 'logic-bug' => 'A bug found by reading the code (not by a failing test or PHPStan).',
@@ -103,6 +114,7 @@ return [
         ],
         'performance' => [
             'title' => 'Performance',
+            'stage' => 'standards',
             'checks' => [
                 'n-plus-one' => 'N+1 queries or queries in loops in PHP classes.',
                 'inefficient-query' => 'Collection filtering that belongs in SQL, get()->count(), missing chunk()/lazy().',
@@ -111,6 +123,7 @@ return [
         ],
         'dead-code' => [
             'title' => 'Dead code',
+            'stage' => 'standards',
             'sections' => ['Dead code candidates'],
             'snapshots' => ['routes', 'phpstan'],
             'checks' => [
@@ -119,6 +132,7 @@ return [
         ],
         'database' => [
             'title' => 'Database schema and migrations',
+            'stage' => 'standards',
             'snapshots' => ['database-schema'],
             'checks' => [
                 'missing-index' => 'Missing indexes on foreign keys or frequently filtered or sorted columns.',

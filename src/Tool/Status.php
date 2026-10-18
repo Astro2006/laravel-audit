@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Tool;
 
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Enums\Stage;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\TestGate;
 use Astro2006\LaravelAudit\Support\AuditConfig;
@@ -32,10 +33,21 @@ final class Status
             }
         }
 
+        $runTasks = RunTasks::for($run, $this->config);
         $tasks = [];
+        $pending = [];
+        $stages = array_fill_keys(Stage::values(), ['done' => 0, 'total' => 0]);
 
-        foreach (array_keys(RunTasks::for($run, $this->config)->tasks) as $key) {
+        foreach ($runTasks->tasks as $key => $task) {
             $tasks[$key] = self::task($run, $key, $lock);
+            $stage = $task->stage->value;
+            $stages[$stage]['total'] = Read::int($stages, $stage.'.total') + 1;
+
+            if ($run->store->record($key) !== null) {
+                $stages[$stage]['done'] = Read::int($stages, $stage.'.done') + 1;
+            } elseif ($preflight === null || Arr::get($runTasks->audits, $key)->skipReason($task, $preflight) === null) {
+                $pending[] = $key;
+            }
         }
 
         return [
@@ -51,7 +63,11 @@ final class Status
                 'gate_hint' => 'Tests fail. Show the user the failures (preflight/details/tests/) and ask whether to continue. Only on a yes: `continue`.',
             ] : []),
             'preflight' => $steps,
+            'stages' => $stages,
             'tasks' => $tasks,
+            'pending' => $pending,
+            'spend_usd' => $run->store->spendUsd(),
+            'next' => (new NextStep($this->config))->for($run),
         ];
     }
 

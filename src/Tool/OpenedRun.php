@@ -21,6 +21,7 @@ final readonly class OpenedRun
         public RunPlan $plan,
         public TaskStore $store,
         public WorkerLock $lock,
+        public Attempts $attempts,
     ) {}
 
     /** @throws InvalidSelection when the run does not exist or was not opened for audit:tool */
@@ -38,7 +39,7 @@ final readonly class OpenedRun
     {
         $directory = self::directory($run);
 
-        return new self($run, $state, $plan, new TaskStore($directory.'/tasks'), new WorkerLock($directory.'/worker.lock'));
+        return new self($run, $state, $plan, new TaskStore($directory.'/tasks'), new WorkerLock($directory.'/worker.lock'), new Attempts($directory.'/attempts'));
     }
 
     public static function directory(AuditRun $run): string

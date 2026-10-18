@@ -197,11 +197,12 @@ The package ships a Laravel Boost guideline and a skill. The guideline, a few li
 | Command | What it does |
 |---|---|
 | `audit:tool open [--audits=…] [--without=…]` | Checks the requirements and creates a run; prints its ID |
-| `audit:tool catalog --run=ID` | Preflight steps, tasks and the project's installed skills |
+| `audit:tool catalog --run=ID` | Preflight steps, tasks grouped by stage (`analyse`, `standards`, `security`) and the project's installed skills |
 | `audit:tool preflight STEP … --run=ID` | Runs these preflight steps in the background |
-| `audit:tool wait --run=ID` / `status` | Waits for the background work / shows the state; `gate: aborted` when tests fail |
+| `audit:tool wait --run=ID` / `status` | Waits for the background work and reports what finished since the last `wait` / shows the full state with the spend so far; `gate: aborted` when tests fail |
 | `audit:tool continue --run=ID` | Continues past failing tests, after you agreed |
-| `audit:tool start TASK[:SKILL,…] … --run=ID` | Starts tasks, optionally with the project skills each one gets |
+| `audit:tool start TASK[:SKILL,…] … --run=ID` | Starts tasks, optionally with the project skills each one gets; tasks without skills get the harness's own selection |
+| `audit:tool start --stage=STAGE` / `--pending` / `--failed` | Starts every task of a stage that has not run, every task that has not run, or every failed task once more (at most `agent.max_attempts` starts per task) |
 | `audit:tool result TASK --run=ID` | The findings of one task |
 | `audit:tool finish --run=ID` | Writes the reports and `run.md` |
 
@@ -434,6 +435,8 @@ return [
 | `agent.skills` / `skills_per_task` / `skill_max_chars` | `auto` (one agent call picks the skills per task) / `2` / `2000` |
 | `agent.verify_max_turns` | `6`, tool calls a verify call may take |
 | `tool.wait_timeout` | `100`, seconds `audit:tool wait` blocks at most |
+| `tool.max_calls` | `400`, `audit:tool` calls per run; above it only `status`, `wait` and `finish` still work |
+| `agent.max_attempts` | `2`, how often one task may be started in a run |
 | `snapshot_rows` | `10` |
 | `summary` | `generated` (no agent call) or `agent` |
 | `exclude_paths` | `vendor`, `node_modules`, `storage`, `public/build`, `bootstrap/cache` |
