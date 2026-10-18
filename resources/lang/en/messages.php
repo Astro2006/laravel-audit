@@ -140,7 +140,7 @@ return [
 
     'pause' => [
         'limit' => 'Usage limit reached: :message',
-        'budget' => 'Run budget reached: :message',
+        'budget' => ':message',
         'resets' => 'The limit resets at :time.',
         'resume' => ':pending tasks are pending. Resume with `php artisan audit --resume=:run`.',
         'question' => 'Wait for the reset and continue?',

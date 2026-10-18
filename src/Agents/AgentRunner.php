@@ -64,7 +64,7 @@ final class AgentRunner
 
             while ($this->pause === null && count($running) < max(1, $this->concurrency) && ($job = $queue->take($finished)) !== null) {
                 if ($this->overBudget($finished)) {
-                    $this->pause = new RunPause(RunPause::BUDGET, sprintf('Run budget of %.2f USD reached: %.2f USD spent.', $this->budgetUsd, Spend::of($finished)), [$job->key]);
+                    $this->pause = new RunPause(RunPause::BUDGET, sprintf('Run budget of %s USD reached: %s USD spent, the next task would exceed it.', Spend::format((float) $this->budgetUsd), Spend::format(Spend::of($finished))), [$job->key]);
 
                     break;
                 }

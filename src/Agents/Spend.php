@@ -21,6 +21,12 @@ final class Spend
         return $total;
     }
 
+    /** @return string the amount with up to four decimals and no trailing zeros, e.g. 0.025 or 1.5 */
+    public static function format(float $usd): string
+    {
+        return rtrim(rtrim(number_format($usd, 4, '.', ''), '0'), '.');
+    }
+
     /**
      * @param  array<string, TaskOutcome>  $outcomes
      * @return float what the next job will cost, judged by the ones that reported a cost; 0 before the first

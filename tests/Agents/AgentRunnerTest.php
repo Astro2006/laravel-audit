@@ -327,7 +327,7 @@ it('pauses before a task that would exceed the run budget', function () {
 
     expect($outcomes)->toHaveCount(1)
         ->and($runner->pause())->reason->toBe('budget')->pending->toBe(['backend.b'])
-        ->and($runner->pause()->message)->toContain('0.50');
+        ->and($runner->pause()->message)->toContain('0.5 USD reached: 0.42 USD spent');
 });
 
 it('asks the repair pass to fix the linter warnings too', function () {

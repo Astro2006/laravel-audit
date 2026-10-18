@@ -140,7 +140,7 @@ return [
 
     'pause' => [
         'limit' => 'Nutzungslimit erreicht: :message',
-        'budget' => 'Budget des Runs erreicht: :message',
+        'budget' => ':message',
         'resets' => 'Das Limit wird um :time zurückgesetzt.',
         'resume' => ':pending Tasks stehen noch aus. Fortsetzen mit `php artisan audit --resume=:run`.',
         'question' => 'Auf das Zurücksetzen warten und weitermachen?',
