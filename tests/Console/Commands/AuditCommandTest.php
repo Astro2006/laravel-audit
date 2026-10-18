@@ -423,3 +423,44 @@ it('starts the agents without asking with --force', function () {
 
     expect(file_get_contents(latestRun($project).'/run.md'))->toContain('gate: forced');
 });
+
+it('resumes a run and runs only the tasks without a completed result', function () {
+    $project = auditProject();
+    $answers = dependencyAnswers();
+    fakeTools(['*pint*-p*' => fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.security'
+        ? Process::result(claudeJson(['result' => $answers['dependencies.security']]))
+        : Process::result(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'API Error: 500']), exitCode: 1)]);
+
+    $this->artisan('audit', ['--dependencies' => true])->assertExitCode(3);
+    $run = latestRun($project);
+
+    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('failed')
+        ->and($run.'/tool/tasks/dependencies.security.json')->toBeFile()
+        ->and($run.'/tool/tasks/dependencies.hygiene.json')->toBeFile();
+
+    fakeAgent($answers);
+
+    $this->artisan('audit', ['--resume' => null])
+        ->expectsOutputToContain('Resuming run '.basename($run).': 1 tasks keep their result, the others run again.')
+        ->assertExitCode(0);
+
+    expect(latestRun($project))->toBe($run)
+        ->and(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')
+        ->and(file_get_contents($run.'/dependencies.md'))->toContain('### DEP-001 — guzzlehttp/psr7')
+        ->toContain("## Upgrade plan\n\n1. Update guzzlehttp/psr7 (✅ safe patch).")
+        ->and(file_get_contents($run.'/run.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001)");
+
+    Process::assertRanTimes(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.security', 1);
+    Process::assertRanTimes(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.necessity', 2);
+});
+
+it('says so when there is no run to resume', function () {
+    $project = auditProject();
+    fakeTools();
+
+    $this->artisan('audit', ['--resume' => null])
+        ->expectsOutputToContain('No run to resume in')
+        ->assertExitCode(3);
+
+    expect(glob($project.'/storage/audit/*', GLOB_ONLYDIR))->toBe([]);
+});

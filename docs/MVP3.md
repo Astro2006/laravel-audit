@@ -144,7 +144,7 @@ Every `audit:tool` answer carries a `next` field with the command the harness wo
 
 ### 4.2 One task store for both flows
 
-`Run/Phases/RunAgents` passes `TaskStore::save(...)` as `onFinished` and loads earlier outcomes with `TaskStore::load()`, exactly as `Tool/Work` and `Tool/Finish` do today. The store directory is the same (`<run>/tool/tasks`). `php artisan audit --resume[=<run>]` reopens the latest run (or the given one), reuses its preflight (`Run/PreflightReuse`, exists), loads the stored outcomes, plans only the jobs without an outcome, runs them and finalizes. Verify jobs are stored too (exists), so a verified task is not verified again.
+`Run/Phases/RunAgents` passes `TaskStore::save(...)` as `onFinished` and loads earlier outcomes with `TaskStore::load()`, exactly as `Tool/Work` and `Tool/Finish` do today. The store directory is the same (`<run>/tool/tasks`). `php artisan audit --resume[=<run>]` reopens the latest run (or the given one), reuses its preflight in place, keeps every outcome with status `completed` and runs every other job again: pending ones, and failed ones, because the usual reason for a resume is an outage or a limit that also produced the failures. Then it finalizes. Verify jobs are stored too (exists), so a verified task is not verified again.
 
 This closes F12 and is the basis for §4.3: a crash at task 30 costs the one running task, not the run.
 
@@ -328,7 +328,8 @@ Phases 2 and 3 come before 6 on purpose: the first unattended Haiku runs on the 
 
 - **Phase 0 done.** `tests/Core/FileSizeTest` caps source files at 250 lines with an empty allowlist. `AgentRunner` (263 lines) is split into `AgentRunner` (127, the loop), `Agents/JobQueue` (114, critical-first order and readiness) and `Agents/FollowUp` (90, the repair, answer-now and open-files decisions). The public signature of `run()` is unchanged; the 45 agent tests are the characterization. The "Nothing to do" outcome still bypasses `onFinished`, as before; worth a look in phase 2 when both flows share the store.
 - **Phase 1 done.** `Enums/Stage`, `stage` per task in the four `audit.php` files (10 analyse, 14 standards, 10 security, asserted by a test), `Tool/TaskSelection` (`--stage`, `--pending`, `--failed`), `Tool/Attempts` (`agent.max_attempts`, 2), `Tool/NextStep` (`next` in catalog, status, wait, preflight and start; busy worker → `wait`, no preflight → `preflight <steps>`, gate aborted → ask the user, pending stage → `start --stage=…`, failed with attempts left → `start --failed`, else `finish`), `Tool/CallBudget` (`tool.max_calls`, 400), `wait` deltas with a cursor at the latest `finished_at`, `status` with `stages`, `pending` and `spend_usd`, automatic skill selection in `start` for tasks the session did not assign (one call per run, cached in `skills.json`). 360 tests, PHPStan level 6 and Pint pass.
-- **Not yet started:** phases 2–8. The skill text (§3.5) still describes the MVP2 step list; it is rewritten in phase 6 together with the headless host.
+- **Phase 2 done.** `RunAgents` saves every outcome to `TaskStore::directoryFor($run)` (`<run>/tool/tasks`) as it finishes and loads the stored ones first; `Tool/Finish` uses the same path without its own closure. `php artisan audit --resume[=<run>]` (`Run/Phases/ResumeRun`) finds the run through `PreflightReuse`, takes the audits from `run.json`, keeps completed outcomes and reruns the rest; a test fails two tasks with an API error, resumes and checks that the completed task did not run again.
+- **Not yet started:** phases 3–8. The skill text (§3.5) still describes the MVP2 step list; it is rewritten in phase 6 together with the headless host.
 
 ## 14. Decisions, assumptions, open questions
 

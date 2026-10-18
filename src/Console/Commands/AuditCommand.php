@@ -29,6 +29,7 @@ class AuditCommand extends Command
         {--force : Start the agents even if tests or browser tests fail, without asking}
         {--preflight-only : Run the tools only, without agents}
         {--reuse-preflight= : Reuse the preflight of the latest run, or of the given run ID}
+        {--resume= : Continue the latest run, or the given run ID: tasks with a completed result keep it, the others run}
         {--agent= : Agent CLI for this run: claude_code, opencode or auto}
         {--model= : Model for this run, in the format the agent CLI expects}
         {--concurrency= : Tasks at once for this run; 1 = one after the other; default agent.max_concurrency}
@@ -50,6 +51,8 @@ class AuditCommand extends Command
                 model: $this->stringOption('model'),
                 concurrency: $this->stringOption('concurrency'),
                 reselectSkills: (bool) $this->option('reselect-skills'),
+                resume: $this->input->hasParameterOption('--resume'),
+                resumeRunId: $this->stringOption('resume'),
             ),
             new AuditConsole($this->output, Messages::fromConfig(), $this->input->isInteractive()),
         )->value;

@@ -11,6 +11,8 @@ final readonly class AuditOptions
      * @param  list<string>  $without  audits and steps left out with --without
      * @param  bool  $force  continue past the test gate without asking
      * @param  string|null  $reuseRunId  run whose preflight to reuse; null = the latest
+     * @param  bool  $resume  continue an earlier run: tasks with a completed result keep it, the others run
+     * @param  string|null  $resumeRunId  the run to continue; null = the latest
      */
     public function __construct(
         public array $audits = [],
@@ -23,5 +25,7 @@ final readonly class AuditOptions
         public ?string $model = null,
         public ?string $concurrency = null,
         public bool $reselectSkills = false,
+        public bool $resume = false,
+        public ?string $resumeRunId = null,
     ) {}
 }

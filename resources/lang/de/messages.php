@@ -133,6 +133,11 @@ return [
         'preflight_only' => 'Preflight fertig, keine Agents gestartet. → :path',
     ],
 
+    'resume' => [
+        'using' => 'Setze Run :run fort: :done Tasks behalten ihr Ergebnis, die anderen laufen erneut.',
+        'not_found' => 'Kein Run zum Fortsetzen in :path.',
+    ],
+
     'reuse' => [
         'using' => 'Nutze den Preflight von Run :run.',
         'commit_changed' => 'Der Code hat sich seit diesem Preflight geändert (:then → :now). Die Ergebnisse können veraltet sein.',

@@ -185,6 +185,7 @@ Other options:
 | `--force` | Start the agents even if tests or browser tests fail, without asking |
 | `--preflight-only` | Run the tools only, no agents, no cost. Useful to check the setup |
 | `--reuse-preflight[=RUN_ID]` | Skip the tools and reuse the preflight of the latest (or the given) run, e.g. after changing a prompt. You are warned if the code changed since |
+| `--resume[=RUN_ID]` | Continue the latest (or the given) run after a crash, an outage or a usage limit: tasks with a completed result keep it, every other task runs again, then the reports are written |
 | `--agent=NAME` | Agent CLI for this run: `claude_code`, `opencode` or `auto` |
 | `--model=MODEL` | Model for this run, in the format the agent CLI expects (e.g. `opus`, `ollama/qwen3-coder:30b`) |
 | `--concurrency=N` | Tasks at once for this run; `1` runs them one after the other (the default, `agent.max_concurrency`) |

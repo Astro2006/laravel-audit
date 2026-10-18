@@ -39,7 +39,7 @@ final readonly class OpenedRun
     {
         $directory = self::directory($run);
 
-        return new self($run, $state, $plan, new TaskStore($directory.'/tasks'), new WorkerLock($directory.'/worker.lock'), new Attempts($directory.'/attempts'));
+        return new self($run, $state, $plan, new TaskStore(TaskStore::directoryFor($run)), new WorkerLock($directory.'/worker.lock'), new Attempts($directory.'/attempts'));
     }
 
     public static function directory(AuditRun $run): string

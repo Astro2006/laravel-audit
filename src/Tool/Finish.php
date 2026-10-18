@@ -10,8 +10,6 @@ use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\RunStatus;
 use Astro2006\LaravelAudit\Reports\Finding;
-use Astro2006\LaravelAudit\Reports\ReportValidator;
-use Astro2006\LaravelAudit\Run\JobPlan;
 use Astro2006\LaravelAudit\Run\Phases\FinalizeRun;
 use Astro2006\LaravelAudit\Run\Phases\Preflight;
 use Astro2006\LaravelAudit\Run\Phases\RunAgents;
@@ -52,8 +50,7 @@ final class Finish
         }
 
         $context = new RunContext($plan, $run->run, $manifest, $run->state->options(), $console);
-        $validator = ReportValidator::forProject($plan->project->basePath);
-        $outcomes = $this->runAgents->handle($context, $summary, $run->store->taskKeys(), fn (JobPlan $jobs): array => $run->store->load($jobs, $validator));
+        $outcomes = $this->runAgents->handle($context, $summary, $run->store->taskKeys());
         $exit = $this->finalizeRun->handle($context, $summary, $outcomes);
 
         return [

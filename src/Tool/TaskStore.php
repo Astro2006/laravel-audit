@@ -12,6 +12,7 @@ use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\Rejection;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
+use Astro2006\LaravelAudit\Run\AuditRun;
 use Astro2006\LaravelAudit\Run\JobPlan;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
@@ -19,6 +20,12 @@ use Astro2006\LaravelAudit\Support\Read;
 final class TaskStore
 {
     public function __construct(private readonly string $directory) {}
+
+    /** @return string where both `php artisan audit` and `audit:tool` keep the run's task outcomes */
+    public static function directoryFor(AuditRun $run): string
+    {
+        return OpenedRun::directory($run).'/tasks';
+    }
 
     public function save(TaskOutcome $outcome): void
     {
@@ -89,18 +96,21 @@ final class TaskStore
      * against each job's report spec.
      *
      * @param  list<string>  $except  job keys to leave out (they run again)
+     * @param  bool  $completedOnly  leave out failed jobs too, so a resumed run retries them
      * @return array<string, TaskOutcome>
      */
-    public function load(JobPlan $plan, ReportValidator $validator, array $except = []): array
+    public function load(JobPlan $plan, ReportValidator $validator, array $except = [], bool $completedOnly = false): array
     {
         $outcomes = [];
 
         foreach ($plan->jobs as $job) {
             $data = in_array($job->key, $except, true) ? null : $this->record($job->key);
 
-            if ($data !== null) {
-                $outcomes[$job->key] = $this->outcome($job, $data, $validator);
+            if ($data === null || ($completedOnly && Read::string($data, 'status') !== AuditStatus::Completed->value)) {
+                continue;
             }
+
+            $outcomes[$job->key] = $this->outcome($job, $data, $validator);
         }
 
         return $outcomes;
