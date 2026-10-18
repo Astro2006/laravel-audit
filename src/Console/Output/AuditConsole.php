@@ -153,6 +153,11 @@ final class AuditConsole
         return $this->output->confirm($this->messages->get('gate.question'), false);
     }
 
+    public function confirmWait(): bool
+    {
+        return $this->output->confirm($this->messages->get('pause.question'), false);
+    }
+
     public function outcome(AuditOutcome $outcome): void
     {
         $name = $outcome->audit->value;

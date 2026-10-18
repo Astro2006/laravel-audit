@@ -315,3 +315,23 @@ it('picks skills for the tasks the session did not assign', function () {
 
     Process::assertRanTimes(fn ($process) => in_array('laravel-audit-answer', (array) $process->command, true), 1);
 });
+
+it('pauses a batch at a usage limit and refuses to start again before the reset', function () {
+    $project = orchestratedProject();
+    $answers = dependencyAnswers();
+    $limit = ['type' => 'error', 'timestamp' => 1, 'sessionID' => 'ses_1', 'error' => ['name' => 'APIError', 'data' => ['message' => 'Rate limit exceeded. Your limit resets '.gmdate('Y-m-d H:i', time() + 3600).' UTC.']]];
+    fakeTools(['*pint*run*' => fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.hygiene'
+        ? Process::result(json_encode($limit), exitCode: 1)
+        : Process::result(openCodeAnswer($answers[$process->environment['AUDIT_TASK']] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n"))]);
+    $run = orchestratedRun($project);
+    tool($run, 'preflight', ['composer'], ['--sync' => true]);
+    tool($run, 'start', ['dependencies.hygiene', 'dependencies.necessity'], ['--sync' => true]);
+
+    $status = tool($run, 'status');
+
+    expect($status['paused'])->toMatchArray(['reason' => 'limit', 'pending' => ['dependencies.hygiene']])
+        ->and($status['tasks']['dependencies.necessity']['status'])->toBe('completed')
+        ->and($status['tasks']['dependencies.hygiene'])->toBe(['status' => 'not_started'])
+        ->and($status['next'])->toContain('paused')
+        ->and(tool($run, 'start', [], ['--pending' => true]))->toMatchArray(['error' => 'paused', 'reason' => 'limit']);
+});

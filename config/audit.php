@@ -41,6 +41,11 @@ return [
 
         'timeout' => 900,   // seconds per task
 
+        // Pause the run before a task that would push its total cost above
+        // this amount, and continue later with --resume. null = no limit.
+        // Only CLIs that report costs (Claude Code with an API key) enforce it.
+        'run_budget_usd' => env('AUDIT_RUN_BUDGET_USD'),
+
         // Tool calls (turns) one agent session may take before it has to
         // answer. Every turn sends the whole conversation again, so long
         // sessions get slow and expensive, above all with local models.

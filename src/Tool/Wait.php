@@ -73,6 +73,7 @@ final class Wait
             'gate_hint' => Arr::get($status, 'gate_hint'),
             'finished_since' => $finished,
             'failed_since' => $failed,
+            'paused' => Arr::get($status, 'paused'),
             'pending' => Arr::get($status, 'pending'),
             'spend_usd' => Arr::get($status, 'spend_usd'),
             'next' => Arr::get($status, 'next'),

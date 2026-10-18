@@ -101,3 +101,9 @@ it('fails a run in which the model only sent empty replies', function () {
         ->and($result->error)->toContain('30 empty replies')
         ->and($result->telemetry->turns)->toBe(30);
 });
+
+it('maps a rate limit of the provider to a limit exit', function () {
+    $error = '{"type":"error","timestamp":1,"sessionID":"ses_1","error":{"name":"APIError","data":{"message":"Rate limit exceeded, retry in 20s"}}}';
+
+    expect((new OpenCodeDriver('/app'))->parse($error, 1))->exit->toBe(AgentExit::Limit)->error->toBe('Rate limit exceeded, retry in 20s');
+});

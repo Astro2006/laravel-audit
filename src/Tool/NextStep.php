@@ -40,6 +40,12 @@ final class NextStep
             return 'Tests fail: show the user the failures and ask whether to continue. Only on a yes: '.$this->command($run, 'continue');
         }
 
+        $pause = Pause::read($run->run);
+
+        if ($pause !== null && $pause->resetIsPending()) {
+            return sprintf('The run is paused (%s). Tell the user; after %s: %s', $pause->message, date('H:i', (int) $pause->resetsAt), $this->command($run, 'start --pending'));
+        }
+
         $tasks = RunTasks::for($run, $this->config);
         $failed = false;
 

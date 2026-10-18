@@ -16,6 +16,7 @@ use Astro2006\LaravelAudit\Run\RunContext;
 use Astro2006\LaravelAudit\Run\RunJobs;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
+use Astro2006\LaravelAudit\Tool\Pause;
 use Astro2006\LaravelAudit\Tool\TaskStore;
 use Illuminate\Support\Arr;
 
@@ -39,6 +40,8 @@ final class RunAgents
         $plan = (new RunJobs($this->config))->plan($context->plan, $context->run, $summary, $console->messages->locale, $only);
         $store = new TaskStore(TaskStore::directoryFor($context->run));
         $done = $store->load($plan, $validator, completedOnly: $context->options->resume);
+        $budget = $this->config->nullableFloat('agent.run_budget_usd');
+        Pause::clear($context->run);
         $jobs = array_values(array_filter($plan->jobs, fn (AgentJob $job): bool => ! Arr::has($done, $job->key)));
 
         $console->section('agents');
@@ -54,6 +57,7 @@ final class RunAgents
             $context->plan->concurrency,
             $this->config->int('agent.timeout'),
             environment: ChildEnvironment::forApp($project),
+            budgetUsd: $budget === null ? null : $budget - $store->spendUsd(),
         );
 
         $progress = new AgentProgress($jobs, $console->live, $console->messages);
@@ -73,6 +77,11 @@ final class RunAgents
 
         foreach ($new as $outcome) {
             $store->save($outcome);
+        }
+
+        if ($runner->pause() !== null) {
+            Pause::write($context->run, $runner->pause());
+            $context->manifest->pause = $runner->pause();
         }
 
         $raw = [...array_values($done), ...$new];

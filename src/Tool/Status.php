@@ -22,6 +22,7 @@ final class Status
     {
         $lock = $run->lock->current();
         $preflight = $run->preflight();
+        $pause = Pause::read($run->run);
         $steps = [];
 
         foreach (PreflightStep::cases() as $step) {
@@ -63,6 +64,7 @@ final class Status
                 'gate_hint' => 'Tests fail. Show the user the failures (preflight/details/tests/) and ask whether to continue. Only on a yes: `continue`.',
             ] : []),
             'preflight' => $steps,
+            ...($pause === null ? [] : ['paused' => $pause->toArray()]),
             'stages' => $stages,
             'tasks' => $tasks,
             'pending' => $pending,

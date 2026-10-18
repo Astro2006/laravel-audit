@@ -139,3 +139,13 @@ it('falls back to the default boost command without an .mcp.json entry', functio
     expect(McpServer::forProject(new ProjectInspector($dir)))->toEqual(McpServer::default())
         ->and(McpServer::forProject(new ProjectInspector(tempDir('noboost'))))->toBeNull();
 });
+
+it('maps usage and rate limits to a limit exit', function () {
+    $driver = new ClaudeCodeDriver;
+    $limit = $driver->parse(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => "You've reached your usage limit. Your limit resets 2026-08-08 00:00 UTC."]), 1);
+
+    expect($limit->exit)->toBe(AgentExit::Limit)
+        ->and($limit->error)->toContain('usage limit')
+        ->and($driver->parse(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'API Error: 429 {"type":"error","error":{"type":"rate_limit_error"}}']), 1)->exit)->toBe(AgentExit::Limit)
+        ->and($driver->parse(claudeJson(['result' => 'Findings about the missing rate limit on POST /login']), 0)->exit)->toBe(AgentExit::Success);
+});

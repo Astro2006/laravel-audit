@@ -77,6 +77,12 @@ final class StartWork
             return ['error' => 'Name the tasks to start, or pass --stage, --pending or --failed.', 'hint' => 'See `catalog` for the task keys.'];
         }
 
+        $pause = Pause::read($run->run);
+
+        if ($pause !== null && $pause->resetIsPending()) {
+            return ['error' => 'paused', ...$pause->toArray(), 'hint' => 'Wait until the limit resets, then `start --pending`.'];
+        }
+
         $tasks = RunTasks::for($run, $this->config);
         $skipReason = fn (AuditTask $task): ?string => Arr::get($tasks->audits, $task->key())->skipReason($task, $preflight);
 
@@ -139,6 +145,7 @@ final class StartWork
 
         [$skillWarnings, $skills] = $this->assignSkills($run, $selection->skills(), $start);
         $run->attempts->count($start);
+        Pause::clear($run->run);
 
         return $this->launch($run, WorkerLock::TASKS, $start, $sync, ['skipped' => $skipped, 'exhausted' => $exhausted, 'warnings' => [...$warnings, ...$skillWarnings], 'skills' => $skills]);
     }

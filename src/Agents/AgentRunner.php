@@ -19,6 +19,9 @@ final class AgentRunner
 
     private readonly FollowUp $followUp;
 
+    private ?RunPause $pause = null;
+
+    /** @param  float|null  $budgetUsd  what this call may spend; null = no limit */
     public function __construct(
         private readonly AgentDriver $driver,
         ReportValidator $validator,
@@ -27,6 +30,7 @@ final class AgentRunner
         int $timeout = 1800,
         private readonly int $pollMicroseconds = 250_000,
         ChildEnvironment $environment = new ChildEnvironment,
+        private readonly ?float $budgetUsd = null,
     ) {
         $this->processes = new AgentProcesses($driver, $logsDir, $timeout, $environment);
         $this->followUp = new FollowUp($validator);
@@ -39,7 +43,7 @@ final class AgentRunner
      * @param  (Closure(): void)|null  $onTick  called after every poll round
      * @param  (Closure(AgentJob): void)|null  $onRepair  called when a job starts its repair pass
      * @param  array<string, TaskOutcome>  $earlier  outcomes of jobs that finished in an earlier call; not part of the result
-     * @return list<TaskOutcome> in the order the jobs finished
+     * @return list<TaskOutcome> in the order the jobs finished; see pause() for the jobs that did not run
      */
     public function run(array $jobs, ?Closure $onStarted = null, ?Closure $onFinished = null, ?Closure $onTick = null, ?Closure $onRepair = null, array $earlier = []): array
     {
@@ -47,7 +51,9 @@ final class AgentRunner
         $running = [];
         $finished = $earlier;
         $outcomes = [];
+        $hitByLimit = [];
         $errorsInARow = 0;
+        $this->pause = null;
 
         while (! $queue->isEmpty() || $running !== []) {
             if ($errorsInARow >= self::MAX_ERRORS_IN_A_ROW) {
@@ -56,7 +62,13 @@ final class AgentRunner
                 }
             }
 
-            while (count($running) < max(1, $this->concurrency) && ($job = $queue->take($finished)) !== null) {
+            while ($this->pause === null && count($running) < max(1, $this->concurrency) && ($job = $queue->take($finished)) !== null) {
+                if ($this->overBudget($finished)) {
+                    $this->pause = new RunPause(RunPause::BUDGET, sprintf('Run budget of %.2f USD reached: %.2f USD spent.', $this->budgetUsd, Spend::of($finished)), [$job->key]);
+
+                    break;
+                }
+
                 $request = $job->request($finished);
 
                 if ($request === null) {
@@ -67,6 +79,10 @@ final class AgentRunner
 
                 $onStarted?->__invoke($job);
                 $running[] = $this->processes->start($job, $request, $request->prompt, $this->driver->command($request), false, microtime(true));
+            }
+
+            if ($this->pause !== null && $running === []) {
+                break;
             }
 
             if ($running === [] && ! $queue->isEmpty()) {
@@ -84,6 +100,13 @@ final class AgentRunner
 
                 if ($result === null) {
                     $stillRunning[] = $attempt;
+
+                    continue;
+                }
+
+                if ($result->exit === AgentExit::Limit) {
+                    $this->pause ??= new RunPause(RunPause::LIMIT, $result->error ?? 'Usage limit reached.', resetsAt: LimitSignals::resetsAt($result->error));
+                    $hitByLimit[] = $attempt->job->key;
 
                     continue;
                 }
@@ -110,7 +133,23 @@ final class AgentRunner
             }
         }
 
+        if ($this->pause !== null) {
+            $this->pause = $this->pause->withPending([...$hitByLimit, ...$this->pause->pending, ...array_map(fn (AgentJob $job): string => $job->key, $queue->drain())]);
+        }
+
         return $outcomes;
+    }
+
+    /** @return RunPause|null why the last run() stopped early, with the jobs that did not run */
+    public function pause(): ?RunPause
+    {
+        return $this->pause;
+    }
+
+    /** @param  array<string, TaskOutcome>  $finished */
+    private function overBudget(array $finished): bool
+    {
+        return $this->budgetUsd !== null && Spend::of($finished) + Spend::estimate($finished) > $this->budgetUsd;
     }
 
     /**

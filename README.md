@@ -220,6 +220,7 @@ The agents audit code, not a broken environment. The gate comes once the whole p
 | `0` | Run completed. Findings do not change the exit code |
 | `2` | Aborted at the test gate |
 | `3` | Harness error: a requirement is missing, or an audit is failed or partial because a task failed or its report stayed invalid after the repair pass |
+| `4` | Paused at a usage limit or the run budget; `php artisan audit --resume` continues the run |
 
 ## Agents
 
@@ -482,7 +483,9 @@ To change the console texts, publish the translations with `php artisan vendor:p
 
 ## Costs
 
-A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code), and keep `agent.max_concurrency` at `1` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
+A full run is about 30 short agent sessions (tasks). With a subscription CLI they count against your plan's usage limits; with an API key they are billed; with a self-hosted model they cost only compute. Every audit line and `run.md` show tokens, turns, duration and, where the CLI reports it, cost. Limit the spend per task with `AUDIT_MAX_BUDGET_USD` (Claude Code) and per run with `AUDIT_RUN_BUDGET_USD`, and keep `agent.max_concurrency` at `1` if you hit rate limits. Use `--preflight-only` to check the setup for free, and `--reuse-preflight` to rerun agents without rerunning the tools.
+
+**Usage limits.** When the CLI reports a usage or rate limit, the run pauses instead of failing: finished tasks keep their results in `storage/audit/<run>/tool/tasks/`, the pending ones are listed in `tool/pause.json`, and the command ends with exit code `4` and the resume command. In a terminal it first offers to wait for the reset and continue by itself. Later, `php artisan audit --resume` continues the same run. The same happens when the run budget is reached.
 
 ## Evaluating prompt changes
 

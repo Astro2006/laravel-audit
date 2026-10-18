@@ -11,4 +11,6 @@ enum AuditExit: int
     case GateAborted = 2;
 
     case HarnessError = 3;
+
+    case Paused = 4;
 }

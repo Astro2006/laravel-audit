@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
 use Astro2006\LaravelAudit\Run\Phases\CheckRequirements;
 use Astro2006\LaravelAudit\Run\Phases\FinalizeRun;
+use Astro2006\LaravelAudit\Run\Phases\PauseRun;
 use Astro2006\LaravelAudit\Run\Phases\PlanRun;
 use Astro2006\LaravelAudit\Run\Phases\Preflight;
 use Astro2006\LaravelAudit\Run\Phases\ResumeRun;
@@ -30,6 +31,7 @@ final class AuditOrchestrator
         private readonly RunAgents $runAgents,
         private readonly FinalizeRun $finalizeRun,
         private readonly ResumeRun $resumeRun,
+        private readonly PauseRun $pauseRun,
     ) {}
 
     public function run(AuditOptions $options, AuditConsole $console): AuditExit
@@ -79,6 +81,12 @@ final class AuditOrchestrator
 
         $this->selectSkills->handle($context);
         $outcomes = $this->runAgents->handle($context, $summary);
+
+        if ($context->manifest->pause !== null) {
+            return $this->pauseRun->handle($context)
+                ? $this->resumeRun->handle(new AuditOptions(force: $options->force, resume: true, resumeRunId: $context->run->id), $console)
+                : AuditExit::Paused;
+        }
 
         return $this->finalizeRun->handle($context, $summary, $outcomes);
     }

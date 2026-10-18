@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
+use Astro2006\LaravelAudit\Agents\LimitSignals;
 use Astro2006\LaravelAudit\Agents\Telemetry;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
@@ -140,7 +141,7 @@ final class OpenCodeDriver implements AgentDriver
         );
 
         if ($error !== null || ($answer === '' && $exitCode !== 0)) {
-            return new AgentResult('', $sessionId, $this->model, $telemetry, AgentExit::Error, error: $error ?? sprintf('OpenCode exited with code %d.', $exitCode));
+            return new AgentResult('', $sessionId, $this->model, $telemetry, LimitSignals::matches($error) ? AgentExit::Limit : AgentExit::Error, error: $error ?? sprintf('OpenCode exited with code %d.', $exitCode));
         }
 
         if ($turns === 0 && $answer === '') {

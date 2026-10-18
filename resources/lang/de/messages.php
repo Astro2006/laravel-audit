@@ -138,6 +138,15 @@ return [
         'not_found' => 'Kein Run zum Fortsetzen in :path.',
     ],
 
+    'pause' => [
+        'limit' => 'Nutzungslimit erreicht: :message',
+        'budget' => 'Budget des Runs erreicht: :message',
+        'resets' => 'Das Limit wird um :time zurückgesetzt.',
+        'resume' => ':pending Tasks stehen noch aus. Fortsetzen mit `php artisan audit --resume=:run`.',
+        'question' => 'Auf das Zurücksetzen warten und weitermachen?',
+        'waiting' => 'Warte :minutes Minuten …',
+    ],
+
     'reuse' => [
         'using' => 'Nutze den Preflight von Run :run.',
         'commit_changed' => 'Der Code hat sich seit diesem Preflight geändert (:then → :now). Die Ergebnisse können veraltet sein.',

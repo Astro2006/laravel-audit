@@ -138,6 +138,15 @@ return [
         'not_found' => 'No run to resume in :path.',
     ],
 
+    'pause' => [
+        'limit' => 'Usage limit reached: :message',
+        'budget' => 'Run budget reached: :message',
+        'resets' => 'The limit resets at :time.',
+        'resume' => ':pending tasks are pending. Resume with `php artisan audit --resume=:run`.',
+        'question' => 'Wait for the reset and continue?',
+        'waiting' => 'Waiting :minutes minutes …',
+    ],
+
     'reuse' => [
         'using' => 'Reusing the preflight of run :run.',
         'commit_changed' => 'The code changed since that preflight (:then → :now). Results may be outdated.',

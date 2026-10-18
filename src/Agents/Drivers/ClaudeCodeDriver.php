@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Agents\Drivers;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
+use Astro2006\LaravelAudit\Agents\LimitSignals;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
 use Astro2006\LaravelAudit\Support\Json;
@@ -146,6 +147,7 @@ final class ClaudeCodeDriver implements AgentDriver
             $subtype === 'success' && ! Read::bool($data, 'is_error') => AgentExit::Success,
             str_contains($subtype, 'max_turns') => AgentExit::MaxTurns,
             str_contains($subtype, 'budget') => AgentExit::Budget,
+            LimitSignals::matches($subtype.' '.Read::string($data, 'result')) => AgentExit::Limit,
             default => AgentExit::Error,
         };
 

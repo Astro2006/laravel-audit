@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
+use Astro2006\LaravelAudit\Agents\RunPause;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\RunStatus;
@@ -33,6 +34,8 @@ final class RunManifest
     public ?string $model = null;
 
     public ?string $overview = null;
+
+    public ?RunPause $pause = null;
 
     public StepResults $steps;
 
@@ -90,6 +93,7 @@ final class RunManifest
             'agent' => $this->agent,
             'model' => $this->model,
             'overview' => $this->overview,
+            'paused' => $this->pause?->toArray(),
             'git' => ['branch' => $this->git->branch, 'commit' => $this->git->commit, 'dirty' => $this->git->dirty],
             'outcomes' => array_map(fn (AuditOutcome $outcome): array => [
                 'audit' => $outcome->audit->value,

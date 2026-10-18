@@ -11,4 +11,5 @@ enum AgentExit: string
     case Budget = 'budget';
     case Timeout = 'timeout';
     case Error = 'error';
+    case Limit = 'limit';
 }

@@ -306,3 +306,26 @@ it('starts no more tasks after two agent calls in a row failed', function () {
 
     Process::assertRanTimes(fn () => true, 2);
 });
+
+it('pauses the batch when the model hits a usage limit and keeps the tasks pending', function () {
+    Process::fake(['*' => Process::result(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'Usage limit reached. Your limit resets 2026-08-08 00:00 UTC.']), exitCode: 1)]);
+    $runner = runner(tempDir('logs'), concurrency: 1);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b'), taskJob('backend.c')]);
+
+    expect($outcomes)->toBe([])
+        ->and($runner->pause())->reason->toBe('limit')->pending->toBe(['backend.a', 'backend.b', 'backend.c'])->resetsAt->toBe(strtotime('2026-08-08 00:00 UTC'));
+
+    Process::assertRanTimes(fn () => true, 1);
+});
+
+it('pauses before a task that would exceed the run budget', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), concurrency: 1, pollMicroseconds: 1000, budgetUsd: 0.5);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b')]);
+
+    expect($outcomes)->toHaveCount(1)
+        ->and($runner->pause())->reason->toBe('budget')->pending->toBe(['backend.b'])
+        ->and($runner->pause()->message)->toContain('0.50');
+});

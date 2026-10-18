@@ -87,6 +87,7 @@ final class Work
         $jobs = (new RunJobs($this->config))->plan($plan, $run->run, $preflight, Messages::fromConfig()->locale, $keys, withHarnessJobs: false);
         $keysInBatch = array_map(fn (AgentJob $job): string => $job->key, $jobs->jobs);
 
+        $budget = $this->config->nullableFloat('agent.run_budget_usd');
         $runner = new AgentRunner(
             $plan->driver,
             $validator,
@@ -94,6 +95,7 @@ final class Work
             $plan->concurrency,
             $this->config->int('agent.timeout'),
             environment: ChildEnvironment::forApp($plan->project),
+            budgetUsd: $budget === null ? null : $budget - $run->store->spendUsd(),
         );
 
         $outcomes = $runner->run(
@@ -104,6 +106,10 @@ final class Work
 
         foreach ($outcomes as $outcome) {
             $run->store->save($outcome);
+        }
+
+        if ($runner->pause() !== null) {
+            Pause::write($run->run, $runner->pause());
         }
     }
 }

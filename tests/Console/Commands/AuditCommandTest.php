@@ -1,6 +1,7 @@
 <?php
 
 use Astro2006\LaravelAudit\Run\Data\RunFrontmatter;
+use Astro2006\LaravelAudit\Run\Phases\PauseRun;
 use Astro2006\LaravelAudit\Run\PreflightReuse;
 use Illuminate\Support\Facades\Process;
 
@@ -463,4 +464,60 @@ it('says so when there is no run to resume', function () {
         ->assertExitCode(3);
 
     expect(glob($project.'/storage/audit/*', GLOB_ONLYDIR))->toBe([]);
+});
+
+it('pauses at a usage limit, keeps the run on disk and resumes it later', function () {
+    $project = auditProject();
+    $answers = dependencyAnswers();
+    fakeTools(['*pint*-p*' => fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.security'
+        ? Process::result(claudeJson(['result' => $answers['dependencies.security']]))
+        : Process::result(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'You have reached your weekly usage limit.']), exitCode: 1)]);
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsOutputToContain('Usage limit reached')
+        ->expectsConfirmation('Wait for the reset and continue?', 'no')
+        ->assertExitCode(4);
+
+    $run = latestRun($project);
+
+    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('paused')
+        ->and($run.'/tool/pause.json')->toBeFile()
+        ->and(json_decode(file_get_contents($run.'/tool/pause.json'), true)['pending'])->toContain('dependencies.necessity');
+
+    fakeAgent($answers);
+
+    $this->artisan('audit', ['--resume' => null])->assertExitCode(0);
+
+    expect(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')
+        ->and($run.'/tool/pause.json')->not->toBeFile();
+
+    Process::assertRanTimes(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.security', 1);
+});
+
+it('waits for the reset when asked and continues the same run', function () {
+    $project = auditProject();
+    $slept = [];
+    $this->app->bind(PauseRun::class, function () use (&$slept): PauseRun {
+        return new PauseRun(function (int $seconds) use (&$slept): void {
+            $slept[] = $seconds;
+        });
+    });
+    $answers = dependencyAnswers();
+    $calls = 0;
+    fakeTools(['*pint*-p*' => function ($process) use ($answers, &$calls) {
+        $task = $process->environment['AUDIT_TASK'] ?? '';
+
+        return $task === 'dependencies.security' || ++$calls > 1
+            ? Process::result(claudeJson(['result' => $answers[$task] ?? "## Findings\nNo findings.\n\n## Limitations\nNone.\n"]))
+            : Process::result(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'Claude AI usage limit reached|'.(time() + 120)]), exitCode: 1);
+    }]);
+
+    $this->artisan('audit', ['--dependencies' => true])
+        ->expectsConfirmation('Wait for the reset and continue?', 'yes')
+        ->expectsOutputToContain('Resuming run')
+        ->assertExitCode(0);
+
+    expect($slept)->toHaveCount(1)
+        ->and($slept[0])->toBeGreaterThan(60)
+        ->and(RunFrontmatter::read(latestRun($project).'/run.md'))->status->toBe('completed');
 });

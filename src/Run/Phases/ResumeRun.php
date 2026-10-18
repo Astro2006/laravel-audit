@@ -30,6 +30,7 @@ final class ResumeRun
         private readonly CheckRequirements $checkRequirements,
         private readonly RunAgents $runAgents,
         private readonly FinalizeRun $finalizeRun,
+        private readonly PauseRun $pauseRun,
     ) {}
 
     /**
@@ -96,6 +97,12 @@ final class ResumeRun
 
         $context = new RunContext($plan, $run, $manifest, new AuditOptions(force: $options->force, resume: true), $console);
         $outcomes = $this->runAgents->handle($context, $summary);
+
+        if ($manifest->pause !== null) {
+            return $this->pauseRun->handle($context)
+                ? $this->handle(new AuditOptions(force: $options->force, resume: true, resumeRunId: $run->id), $console)
+                : AuditExit::Paused;
+        }
 
         return $this->finalizeRun->handle($context, $summary, $outcomes);
     }
