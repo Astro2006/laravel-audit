@@ -193,7 +193,7 @@ Other options:
 
 ### Running the audit from your agent
 
-The package ships a Laravel Boost guideline and a skill. The guideline, a few lines in `CLAUDE.md` / `AGENTS.md`, points your agent to the `laravel-audit` skill. The skill tells your own Claude Code or OpenCode session how to run the audit step by step with `php artisan audit:tool`, so the agent can pick steps and tasks, ask you at the test gate and report progress:
+The package ships a Laravel Boost guideline and a skill. The guideline, a few lines in `CLAUDE.md` / `AGENTS.md`, points your agent to the `laravel-audit` skill. The skill makes your own Claude Code or OpenCode session the orchestrator of the audit: it works through `php artisan audit:tool` stage by stage (analyse, coding standards, security, then the reports), picks tasks, reruns failures, asks you at the test gate and reports progress. `php artisan audit:orchestrate` runs the same skill in a headless session with `audit:tool` as its only tool, for unattended runs; the session's closing message lands in `storage/audit/<run>/orchestrator.md`, and the command writes the reports itself if the session ends without `finish`. The commands the orchestrator uses:
 
 | Command | What it does |
 |---|---|
@@ -437,6 +437,7 @@ return [
 | `agent.skills` / `skills_per_task` / `skill_max_chars` | `auto` (one agent call picks the skills per task) / `2` / `2000` |
 | `agent.standards` / `standards_max_chars` | `boost` (the code rules Boost wrote into `AGENTS.md`, plus `.ai/rules` and `.ai/guidelines`, inlined into the standards-stage tasks), `none`, or a list of files / `6000` |
 | `agent.run_budget_usd` | `null`; pause the run before a task that would push its total cost above this amount (`AUDIT_RUN_BUDGET_USD`) |
+| `agent.orchestrator.model` / `max_turns` / `max_budget_usd` / `timeout` | `null` (the task model; `AUDIT_ORCHESTRATOR_MODEL`) / `300` / `null` / `7200` seconds, for the session `php artisan audit:orchestrate` starts |
 | `agent.verify.threshold` / `agent.verify.always_categories` | `2` (severity rank minus confidence rank that triggers the verify pass) / `security`, `correctness` (always verified from `medium` up unless `confirmed`) |
 | `project.context` | `null`; free text about who uses the app and how it runs, given to every task with the runtime facts from `artisan about` so severities fit the threat model (`AUDIT_PROJECT_CONTEXT`) |
 | `max_turns` per task in `audit.php` | the task's own turn cap, e.g. `backend.dead-code` 30; overrides `agent.max_turns` |
@@ -462,7 +463,7 @@ Lists replace the default, they are not merged: `'exclude_paths' => ['vendor']` 
 | `agent.verify.min_severity` | none: severity and confidence decide together which findings are verified |
 | `agent.mode`, `agent.concurrency` | `agent.max_concurrency`: `1` for single, the old concurrency for parallel |
 | `agent.drivers.codex` | none: the Codex driver is removed for now, because it cannot keep agents away from `.env` |
-| `orchestrator`, `agent.orchestrator.*` | none: run the audit from your agent session with the Boost skill; `tool.wait_timeout` replaces `agent.orchestrator.wait_timeout` |
+| `orchestrator`, `agent.orchestrator.wait_timeout` | `php artisan audit:orchestrate` replaces `orchestrator => agent`; `tool.wait_timeout` replaces `agent.orchestrator.wait_timeout` |
 
 ### Customizing prompts
 

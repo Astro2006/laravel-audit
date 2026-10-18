@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit;
 use Astro2006\LaravelAudit\Console\Commands\AuditCommand;
 use Astro2006\LaravelAudit\Console\Commands\EvalCommand;
 use Astro2006\LaravelAudit\Console\Commands\InstallCommand;
+use Astro2006\LaravelAudit\Console\Commands\OrchestrateCommand;
 use Astro2006\LaravelAudit\Console\Commands\ToolCommand;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Support\AuditConfig;
@@ -26,6 +27,7 @@ class LaravelAuditServiceProvider extends PackageServiceProvider
                 InstallCommand::class,
                 EvalCommand::class,
                 ToolCommand::class,
+                OrchestrateCommand::class,
             ]);
     }
 

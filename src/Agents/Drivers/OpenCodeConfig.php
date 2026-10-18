@@ -27,6 +27,7 @@ final readonly class OpenCodeConfig
         private ?int $steps = null,
         private ?int $verifySteps = null,
         private array $taskSteps = [],
+        private ?int $orchestratorSteps = null,
     ) {}
 
     /**
@@ -58,6 +59,14 @@ final readonly class OpenCodeConfig
         foreach ($this->taskSteps as $steps) {
             $config['agent'][OpenCodeDriver::AGENT.'-'.$steps] = $agent(sprintf('Read-only Laravel audit agent with %d steps', $steps), $steps);
         }
+
+        $config['agent'][OpenCodeDriver::ORCHESTRATOR_AGENT] = [
+            'description' => 'Orchestrates the Laravel audit through php artisan audit:tool',
+            'mode' => 'primary',
+            'tools' => ['*' => false, 'bash' => true],
+            'permission' => [...array_fill_keys(array_diff(self::DENIED_PERMISSIONS, ['bash']), 'deny'), 'read' => 'deny', 'bash' => ['*' => 'deny', 'php artisan audit:tool *' => 'allow']],
+            ...($this->orchestratorSteps === null ? [] : ['steps' => $this->orchestratorSteps]),
+        ];
 
         if ($this->boost !== null) {
             $config['mcp'] = [

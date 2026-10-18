@@ -39,6 +39,15 @@ interface AgentDriver
      */
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array;
 
+    /**
+     * Starts the orchestrating session: it may run `php artisan audit:tool`
+     * and nothing else; $request->maxTurns caps its turns.
+     *
+     * @param  float|null  $maxBudgetUsd  what the session may spend, where the CLI can enforce it
+     * @return list<string> argv
+     */
+    public function orchestratorCommand(AgentRequest $request, ?float $maxBudgetUsd = null): array;
+
     public function parse(string $stdout, int $exitCode): AgentResult;
 
     /**

@@ -102,6 +102,7 @@ final class DriverRegistry
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
                 taskSteps: AuditDefinition::turnCaps(),
+                orchestratorMaxTurns: $this->maxTurns('agent.orchestrator.max_turns'),
             ),
             default => new ClaudeCodeDriver(
                 binary: $this->binary($name),

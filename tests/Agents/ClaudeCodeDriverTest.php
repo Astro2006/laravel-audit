@@ -156,3 +156,19 @@ it('lets a task raise its own turn cap', function () {
     expect(implode(' ', $driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30))))->toContain('--max-turns 30')
         ->and(implode(' ', $driver->command(new AgentRequest('backend.dead-code.verify', 'p', '/app', verify: true, maxTurns: 30))))->toContain('--max-turns 6');
 });
+
+it('gives the orchestrator a session that can only run audit:tool', function () {
+    $driver = new ClaudeCodeDriver(model: 'claude-haiku-5-5', boost: McpServer::default(), boostTools: ['application-info']);
+
+    $command = $driver->orchestratorCommand(new AgentRequest('orchestrator', 'p', '/app', '/logs/mcp.json', maxTurns: 300), 2.5);
+
+    expect($command)->toBe([
+        'claude', '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config',
+        '--tools', 'Bash',
+        '--allowedTools', 'Bash(php artisan audit:tool:*)',
+        '--disallowedTools=Edit,Write,NotebookEdit,WebFetch,WebSearch,Read,Grep,Glob,Agent,Skill',
+        '--model', 'claude-haiku-5-5',
+        '--max-turns', '300',
+        '--max-budget-usd', '2.5',
+    ]);
+});

@@ -63,6 +63,14 @@ return [
         // A second call checks each task's findings (keep, downgrade, drop).
         'verify' => true,
 
+        // The headless orchestrator (php artisan audit:orchestrate): the model of
+        // its own session (null = agent.model). Its turn cap, budget and
+        // timeout are agent.orchestrator.max_turns (300), max_budget_usd (null)
+        // and timeout (7200 s), see AuditConfig::DEFAULTS.
+        'orchestrator' => [
+            'model' => env('AUDIT_ORCHESTRATOR_MODEL'),
+        ],
+
         'drivers' => [
             'claude_code' => [
                 'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),

@@ -18,6 +18,7 @@ final readonly class AuditConfig
             'skills' => 'auto',
             'standards' => 'boost',
             'verify' => ['threshold' => 2, 'always_categories' => ['security', 'correctness']],
+            'orchestrator' => ['model' => null, 'max_turns' => 300, 'max_budget_usd' => null, 'timeout' => 7200],
             'max_attempts' => 2,
             'verify_max_turns' => 6,
             'boost_tools' => [
@@ -87,8 +88,6 @@ final readonly class AuditConfig
 
     public const array LEGACY_KEYS = [
         'orchestrator' => null,
-        'agent.orchestrator.timeout' => null,
-        'agent.orchestrator.max_turns' => null,
         'agent.orchestrator.wait_timeout' => 'tool.wait_timeout',
         'agent.mode' => 'agent.max_concurrency',
         'agent.concurrency' => 'agent.max_concurrency',

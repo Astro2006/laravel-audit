@@ -23,6 +23,8 @@ final class ClaudeCodeDriver implements AgentDriver
 
     private const array ALWAYS_DENIED = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch'];
 
+    private const array ORCHESTRATOR_DENIED = ['Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Read', 'Grep', 'Glob', 'Agent', 'Skill'];
+
     private const array SESSION_VARIABLES = [
         'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SSE_PORT', 'CLAUDE_CODE_SESSION_ID',
         'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN',
@@ -132,6 +134,27 @@ final class ClaudeCodeDriver implements AgentDriver
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array
     {
         return [...$this->command($request), '--resume', (string) $previous->sessionId];
+    }
+
+    public function orchestratorCommand(AgentRequest $request, ?float $maxBudgetUsd = null): array
+    {
+        $command = [
+            $this->binary, '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config',
+            '--tools', 'Bash',
+            '--allowedTools', 'Bash(php artisan audit:tool:*)',
+            '--disallowedTools='.implode(',', self::ORCHESTRATOR_DENIED),
+            ...$this->modelArguments(),
+        ];
+
+        if ($request->maxTurns !== null) {
+            array_push($command, '--max-turns', (string) $request->maxTurns);
+        }
+
+        if ($maxBudgetUsd !== null && $maxBudgetUsd > 0) {
+            array_push($command, '--max-budget-usd', (string) $maxBudgetUsd);
+        }
+
+        return $command;
     }
 
     public function parse(string $stdout, int $exitCode): AgentResult

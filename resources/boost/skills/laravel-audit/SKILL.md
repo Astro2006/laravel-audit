@@ -1,42 +1,54 @@
 ---
 name: laravel-audit
-description: Run the laravel-audit code audit of this Laravel app step by step - preflight tools, the tests, frontend, backend and dependencies audits split into small read-only tasks, project skills per task, and the reports.
+description: Run the laravel-audit code audit of this Laravel app as its orchestrator - preflight tools first, then the read-only tasks stage by stage (analyse, coding standards, security), then the reports - through `php artisan audit:tool`.
 ---
 
 # Laravel Audit
 
-The audit has two parts. A **preflight** runs the project's own tools (tests, PHPStan, Pint, `composer audit`, `route:list`, …) and condenses their results. Then **tasks** review the code: each task is one short, read-only agent session with a few related checks, started by the harness. You coordinate; you do not audit code yourself.
-
-## Two ways to run it
-
-- `php artisan audit` runs everything in a fixed order without you. Prefer it in CI, or when the user just wants the reports.
-- The steps below let you choose steps, tasks and skills and report progress to the user.
+You orchestrate the audit; you do not audit code yourself. A **preflight** runs the project's own tools (tests, PHPStan, Pint, `composer audit`, `route:list`, …). Then **tasks**, short read-only agent sessions the harness starts, review the code. You decide which tasks run, in which order, what to rerun and when to stop.
 
 ## Rules
 
-- Run only `php artisan audit:tool …` commands, one per call. Never chain commands with `;`, `&&`, `|` or `$(…)`.
-- Every command prints JSON. Pass `--run=<id>` to every command after `open`.
-- Never change files. Never open `.env` files.
-- Only one piece of background work runs at a time. A `busy` error means: `wait` first.
+- Run only `php artisan audit:tool …`, one command per call. Never chain commands (`;`, `&&`, `|`, `$(…)`). Never change files, never open `.env`.
+- Every command prints JSON. Pass `--run=<id>` to every command after `open`. Every answer has `next`: the command the harness would run now. Follow it when in doubt.
+- Only one piece of background work runs at a time; `busy` means `wait` first.
+- `php artisan audit` runs everything in a fixed order without you. Prefer it in CI.
 
-## Steps
+## Stages
 
-1. **Open the run.** `php artisan audit:tool open` for every configured audit, or `--audits=backend --audits=dependencies` for some. It checks the requirements and prints the run ID. Show the user any `problems` or `warnings`.
-2. **Look at the catalog.** `php artisan audit:tool catalog --run=<id>` lists the preflight steps (`heavy`, `configured_for`), the tasks (`checks`, `depends_on`, `reads_steps`, `skip_reason`) and the project's installed `skills` with their descriptions.
-3. **Run the preflight in one call** with the steps the tasks you plan need: `php artisan audit:tool preflight composer routes tests --run=<id>`. Light steps take seconds; `tests`, `browser` and `phpstan` take minutes. Then `php artisan audit:tool wait --run=<id>` until `"done": true`.
-4. **The test gate.** If `gate` is `aborted`, tests fail. Tell the user how many (`failing_tests`) and where the details are (`storage/audit/<run>/preflight/details/tests/`), and ask whether to continue anyway. Only on a yes: `php artisan audit:tool continue --run=<id>`. On a no: stop and say so.
-5. **Pick skills per task.** Call `catalog` again: `skip_reason` now names tasks with nothing to audit; leave them out. For each task, pick at most `skills_per_task` skills whose description covers what the task checks (a models skill for model hygiene, a PHPStan skill for the PHPStan task). Most tasks need none.
-6. **Start the tasks in batches.** `php artisan audit:tool start backend.conventions backend.data:models,php --run=<id>`: a task key, optionally followed by `:` and its skills. Start tasks listed in another task's `depends_on` first. Then `wait` until `"done": true`. The harness runs at most `agent.max_concurrency` tasks of a batch at once (1 by default); you do not need to split batches for that.
-7. **Check the results.** `status` shows every task; `php artisan audit:tool result <task> --run=<id>` shows its findings. A `failed` task may be started once more.
-8. **Finish.** `php artisan audit:tool finish --run=<id>` writes one report per audit and `run.md`. Tasks you never started are listed as not started.
+Work stage by stage. Within a stage you are free.
 
-## Reading the results
+| Stage | Question | Why this order |
+|---|---|---|
+| 0 preflight | What can tools prove? | the tasks read the results instead of searching |
+| 1 analyse | What do the tool results mean, how is the app built? | writes the conventions baseline and the frontend map the next stage judges against |
+| 2 standards | Where does the code deviate from Boost's guidelines and the project's conventions? | builds on stage 1 |
+| 3 security | What can be exploited or lose data? | independent, so a paused run has the cheaper stages done |
+| 4 think | What matters, in which order? | `finish` writes the reports; the verify passes already ran per task |
 
-- `run.md` has the overview, metrics, every task and a finding index; `<audit>.md` has the findings with evidence.
-- **Severity** says how bad a problem is (`critical` … `info`); **confidence** how sure the task is (`confirmed`, `likely`, `suspected`). Point the user to critical and high findings first.
-- Findings the harness could disprove (a file that does not exist, quoted code that is not in the file) are listed under "Rejected findings" and are not in the reports.
-- Tell the user which tasks you left out and why.
+## Commands
 
-## Local models
+| Command | What it does | Then |
+|---|---|---|
+| `open [--audits=backend --audits=…] [--force]` | checks the requirements, creates the run, prints its ID | `catalog` |
+| `catalog` | preflight steps, tasks grouped by `stages` with `checks`, `depends_on`, `skip_reason`, the installed `skills` | `preflight` |
+| `preflight <step> …` | runs these steps in the background (`tests`, `phpstan`, `browser` take minutes) | `wait` |
+| `wait` | blocks until the worker is idle; reports `finished_since`, `failed_since`, `pending`, `spend_usd`, `paused` | its `next` |
+| `continue` | continues past failing tests, only after the user said yes | `start` |
+| `start --stage=<stage>` · `start <task>[:skill,…] …` · `start --pending` · `start --failed` | starts the tasks of a stage, named tasks, every task not run, or every failed task once more | `wait` |
+| `status` | the full table: gate, stages, every task, spend, pause | – |
+| `result <task>` | the findings of one task | – |
+| `finish` | writes the reports and `run.md` | read them |
 
-A local model server usually answers one request at a time. Keep `agent.max_concurrency` at `1` (the default) for it; raise it only for a hosted API or a server that serves requests in parallel.
+## Decisions you make
+
+- **Scope.** Leave out audits the project has no material for (no frontend, no browser tests) and tasks with a `skip_reason`.
+- **Gate.** `gate: aborted` means tests fail. Tell the user how many (`failing_tests`) and where (`preflight/details/tests/`), and ask whether to continue. Only on a yes: `continue`. Without a user to ask, stop and report.
+- **Rerun.** A `failed` task once (`start --failed`). A `completed` task with zero findings while the preflight shows material (advisories, failing tests) once more. The harness allows two starts per task.
+- **Skills.** Tasks you start without `:skill` get the harness's own selection. Name a skill only when you know it fits the task.
+- **Budget.** Watch `spend_usd`. When the user's budget is near, stop starting tasks and say so.
+- **Pause.** `paused` in `status` or `wait` means a usage limit or the run budget stopped the run. Tell the user the `message` and `resets_at`; after the reset, `start --pending`. Do not retry before.
+
+## When you are done
+
+After `finish`, read `run.md` and tell the user: the findings to fix first (by ID and title, critical and high first), the tasks that failed or were left out and why, and what the run cost (`spend_usd`). Findings the harness disproved are under "Rejected findings" in `run.md`; they are not in the reports.

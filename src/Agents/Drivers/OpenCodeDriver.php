@@ -27,6 +27,8 @@ final class OpenCodeDriver implements AgentDriver
 
     public const string ANSWER_AGENT = 'laravel-audit-answer';
 
+    public const string ORCHESTRATOR_AGENT = 'laravel-audit-orchestrator';
+
     /**
      * @param  string  $basePath  project root; deny rules match absolute paths too
      * @param  list<string>  $boostTools  allowed Boost MCP tools
@@ -43,6 +45,7 @@ final class OpenCodeDriver implements AgentDriver
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
         private readonly array $taskSteps = [],
+        private readonly ?int $orchestratorMaxTurns = null,
     ) {}
 
     public function name(): string
@@ -63,7 +66,7 @@ final class OpenCodeDriver implements AgentDriver
     public function writeConfig(string $directory, array $extraDirectories = []): string
     {
         $path = $directory.'/opencode.json';
-        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns, $this->verifyMaxTurns, $this->taskSteps))->toArray($extraDirectories));
+        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns, $this->verifyMaxTurns, $this->taskSteps, $this->orchestratorMaxTurns))->toArray($extraDirectories));
 
         return $path;
     }
@@ -81,6 +84,11 @@ final class OpenCodeDriver implements AgentDriver
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array
     {
         return [...$this->command($request), '--session', (string) $previous->sessionId];
+    }
+
+    public function orchestratorCommand(AgentRequest $request, ?float $maxBudgetUsd = null): array
+    {
+        return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', self::ORCHESTRATOR_AGENT, ...$this->modelArguments()];
     }
 
     public function parse(string $stdout, int $exitCode): AgentResult

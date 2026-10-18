@@ -19,6 +19,8 @@ use Astro2006\LaravelAudit\Support\Messages;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Console\View\Components\Factory;
 use Illuminate\Support\Arr;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Terminal;
 
 final class AuditConsole
@@ -40,6 +42,12 @@ final class AuditConsole
         $this->live = new LiveOutput($output->getOutput());
         $this->formatter = new StepFormatter($messages);
         $this->components = new Factory($output);
+    }
+
+    /** @return self a console that prints nowhere, for callers that report in their own way */
+    public static function quiet(): self
+    {
+        return new self(new OutputStyle(new ArrayInput([]), new BufferedOutput), Messages::fromConfig(), false);
     }
 
     public function line(string $line): void

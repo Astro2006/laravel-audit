@@ -22,10 +22,7 @@ use Astro2006\LaravelAudit\Tool\TaskSelection;
 use Astro2006\LaravelAudit\Tool\Wait;
 use Astro2006\LaravelAudit\Tool\Work;
 use Illuminate\Console\Command;
-use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Arr;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 
 class ToolCommand extends Command
 {
@@ -90,7 +87,7 @@ class ToolCommand extends Command
             'start' => $start->tasks($run, $selection, $sync),
             'wait' => (new Wait($status))->handle($run, is_numeric($this->option('timeout')) ? (int) $this->option('timeout') : $config->int('tool.wait_timeout')),
             'result' => $items === [] ? ['error' => 'Name the task, e.g. `result backend.injection`.'] : (new TaskResult)->handle($run, Arr::first($items)),
-            'finish' => app(Finish::class)->handle($run, $this->quietConsole()),
+            'finish' => app(Finish::class)->handle($run, AuditConsole::quiet()),
             'work' => $this->work($config, $run),
             default => ['error' => sprintf('Unknown action "%s".', $action), 'allowed' => self::ACTIONS],
         };
@@ -125,11 +122,6 @@ class ToolCommand extends Command
             model: $this->stringOption('model'),
             concurrency: $this->stringOption('concurrency'),
         );
-    }
-
-    private function quietConsole(): AuditConsole
-    {
-        return new AuditConsole(new OutputStyle(new ArrayInput([]), new BufferedOutput), Messages::fromConfig(), false);
     }
 
     private function stringOption(string $name): ?string

@@ -117,3 +117,15 @@ it('gives tasks with their own turn cap their own agent', function () {
         ->and($driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30)))->toContain('laravel-audit-30')
         ->and($driver->command(new AgentRequest('backend.laravel', 'p', '/app')))->toContain('laravel-audit');
 });
+
+it('gives the orchestrator its own agent that may only run audit:tool', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, orchestratorMaxTurns: 300);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+    $agent = $config['agent']['laravel-audit-orchestrator'];
+
+    expect($agent['tools'])->toBe(['*' => false, 'bash' => true])
+        ->and($agent['permission']['bash'])->toBe(['*' => 'deny', 'php artisan audit:tool *' => 'allow'])
+        ->and($agent['permission'])->toMatchArray(['edit' => 'deny', 'read' => 'deny', 'webfetch' => 'deny', 'task' => 'deny'])
+        ->and($agent['steps'])->toBe(300)
+        ->and($driver->orchestratorCommand(new AgentRequest('orchestrator', 'p', '/app')))->toBe(['opencode', 'run', '--pure', '--format', 'json', '--agent', 'laravel-audit-orchestrator']);
+});
