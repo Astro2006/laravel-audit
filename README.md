@@ -7,6 +7,9 @@
 
 An AI code audit for Laravel apps, started with one Artisan command.
 
+> [!WARNING]
+> **Test version.** This is the MVP3 preview on the `refactor/orchestrator` branch: an orchestrator agent that runs the audit stage by stage, pause and resume at usage limits or a run budget, and cheap models such as Claude Haiku 5.5 as the task model. It has been exercised on a handful of test projects only. Commands, config keys and the report layout can still change before a release, and the reports are a well-structured starting point for a human review, not a certificate. Agents can be wrong, and a run uses real tokens (see [Costs](#costs)).
+
 ```bash
 php artisan audit
 ```
@@ -50,9 +53,6 @@ First, a **deterministic preflight** runs the tools you already trust: your test
  Findings: Critical 1 · High 7 · Medium 19 · Low 16 · Info 5
  → storage/audit/2026-09-11_14-02-11/run.md
 ```
-
-> [!IMPORTANT]
-> This is an MVP. The reports are a well-structured starting point for a human review, not a certificate. Agents can be wrong, and a run uses real tokens (see [Costs](#costs)).
 
 ## Contents
 
