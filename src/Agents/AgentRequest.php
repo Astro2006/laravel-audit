@@ -14,6 +14,7 @@ final readonly class AgentRequest
      * @param  array<string, string>  $environment  extra variables for the agent process
      * @param  bool  $verify  a verify call, which gets fewer turns
      * @param  bool  $answerOnly  no tools, one turn: the agent answers from the prompt alone
+     * @param  int|null  $maxTurns  the task's own turn cap; null = the driver's
      */
     public function __construct(
         public string $key,
@@ -24,5 +25,6 @@ final readonly class AgentRequest
         public array $environment = [],
         public bool $verify = false,
         public bool $answerOnly = false,
+        public ?int $maxTurns = null,
     ) {}
 }

@@ -17,6 +17,7 @@ final readonly class OpenCodeConfig
      * @param  list<string>  $boostTools  allowed Boost MCP tools
      * @param  list<string>  $deniedFiles  project-relative files the agent must not read
      * @param  int|null  $steps  tool-call rounds before the agent must answer
+     * @param  list<int>  $taskSteps  turn caps of tasks that set their own; each gets an agent `laravel-audit-<n>`
      */
     public function __construct(
         private string $basePath,
@@ -25,6 +26,7 @@ final readonly class OpenCodeConfig
         private array $deniedFiles,
         private ?int $steps = null,
         private ?int $verifySteps = null,
+        private array $taskSteps = [],
     ) {}
 
     /**
@@ -52,6 +54,10 @@ final readonly class OpenCodeConfig
                 ],
             ],
         ];
+
+        foreach ($this->taskSteps as $steps) {
+            $config['agent'][OpenCodeDriver::AGENT.'-'.$steps] = $agent(sprintf('Read-only Laravel audit agent with %d steps', $steps), $steps);
+        }
 
         if ($this->boost !== null) {
             $config['mcp'] = [

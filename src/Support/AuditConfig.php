@@ -17,6 +17,7 @@ final readonly class AuditConfig
         'agent' => [
             'skills' => 'auto',
             'standards' => 'boost',
+            'verify' => ['threshold' => 2, 'always_categories' => ['security', 'correctness']],
             'max_attempts' => 2,
             'verify_max_turns' => 6,
             'boost_tools' => [

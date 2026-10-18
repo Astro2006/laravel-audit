@@ -437,6 +437,9 @@ return [
 | `agent.skills` / `skills_per_task` / `skill_max_chars` | `auto` (one agent call picks the skills per task) / `2` / `2000` |
 | `agent.standards` / `standards_max_chars` | `boost` (the code rules Boost wrote into `AGENTS.md`, plus `.ai/rules` and `.ai/guidelines`, inlined into the standards-stage tasks), `none`, or a list of files / `6000` |
 | `agent.run_budget_usd` | `null`; pause the run before a task that would push its total cost above this amount (`AUDIT_RUN_BUDGET_USD`) |
+| `agent.verify.threshold` / `agent.verify.always_categories` | `2` (severity rank minus confidence rank that triggers the verify pass) / `security`, `correctness` (always verified from `medium` up unless `confirmed`) |
+| `project.context` | `null`; free text about who uses the app and how it runs, given to every task with the runtime facts from `artisan about` so severities fit the threat model (`AUDIT_PROJECT_CONTEXT`) |
+| `max_turns` per task in `audit.php` | the task's own turn cap, e.g. `backend.dead-code` 30; overrides `agent.max_turns` |
 | `agent.verify_max_turns` | `6`, tool calls a verify call may take |
 | `tool.wait_timeout` | `100`, seconds `audit:tool wait` blocks at most |
 | `tool.max_calls` | `400`, `audit:tool` calls per run; above it only `status`, `wait` and `finish` still work |

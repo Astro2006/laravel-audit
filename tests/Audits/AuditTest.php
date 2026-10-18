@@ -13,12 +13,14 @@ use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\Severity;
 use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\AboutDTO;
 use Astro2006\LaravelAudit\Preflight\Data\Steps\BrowserDTO;
 use Astro2006\LaravelAudit\Preflight\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Preflight\StepResults;
+use Astro2006\LaravelAudit\Prompts\ProjectContextSection;
 use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Reports\Finding;
@@ -379,4 +381,17 @@ it('gives the coding standards to the standards-stage tasks and the conventions 
         ->and($audit->renderTask(backendTask('conventions'), $context)->text)->toContain('## Coding standards')
         ->and($audit->renderTask(backendTask('injection'), $context)->text)->not->toContain('## Coding standards')
         ->and($audit->renderTask(backendTask('laravel'), $context)->hash)->not->toBe($audit->renderTask(backendTask('laravel'), promptContext())->hash);
+});
+
+it('tells the tasks about the project context and the runtime facts', function () {
+    $section = ProjectContextSection::render('Single-user app behind a Cloudflare tunnel.', new AboutDTO('Shop', '13.2.0', '8.4.1', 'local', false, ['database' => 'pgsql', 'queue' => 'database', 'mail' => 'smtp']));
+    $context = promptContext(['projectContext' => $section]);
+
+    expect($section)->toStartWith("## Project context\n\nSingle-user app behind a Cloudflare tunnel.")
+        ->toContain('Runtime facts: Laravel 13.2.0 · PHP 8.4.1 · database pgsql · queue database · mail smtp.')
+        ->toContain('at most `low` unless it is reachable without login')
+        ->and(ProjectContextSection::render(null, new AboutDTO('Shop', '13.2.0', '8.4.1')))->toContain('Runtime facts: Laravel 13.2.0 · PHP 8.4.1.')
+        ->and(ProjectContextSection::render(null, null))->toBe('')
+        ->and((new BackendAudit)->renderTask(backendTask('auth'), $context)->text)->toContain('## Project context')
+        ->and((new BackendAudit)->renderVerify(backendTask('auth'), $context, 'x')->text)->toContain('Runtime facts: Laravel 13.2.0');
 });

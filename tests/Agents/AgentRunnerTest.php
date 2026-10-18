@@ -329,3 +329,16 @@ it('pauses before a task that would exceed the run budget', function () {
         ->and($runner->pause())->reason->toBe('budget')->pending->toBe(['backend.b'])
         ->and($runner->pause()->message)->toContain('0.50');
 });
+
+it('asks the repair pass to fix the linter warnings too', function () {
+    $broken = (string) preg_replace('/\| Check \| [a-z-]+ \|/', '| Check | other |', str_replace("## Limitations\nQueues were not inspected.\n", '', file_get_contents(fixture('reports/backend-valid.md'))), 1);
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['result' => $broken])))
+        ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))])))]);
+
+    runner(tempDir('logs'))->run([backendJob()]);
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'Fix these too:')
+        && str_contains($process->input, 'check "other" — consider a more specific check.'));
+});

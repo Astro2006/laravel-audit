@@ -31,6 +31,7 @@ final class OpenCodeDriver implements AgentDriver
      * @param  string  $basePath  project root; deny rules match absolute paths too
      * @param  list<string>  $boostTools  allowed Boost MCP tools
      * @param  list<string>  $deniedFiles  project-relative files the agent must not read
+     * @param  list<int>  $taskSteps  turn caps tasks set for themselves; each gets its own agent
      */
     public function __construct(
         private readonly string $basePath,
@@ -41,6 +42,7 @@ final class OpenCodeDriver implements AgentDriver
         private readonly ?McpServer $boost = null,
         private readonly array $boostTools = [],
         private readonly array $deniedFiles = [],
+        private readonly array $taskSteps = [],
     ) {}
 
     public function name(): string
@@ -61,7 +63,7 @@ final class OpenCodeDriver implements AgentDriver
     public function writeConfig(string $directory, array $extraDirectories = []): string
     {
         $path = $directory.'/opencode.json';
-        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns, $this->verifyMaxTurns))->toArray($extraDirectories));
+        Json::writeFile($path, (new OpenCodeConfig($this->basePath, $this->boost, $this->boostTools, $this->deniedFiles, $this->maxTurns, $this->verifyMaxTurns, $this->taskSteps))->toArray($extraDirectories));
 
         return $path;
     }
@@ -71,6 +73,7 @@ final class OpenCodeDriver implements AgentDriver
         return [$this->binary, 'run', '--pure', '--format', 'json', '--agent', match (true) {
             $request->answerOnly => self::ANSWER_AGENT,
             $request->verify => self::VERIFY_AGENT,
+            $request->maxTurns !== null => self::AGENT.'-'.$request->maxTurns,
             default => self::AGENT,
         }, ...$this->modelArguments()];
     }

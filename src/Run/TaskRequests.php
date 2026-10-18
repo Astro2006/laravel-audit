@@ -36,6 +36,7 @@ final class TaskRequests
         private readonly ReportParser $parser = new ReportParser,
         private readonly FindingEditor $editor = new FindingEditor,
         private readonly VerdictApplier $verdicts = new VerdictApplier,
+        private readonly VerifyPolicy $policy = new VerifyPolicy,
     ) {}
 
     /**
@@ -53,7 +54,7 @@ final class TaskRequests
             $prompt = $audit->renderTask($task, $this->context, $sections, $missing, $maxFindings);
         }
 
-        return $this->request($task->key(), $prompt);
+        return $this->request($task->key(), $prompt, maxTurns: $task->maxTurns);
     }
 
     /**
@@ -73,7 +74,7 @@ final class TaskRequests
 
         $ids = array_map(
             fn (Finding $finding): string => $finding->id,
-            array_filter($outcome->findings, fn (Finding $finding): bool => VerifyPolicy::needsVerify($finding)
+            array_filter($outcome->findings, fn (Finding $finding): bool => $this->policy->needsVerify($finding)
                 && array_filter($required, fn (RequiredFinding $requirement): bool => $requirement->isCoveredBy([$finding])) === []),
         );
 
@@ -108,11 +109,11 @@ final class TaskRequests
         return $this->request(JobPlanner::RESULTS_KEY, (new OverviewPrompt($this->overridePath))->render($this->context, $digests));
     }
 
-    private function request(string $key, RenderedPrompt $prompt, bool $verify = false): AgentRequest
+    private function request(string $key, RenderedPrompt $prompt, bool $verify = false, ?int $maxTurns = null): AgentRequest
     {
         file_put_contents($this->run->logsDir().'/'.$key.'.prompt.md', $prompt->text);
 
-        return new AgentRequest($key, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories, verify: $verify);
+        return new AgentRequest($key, $prompt->text, $this->workingDirectory, $this->configFile, $this->extraDirectories, verify: $verify, maxTurns: $maxTurns);
     }
 
     /**

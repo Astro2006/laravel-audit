@@ -20,6 +20,7 @@ final readonly class AuditTask
      * @param  list<string>  $dependsOn  names of tasks in the same audit whose output this task needs
      * @param  list<SnapshotType>  $snapshots  preflight data shown in the prompt (the status of all steps is always shown)
      * @param  Stage  $stage  when an orchestrating agent runs the task: analyse, standards or security
+     * @param  int|null  $maxTurns  tool calls the task may take before it has to answer; null = agent.max_turns
      */
     public function __construct(
         public AuditType $audit,
@@ -30,6 +31,7 @@ final readonly class AuditTask
         public array $dependsOn = [],
         public array $snapshots = [],
         public Stage $stage = Stage::Standards,
+        public ?int $maxTurns = null,
     ) {}
 
     public function key(): string

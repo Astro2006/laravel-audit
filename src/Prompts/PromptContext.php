@@ -36,6 +36,7 @@ final readonly class PromptContext
         public array $snapshots = [],
         public array $skills = [],
         public string $standards = '',
+        public string $projectContext = '',
     ) {}
 
     /** @return list<string> */

@@ -149,3 +149,10 @@ it('maps usage and rate limits to a limit exit', function () {
         ->and($driver->parse(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'API Error: 429 {"type":"error","error":{"type":"rate_limit_error"}}']), 1)->exit)->toBe(AgentExit::Limit)
         ->and($driver->parse(claudeJson(['result' => 'Findings about the missing rate limit on POST /login']), 0)->exit)->toBe(AgentExit::Success);
 });
+
+it('lets a task raise its own turn cap', function () {
+    $driver = new ClaudeCodeDriver(maxTurns: 15, verifyMaxTurns: 6);
+
+    expect(implode(' ', $driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30))))->toContain('--max-turns 30')
+        ->and(implode(' ', $driver->command(new AgentRequest('backend.dead-code.verify', 'p', '/app', verify: true, maxTurns: 30))))->toContain('--max-turns 6');
+});

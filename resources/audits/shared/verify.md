@@ -6,6 +6,8 @@ You check the findings another agent reported for the task "{{task_title}}" of t
 
 {{tools_note}}
 
+{{project_context}}
+
 ## For every finding below
 
 1. Open the files in its Locations, at most three per finding. Read only the lines it points at and about 30 around them (offset and limit), not whole files.

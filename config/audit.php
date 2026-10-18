@@ -25,6 +25,14 @@ return [
     // null = app.locale. Language for report prose and console output.
     'report_language' => env('AUDIT_LANGUAGE'),
 
+    'project' => [
+        // Free text the agents read before judging severity: who uses the app,
+        // how it is deployed, what is exposed. Without it, smaller models
+        // rate authorization findings as if every app had many users.
+        // e.g. 'Single-user app. Only the owner has an account; no registration.'
+        'context' => env('AUDIT_PROJECT_CONTEXT'),
+    ],
+
     'agent' => [
         // claude_code, opencode or auto (the first agent from boost.json
         // that is installed, then Claude Code, OpenCode).

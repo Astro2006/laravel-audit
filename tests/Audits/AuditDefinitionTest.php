@@ -73,3 +73,12 @@ it('splits the shipped tasks into ten analyse, fourteen standards and ten securi
 
     expect($counts)->toBe(['analyse' => 10, 'standards' => 14, 'security' => 10]);
 });
+
+it('reads a turn cap per task', function () {
+    $byName = collect(AuditDefinition::for(AuditType::Backend)->tasks)->keyBy('name');
+
+    expect($byName['dead-code']->maxTurns)->toBe(30)
+        ->and($byName['database']->maxTurns)->toBe(25)
+        ->and($byName['laravel']->maxTurns)->toBeNull()
+        ->and(AuditDefinition::turnCaps())->toBe([25, 30]);
+});

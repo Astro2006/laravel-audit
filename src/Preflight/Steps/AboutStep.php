@@ -45,6 +45,7 @@ final class AboutStep implements Step
             php: Read::nullableString($about, 'environment.php_version') ?? $fallback->php,
             env: Read::nullableString($about, 'environment.environment') ?? $fallback->env,
             debug: data_get($about, 'environment.debug_mode') === null ? null : Read::bool($about, 'environment.debug_mode'),
+            drivers: Read::stringMap($about, 'drivers'),
         ));
     }
 }

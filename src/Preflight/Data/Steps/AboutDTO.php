@@ -9,12 +9,14 @@ use Astro2006\LaravelAudit\Support\Read;
 
 final readonly class AboutDTO implements StepDTO
 {
+    /** @param  array<string, string>  $drivers  database, cache, queue, session, … as `artisan about` reports them */
     public function __construct(
         public ?string $name = null,
         public ?string $laravel = null,
         public ?string $php = null,
         public ?string $env = null,
         public ?bool $debug = null,
+        public array $drivers = [],
     ) {}
 
     public static function fromArray(array $data): static
@@ -25,6 +27,7 @@ final readonly class AboutDTO implements StepDTO
             Read::nullableString($data, 'php'),
             Read::nullableString($data, 'env'),
             data_get($data, 'debug') === null ? null : Read::bool($data, 'debug'),
+            Read::stringMap($data, 'drivers'),
         );
     }
 
@@ -37,6 +40,7 @@ final readonly class AboutDTO implements StepDTO
             'php' => $this->php,
             'env' => $this->env,
             'debug' => $this->debug,
+            'drivers' => $this->drivers,
             'file' => 'about.json',
         ];
     }

@@ -63,7 +63,11 @@ final class FollowUp
             return TaskOutcome::fromAttempt($attempt, AuditStatus::Failed, 'Report failed validation'.($attempt->repair ? ' after the repair pass.' : '.'), $validated, $telemetry, $result);
         }
 
-        return sprintf(self::REPAIR_MESSAGE, $section)."\n".implode("\n", array_map(fn (string $error): string => '- '.$error, $validated->lint->errors));
+        $warnings = array_values(array_filter($validated->lint->warnings, fn (string $warning): bool => ! str_contains($warning, 'rejected')));
+        $bullets = fn (array $lines): string => implode("\n", array_map(fn (string $line): string => '- '.$line, $lines));
+
+        return sprintf(self::REPAIR_MESSAGE, $section)."\n".$bullets($validated->lint->errors)
+            .($warnings === [] ? '' : "\n\nFix these too:\n".$bullets($warnings));
     }
 
     /**

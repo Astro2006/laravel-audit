@@ -107,3 +107,13 @@ it('maps a rate limit of the provider to a limit exit', function () {
 
     expect((new OpenCodeDriver('/app'))->parse($error, 1))->exit->toBe(AgentExit::Limit)->error->toBe('Rate limit exceeded, retry in 20s');
 });
+
+it('gives tasks with their own turn cap their own agent', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, taskSteps: [30, 25]);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-30']['steps'])->toBe(30)
+        ->and($config['agent']['laravel-audit-25']['permission'])->toBe($config['agent']['laravel-audit']['permission'])
+        ->and($driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30)))->toContain('laravel-audit-30')
+        ->and($driver->command(new AgentRequest('backend.laravel', 'p', '/app')))->toContain('laravel-audit');
+});

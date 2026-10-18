@@ -112,7 +112,7 @@ final class ClaudeCodeDriver implements AgentDriver
             array_push($command, '--effort', $this->effort);
         }
 
-        $turns = $request->verify ? $this->verifyMaxTurns ?? $this->maxTurns : $this->maxTurns;
+        $turns = $request->verify ? $this->verifyMaxTurns ?? $this->maxTurns : $request->maxTurns ?? $this->maxTurns;
 
         if ($turns !== null) {
             array_push($command, '--max-turns', (string) $turns);

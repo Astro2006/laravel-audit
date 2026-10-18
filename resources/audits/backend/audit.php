@@ -13,6 +13,8 @@
 | snapshots: preflight data in the prompt (the status of all steps is always there).
 | stage: analyse, standards or security (default standards); the order an
 |   orchestrating agent works in. See docs/MVP3.md.
+| max_turns: tool calls this task may take before it has to answer; overrides
+|   agent.max_turns for tasks that need many searches.
 */
 
 return [
@@ -124,6 +126,7 @@ return [
         'dead-code' => [
             'title' => 'Dead code',
             'stage' => 'standards',
+            'max_turns' => 30,
             'sections' => ['Dead code candidates'],
             'snapshots' => ['routes', 'phpstan'],
             'checks' => [
@@ -133,6 +136,7 @@ return [
         'database' => [
             'title' => 'Database schema and migrations',
             'stage' => 'standards',
+            'max_turns' => 25,
             'snapshots' => ['database-schema'],
             'checks' => [
                 'missing-index' => 'Missing indexes on foreign keys or frequently filtered or sorted columns.',

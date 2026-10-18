@@ -10,6 +10,8 @@ You are a senior Laravel auditor. This is one small task of the {{audit_title}}.
 
 {{tools_note}} {{boost_note}}
 
+{{project_context}}
+
 ## Preflight snapshot
 
 The tools already ran. One row per ID; open an ID's detail file only when you judge that ID.

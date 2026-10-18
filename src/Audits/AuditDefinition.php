@@ -66,10 +66,34 @@ final readonly class AuditDefinition
                 ),
                 Stage::tryFrom(Read::string($task, 'stage', Stage::Standards->value))
                     ?? throw new RuntimeException(sprintf('Unknown stage "%s" in task "%s" of [%s]. Allowed: %s.', Read::string($task, 'stage'), $name, $path, implode(', ', Stage::values()))),
+                Read::nullableInt($task, 'max_turns'),
             );
         }
 
         return new self($tasks, $checks, Read::strings($data, 'sections'), Read::strings($data, 'summary_sections'));
+    }
+
+    /**
+     * The turn caps tasks set for themselves, across every audit.
+     *
+     * @return list<int> distinct, ascending
+     */
+    public static function turnCaps(): array
+    {
+        $caps = [];
+
+        foreach (AuditType::cases() as $type) {
+            foreach (self::for($type)->tasks as $task) {
+                if ($task->maxTurns !== null) {
+                    $caps[] = $task->maxTurns;
+                }
+            }
+        }
+
+        $caps = array_values(array_unique($caps));
+        sort($caps);
+
+        return $caps;
     }
 
     /**

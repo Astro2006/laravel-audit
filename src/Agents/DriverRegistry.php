@@ -6,6 +6,7 @@ namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
+use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Support\AuditConfig;
@@ -100,6 +101,7 @@ final class DriverRegistry
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
+                taskSteps: AuditDefinition::turnCaps(),
             ),
             default => new ClaudeCodeDriver(
                 binary: $this->binary($name),

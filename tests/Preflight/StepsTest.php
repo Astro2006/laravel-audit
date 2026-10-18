@@ -39,13 +39,13 @@ function safeGuard(ProjectInspector $project): DatabaseGuard
 }
 
 it('reads app info from artisan about', function () {
-    Process::fake(['*about*' => Process::result(json_encode(['environment' => ['application_name' => 'Shop', 'laravel_version' => '13.2.0', 'php_version' => '8.4.1', 'environment' => 'local']]))]);
+    Process::fake(['*about*' => Process::result(json_encode(['environment' => ['application_name' => 'Shop', 'laravel_version' => '13.2.0', 'php_version' => '8.4.1', 'environment' => 'local'], 'drivers' => ['database' => 'pgsql', 'queue' => 'database']]))]);
     $context = stepContext();
 
     $result = (new AboutStep)->run($context);
 
     expect($result->status)->toBe(StepStatus::Ok)
-        ->and($result->data)->name->toBe('Shop')->laravel->toBe('13.2.0')->php->toBe('8.4.1')
+        ->and($result->data)->name->toBe('Shop')->laravel->toBe('13.2.0')->php->toBe('8.4.1')->drivers->toBe(['database' => 'pgsql', 'queue' => 'database'])
         ->and($context->preflightDir.'/about.json')->toBeFile();
 });
 

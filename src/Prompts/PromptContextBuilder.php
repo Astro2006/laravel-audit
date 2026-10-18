@@ -52,6 +52,7 @@ final class PromptContextBuilder
             snapshots: $snapshots,
             skills: $skills,
             standards: $standards,
+            projectContext: ProjectContextSection::render($config->nullableString('project.context'), $about),
         );
     }
 

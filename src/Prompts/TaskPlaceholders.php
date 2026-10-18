@@ -55,6 +55,7 @@ final class TaskPlaceholders
             '{{boost_note}}' => $context->boostAvailable ? self::BOOST_NOTE : self::NO_BOOST_NOTE,
             '{{skills}}' => (string) Arr::get($context->skills, $task->key(), ''),
             '{{standards}}' => $task->stage === Stage::Standards || $task->name === 'conventions' ? $context->standards : '',
+            '{{project_context}}' => $context->projectContext,
         ];
     }
 
