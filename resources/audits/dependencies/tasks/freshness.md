@@ -17,6 +17,7 @@ You cannot run Composer; a missing precomputed file goes under Limitations. npm 
 - Laravel and PHP: is the installed major still receiving bug and security fixes? Is the PHP version in `composer.json` / `config.platform` still supported? If you cannot verify support windows, say so. (`unsupported-runtime`)
 - Direct dependencies one or more majors behind. (`outdated-major`)
 - Packages whose latest release is very old (use the `time` field in `composer.lock`). (`stale-package`)
+- Advisories and abandoned packages belong to the security task: use them in the Upgrade plan, never as findings here.
 
 ## Section you write
 
