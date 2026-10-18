@@ -11,23 +11,24 @@ return [
     ],
 
     'requirements' => [
-        'prompts_outdated' => 'Published prompts from the single-agent layout are ignored now (:files in resources/prompts/vendor/laravel-audit) → republish with --tag=audit-prompts',
+        'prompts_outdated' => 'Published prompts or checks of an older layout are ignored now (:files) → republish with --tag=audit-prompts and --tag=audit-checks',
         'production' => 'APP_ENV is production — laravel-audit never runs in production.',
         'agent' => 'Agent: :agent · model :model',
         'agent_default_model' => 'from the CLI config',
-        'agent_missing' => ':agent CLI `:binary` not found in PATH → install it, or pick another agent with --agent (claude_code, opencode, codex)',
-        'agent_unprotected' => ':agent cannot keep agents away from .env and other secret files (it works through a shell). Set :key to true to accept that, or use another agent.',
-        'agent_unprotected_waived' => ':agent can read .env and other secret files — accepted in the config.',
+        'agent_missing' => ':agent CLI `:binary` not found in PATH → install it, or pick another agent with --agent (claude_code, opencode)',
         'composer' => 'Composer',
         'composer_missing' => 'Composer not found — the dependencies audit needs it.',
         'output' => 'Output folder :path',
+        'legacy_key' => 'config/audit.php sets :old, which is no longer read. Use :new instead.',
+        'legacy_key_removed' => 'config/audit.php sets :old, which is no longer read. You can remove it.',
+        'checks_outdated' => 'The published checks of the :audit audit (resources/audits/vendor/laravel-audit/:audit/audit.php) lack newer checks: :checks. Re-publish with --tag=audit-checks --force or add them.',
         'output_not_writable' => 'Output folder :path is not writable.',
         'boost' => 'Boost MCP (:count tools allowed)',
         'boost_missing' => 'Laravel Boost not installed — agents work from files only → php artisan audit:install',
         'phpstan' => 'Larastan (:config)',
         'phpstan_no_config' => 'No phpstan.neon — PHPStan is skipped → php artisan audit:install',
         'coverage' => 'Coverage driver: :driver',
-        'coverage_missing' => 'No coverage driver (pcov or xdebug) — tests run without coverage',
+        'coverage_missing' => 'No coverage driver (pcov, xdebug or Herd coverage) — tests run without coverage',
         'paratest_missing' => 'brianium/paratest missing — tests run without --parallel → php artisan audit:install',
         'database_safe' => 'Test database: :test (separate from the app database)',
         'database_shared' => 'Tests would use the app database (:app) — tests and browser tests are skipped. Configure a separate test database in phpunit.xml.',
@@ -43,6 +44,8 @@ return [
         'pint' => 'Pint',
         'routes' => 'Routes',
         'translations' => 'Translations',
+        'migrations' => 'Migrations',
+        'candidates' => 'Code candidates',
         'composer' => 'Composer',
         'tests' => 'Tests',
         'browser' => 'Browser (Playwright)',
@@ -58,6 +61,8 @@ return [
         'routes' => ':count (:flagged flagged)',
         'translations' => ':locales · :missing missing keys',
         'translations_none' => 'no lang folder',
+        'migrations' => ':tables tables from :migrations migrations, :flagged flagged',
+        'candidates' => ':hits lines for :patterns patterns',
         'composer' => ':advisories advisories, :abandoned abandoned, :outdated major updates',
         'tests' => ':failed/:total failed',
         'tests_green' => ':total passed',
@@ -76,7 +81,6 @@ return [
         'no-browser-tests' => 'no browser tests',
         'plugin-missing' => 'browser plugin or Playwright missing',
         'shared-database' => 'skipped: would use the app database',
-        'gate-aborted' => 'not run (aborted at the test gate)',
     ],
 
     'warnings' => [
@@ -89,6 +93,8 @@ return [
     'gate' => [
         'failing' => ':count tests fail. First failures:',
         'broken' => 'Almost every test fails for the same reason (:reason). The environment looks broken; an audit makes little sense.',
+        'browser_failing' => ':count of :total browser tests fail.',
+        'browser_broken' => 'Almost every browser test fails for the same reason. The server, the assets or the browser look broken.',
         'question' => 'Continue with the audits anyway?',
         'aborted' => 'Aborted at the test gate. The preflight is kept in :path.',
     ],
@@ -101,6 +107,9 @@ return [
         'failed' => 'failed: :reason',
         'skipped' => 'skipped: :reason',
         'rejected' => ':count dropped',
+        'skills' => 'Skills: :installed installed · assigned to :tasks tasks (:source)',
+        'selecting_skills' => 'Picking skills for the tasks from :installed installed (one agent call) …',
+        'no_skills' => 'Skills: none installed',
     ],
 
     'board' => [
@@ -112,8 +121,8 @@ return [
     ],
 
     'modes' => [
-        'single' => 'single, one task at a time',
-        'parallel' => 'parallel, :count tasks at once',
+        'single' => 'one task at a time',
+        'parallel' => 'up to :count tasks at once',
     ],
 
     'summary' => [
@@ -124,6 +133,20 @@ return [
         'preflight_only' => 'Preflight done, no agents started. → :path',
     ],
 
+    'resume' => [
+        'using' => 'Resuming run :run: :done tasks keep their result, the others run again.',
+        'not_found' => 'No run to resume in :path.',
+    ],
+
+    'pause' => [
+        'limit' => 'Usage limit reached: :message',
+        'budget' => ':message',
+        'resets' => 'The limit resets at :time.',
+        'resume' => ':pending tasks are pending. Resume with `php artisan audit --resume=:run`.',
+        'question' => 'Wait for the reset and continue?',
+        'waiting' => 'Waiting :minutes minutes …',
+    ],
+
     'reuse' => [
         'using' => 'Reusing the preflight of run :run.',
         'commit_changed' => 'The code changed since that preflight (:then → :now). Results may be outdated.',
@@ -132,6 +155,10 @@ return [
     ],
 
     'install' => [
+        'boost_missing' => 'Laravel Boost is not installed, so the audit guideline and skill are not registered.',
+        'boost_not_set_up' => 'Laravel Boost is not set up yet → run `php artisan boost:install`, then `php artisan audit:install` again to register the audit skill.',
+        'boost_question' => 'Register the laravel-audit guideline and skill with Boost now? (runs :command)',
+        'boost_would_run' => 'Boost: would run :command',
         'header' => 'laravel-audit · Setup',
         'present' => 'Already installed',
         'need' => 'I need these packages:',

@@ -6,11 +6,6 @@ namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * Reads the report body an agent returns. Only level-2 headings, finding
- * headings and the metadata tables are structure; everything else is free
- * markdown. Lines inside code fences are never treated as structure.
- */
 final class ReportParser
 {
     private const string FINDING_HEADING = '/^([A-Z]{2,4}-\d{3})\s*[—–-]\s*(.+)$/u';

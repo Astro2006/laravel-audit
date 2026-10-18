@@ -11,4 +11,5 @@ enum RunStatus: string
     case Failed = 'failed';
     case Completed = 'completed';
     case PreflightOnly = 'preflight-only';
+    case Paused = 'paused';
 }

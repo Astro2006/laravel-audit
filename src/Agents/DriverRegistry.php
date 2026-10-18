@@ -4,30 +4,28 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Agents;
 
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
+use Astro2006\LaravelAudit\Audits\AuditDefinition;
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Json;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Illuminate\Support\Arr;
 
-/**
- * Builds the agent driver from config/audit.php. Driver names follow
- * Laravel Boost's agent names, so `auto` can pick the agent the project
- * already set up with `boost:install` (boost.json).
- */
 final class DriverRegistry
 {
     public const string AUTO = 'auto';
 
-    /** Fallback order when boost.json names no agent with a driver. */
-    public const array DRIVERS = [ClaudeCodeDriver::NAME, OpenCodeDriver::NAME, CodexDriver::NAME];
+    public const array DRIVERS = [ClaudeCodeDriver::NAME, OpenCodeDriver::NAME];
 
     private const array ALIASES = ['claude' => ClaudeCodeDriver::NAME];
 
-    /** @param array<string, mixed> $config the whole audit config */
     public function __construct(
-        private readonly array $config,
+        private readonly AuditConfig $config,
         private readonly ProjectInspector $project,
     ) {}
 
@@ -39,7 +37,7 @@ final class DriverRegistry
      */
     public function resolve(?string $name = null, ?string $model = null): AgentDriver
     {
-        $name = $this->normalize($name ?? (string) $this->config('agent.driver', self::AUTO));
+        $name = $this->normalize($name ?? $this->config->string('agent.driver'));
 
         if ($name === self::AUTO) {
             return $this->auto($model);
@@ -79,46 +77,40 @@ final class DriverRegistry
             }
         }
 
-        // Nothing installed: return the first candidate so the requirement
-        // check can name the CLI that is missing.
-        return $this->make($candidates[0], $model);
+        return $this->make(Arr::first($candidates), $model);
     }
 
     private function make(string $name, ?string $model): AgentDriver
     {
-        $model = $this->filled($model) ?? $this->filled($this->config('agent.model')) ?? $this->filled($this->config("agent.drivers.{$name}.model"));
-        $boost = $this->project->boostMcpServer();
-        $boostTools = array_values(array_map('strval', (array) $this->config('agent.boost_tools', [])));
+        $model = $this->filled($model) ?? $this->config->nullableString('agent.model');
+        $boost = McpServer::forProject($this->project);
+        $boostTools = $this->config->strings('agent.boost_tools');
         $deniedFiles = DeniedFiles::resolve(
             $this->project->basePath,
-            array_values(array_map('strval', (array) $this->config('agent.deny_read', []))),
-            array_values(array_map('strval', (array) $this->config('agent.allow_read', []))),
+            $this->config->strings('agent.deny_read'),
+            $this->config->strings('agent.allow_read'),
         );
 
         return match ($name) {
             OpenCodeDriver::NAME => new OpenCodeDriver(
                 basePath: $this->project->basePath,
-                binary: $this->binary($name, 'opencode'),
+                binary: $this->binary($name),
                 model: $model,
+                maxTurns: $this->maxTurns(),
+                verifyMaxTurns: $this->maxTurns('agent.verify_max_turns'),
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
-            ),
-            CodexDriver::NAME => new CodexDriver(
-                binary: $this->binary($name, 'codex'),
-                model: $model,
-                boost: $boost,
-                boostTools: $boostTools,
-                allowUnrestrictedRead: (bool) $this->config("agent.drivers.{$name}.allow_unrestricted_read", false),
-                overrides: array_values(array_map('strval', (array) $this->config("agent.drivers.{$name}.config", []))),
+                taskSteps: AuditDefinition::turnCaps(),
+                orchestratorMaxTurns: $this->maxTurns('agent.orchestrator.max_turns'),
             ),
             default => new ClaudeCodeDriver(
-                // agent.binary, agent.effort and agent.max_budget_usd are the
-                // pre-driver keys; published configs may still use them.
-                binary: $this->binary($name, (string) $this->config('agent.binary', 'claude')),
+                binary: $this->binary($name),
                 model: $model,
-                effort: $this->filled($this->config("agent.drivers.{$name}.effort")) ?? $this->filled($this->config('agent.effort')),
-                maxBudgetUsd: $this->budget(),
+                effort: $this->config->nullableString("agent.drivers.{$name}.effort"),
+                maxTurns: $this->maxTurns(),
+                verifyMaxTurns: $this->maxTurns('agent.verify_max_turns'),
+                maxBudgetUsd: $this->config->nullableFloat("agent.drivers.{$name}.max_budget_usd"),
                 boost: $boost,
                 boostTools: $boostTools,
                 deniedFiles: $deniedFiles,
@@ -126,32 +118,30 @@ final class DriverRegistry
         };
     }
 
-    private function binary(string $name, string $default): string
+    private function maxTurns(string $key = 'agent.max_turns'): ?int
     {
-        return $this->filled($this->config("agent.drivers.{$name}.binary")) ?? $default;
+        $turns = $this->config->int($key);
+
+        return $turns > 0 ? $turns : null;
     }
 
-    private function budget(): ?float
+    private function binary(string $name): string
     {
-        $budget = $this->config('agent.drivers.'.ClaudeCodeDriver::NAME.'.max_budget_usd') ?? $this->config('agent.max_budget_usd');
-
-        return is_numeric($budget) ? (float) $budget : null;
+        return $this->config->nullableString("agent.drivers.{$name}.binary") ?? match ($name) {
+            ClaudeCodeDriver::NAME => 'claude',
+            default => $name,
+        };
     }
 
     private function normalize(string $name): string
     {
         $name = strtolower(trim($name));
 
-        return self::ALIASES[$name] ?? ($name === '' ? self::AUTO : $name);
+        return Arr::get(self::ALIASES, $name) ?? ($name === '' ? self::AUTO : $name);
     }
 
     private function filled(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
-    }
-
-    private function config(string $key, mixed $default = null): mixed
-    {
-        return Arr::get($this->config, $key, $default);
     }
 }

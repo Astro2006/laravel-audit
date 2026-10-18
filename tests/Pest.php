@@ -1,5 +1,6 @@
 <?php
 
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Tests\TestCase;
 
 uses(TestCase::class)->in(__DIR__);
@@ -36,4 +37,34 @@ function claudeJson(array $overrides = []): string
             'claude-opus-5[1m]' => ['inputTokens' => 20, 'outputTokens' => 4000, 'cacheReadInputTokens' => 150000, 'cacheCreationInputTokens' => 30000, 'costUSD' => 0.419, 'canonicalModel' => 'claude-opus-5'],
         ],
     ], $overrides));
+}
+
+/**
+ * config('audit.audits') as the package ships it; with $enabled, only
+ * those audits are enabled.
+ *
+ * @param  list<string>|null  $enabled
+ */
+function auditsConfig(?array $enabled = null): array
+{
+    $audits = auditConfig()->array('audits');
+
+    if ($enabled !== null) {
+        foreach ($audits as $audit => $config) {
+            $audits[$audit]['enabled'] = in_array($audit, $enabled, true);
+        }
+    }
+
+    return $audits;
+}
+
+/**
+ * The audit config as the package ships it, with $config merged over it
+ * like a published config/audit.php.
+ *
+ * @param  array<string, mixed>  $config
+ */
+function auditConfig(array $config = []): AuditConfig
+{
+    return AuditConfig::load($config);
 }

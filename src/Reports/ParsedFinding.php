@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Reports;
 
 use Illuminate\Support\Collection;
 
-/**
- * A finding as it appears in the report, before validation.
- */
 final class ParsedFinding
 {
     /** @var Collection<string, string> lower-cased field name => raw value */
@@ -19,7 +16,6 @@ final class ParsedFinding
 
     public bool $hasTable = false;
 
-    /** Last line of the finding in the report, including its closing `---`. */
     public int $endLine;
 
     public function __construct(

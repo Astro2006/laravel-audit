@@ -4,20 +4,17 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Tests\FailureGroup;
-use Astro2006\LaravelAudit\Data\Tests\JunitReport;
-use Astro2006\LaravelAudit\Data\Tests\SkippedTest;
-use Astro2006\LaravelAudit\Data\Tests\SlowTest;
-use Astro2006\LaravelAudit\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\FailureGroup;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\JunitReport;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\SkippedTest;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\SlowTest;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\TestFailure;
+use Astro2006\LaravelAudit\Support\Files;
 use Astro2006\LaravelAudit\Support\Regex;
 use Astro2006\LaravelAudit\Support\Xml;
 use Illuminate\Support\Collection;
 use SimpleXMLElement;
 
-/**
- * Turns a JUnit report (PHPUnit or Pest) into what an agent needs:
- * totals, failures grouped by cause, skipped tests, slowest tests.
- */
 final class JunitCondenser
 {
     private const int MAX_GROUPS = 20;
@@ -54,7 +51,6 @@ final class JunitCondenser
             if ($problem !== null) {
                 $isError = $failure === null;
                 $errors += $isError ? 1 : 0;
-                // PHPUnit 12 starts the text with "Class::method"; that is not the message.
                 $identifier = Xml::attr($case, 'class') !== '' ? Xml::attr($case, 'class').'::'.Xml::attr($case, 'name') : null;
                 $message = $this->firstLine(Xml::attr($problem, 'message') ?: (string) $problem, $identifier);
                 $failures[] = new TestFailure(Xml::attr($problem, 'type', $isError ? 'Error' : 'Failure'), $message, $name, $file);
@@ -121,10 +117,6 @@ final class JunitCondenser
             ->all();
     }
 
-    /**
-     * More than 90 % red with one shared cause: a missing APP_KEY, a dead
-     * database connection or a browser that does not start — not the code.
-     */
     private function looksLikeBrokenEnvironment(int $total, int $broken, int $largestGroup): bool
     {
         return $total >= 5
@@ -142,10 +134,7 @@ final class JunitCondenser
 
     private function relativeFile(string $file, string $basePath): string
     {
-        $file = str_replace('\\', '/', (string) preg_replace('/::.*$/', '', $file));
-        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
-
-        return str_starts_with($file, $base) ? substr($file, strlen($base)) : $file;
+        return Files::relative((string) preg_replace('/::.*$/', '', $file), $basePath);
     }
 
     private function firstLine(string $text, ?string $skipPrefix = null): string

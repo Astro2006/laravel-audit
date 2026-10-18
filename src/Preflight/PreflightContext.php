@@ -4,28 +4,27 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
+use Astro2006\LaravelAudit\Run\AuditRun;
+use Astro2006\LaravelAudit\Run\RunPlan;
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Process\PendingProcess;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Process;
 
 final class PreflightContext
 {
     public readonly StepResults $results;
 
-    /**
-     * @param  array<string, mixed>  $config  the "audit" config array
-     */
     public function __construct(
         public readonly ProjectInspector $project,
         public readonly string $preflightDir,
         public readonly string $logsDir,
-        public readonly array $config,
+        public readonly AuditConfig $config,
         public readonly RunSelection $selection,
         public readonly ChildEnvironment $environment = new ChildEnvironment,
         public readonly string $phpBinary = PHP_BINARY,
@@ -33,9 +32,9 @@ final class PreflightContext
         $this->results = new StepResults;
     }
 
-    public function config(string $key, mixed $default = null): mixed
+    public static function forRun(RunPlan $plan, AuditRun $run, AuditConfig $config, ?RunSelection $selection = null): self
     {
-        return Arr::get($this->config, $key, $default);
+        return new self($plan->project, $run->preflightDir(), $run->logsDir(), $config, $selection ?? $plan->selection, ChildEnvironment::forApp($plan->project));
     }
 
     /**
@@ -46,7 +45,7 @@ final class PreflightContext
      */
     public function process(array $environment = []): PendingProcess
     {
-        return Process::path($this->project->basePath)->env([...$this->environment->overrides(), ...$environment]);
+        return Process::path($this->project->basePath)->env([...$this->environment->toolOverrides(), ...$environment]);
     }
 
     public function record(StepResult $result): void
@@ -54,7 +53,6 @@ final class PreflightContext
         $this->results->put($result);
     }
 
-    /** Absolute path below the preflight directory; parent directories are created. */
     public function path(string $relative): string
     {
         $path = $this->preflightDir.'/'.ltrim($relative, '/');
@@ -110,7 +108,6 @@ final class PreflightContext
         return [$this->phpBinary, $this->project->path('vendor/bin/'.$name), ...$arguments];
     }
 
-    /** Last lines of a tool's output, for error messages. */
     public static function tail(string $output, int $lines = 15): string
     {
         $all = Regex::lines(trim($output));

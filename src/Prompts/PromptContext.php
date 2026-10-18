@@ -6,14 +6,14 @@ namespace Astro2006\LaravelAudit\Prompts;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Run-specific values the prompt placeholders are filled with.
- */
 final readonly class PromptContext
 {
     /**
      * @param  list<string>  $excludePaths
      * @param  array<string, list<string>>  $customChecks  audit key => rules
+     * @param  array<string, string>  $snapshots  snapshot type => markdown for the prompt
+     * @param  array<string, string>  $skills  task key => the skills section of its prompt
+     * @param  string  $standards  the `## Coding standards` section for standards-stage tasks (GuidelineSource::render())
      */
     public function __construct(
         public string $projectName,
@@ -33,6 +33,10 @@ final readonly class PromptContext
         public bool $boostAvailable,
         public string $toolsNote = '',
         public int $maxFiles = 25,
+        public array $snapshots = [],
+        public array $skills = [],
+        public string $standards = '',
+        public string $projectContext = '',
     ) {}
 
     /** @return list<string> */

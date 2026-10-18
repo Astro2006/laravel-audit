@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
-use Astro2006\LaravelAudit\Data\Tests\CoverageReport;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\ClassCoverage;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\CoverageReport;
+use Astro2006\LaravelAudit\Support\Files;
 use Astro2006\LaravelAudit\Support\Xml;
 use SimpleXMLElement;
 
-/**
- * Clover coverage per class in app/, lowest coverage first.
- */
 final class CoverageCondenser
 {
     public function condense(string $cloverPath, string $basePath, string $sourceDir = 'app'): ?CoverageReport
@@ -22,15 +20,13 @@ final class CoverageCondenser
             return null;
         }
 
-        $base = rtrim(str_replace('\\', '/', $basePath), '/').'/';
         $prefix = rtrim($sourceDir, '/').'/';
         $classes = [];
         $statements = 0;
         $covered = 0;
 
         foreach (Xml::xpath($xml, '//file') as $file) {
-            $path = str_replace('\\', '/', Xml::attr($file, 'name'));
-            $relative = str_starts_with($path, $base) ? substr($path, strlen($base)) : $path;
+            $relative = Files::relative(Xml::attr($file, 'name'), $basePath);
 
             if (! str_starts_with($relative, $prefix)) {
                 continue;

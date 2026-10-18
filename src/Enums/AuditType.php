@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Audits\FrontendAudit;
 use Astro2006\LaravelAudit\Audits\TestsAudit;
-use Astro2006\LaravelAudit\Contracts\Audit;
 
 enum AuditType: string
 {
@@ -17,13 +17,14 @@ enum AuditType: string
     case Backend = 'backend';
     case Dependencies = 'dependencies';
 
-    public function audit(): Audit
+    /** @param  string|null  $overridePath  published prompts; only matters when actually rendering prompts */
+    public function audit(?string $overridePath = null): Audit
     {
         return match ($this) {
-            self::Tests => new TestsAudit,
-            self::Frontend => new FrontendAudit,
-            self::Backend => new BackendAudit,
-            self::Dependencies => new DependenciesAudit,
+            self::Tests => new TestsAudit($overridePath),
+            self::Frontend => new FrontendAudit($overridePath),
+            self::Backend => new BackendAudit($overridePath),
+            self::Dependencies => new DependenciesAudit($overridePath),
         };
     }
 

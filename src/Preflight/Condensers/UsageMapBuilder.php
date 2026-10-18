@@ -4,55 +4,37 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Composer\ClassReference;
-use Astro2006\LaravelAudit\Data\Composer\InstalledPackage;
-use Astro2006\LaravelAudit\Data\Composer\PackageUsage;
-use Astro2006\LaravelAudit\Data\Composer\TransitiveUsage;
-use Astro2006\LaravelAudit\Data\Composer\UsageMap;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\ClassReference;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\InstalledPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\PackageUsage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\TransitiveUsage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\UsageMap;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
-use Astro2006\LaravelAudit\Support\Regex;
 use Illuminate\Support\Collection;
 
-/**
- * Where does the app use each Composer package? Counts class references in
- * production code and tests, so the dependencies agent does not have to
- * grep the codebase itself.
- */
 final class UsageMapBuilder
 {
     private const array PRODUCTION_DIRS = ['app', 'config', 'database', 'routes', 'bootstrap', 'resources/views'];
 
     private const string TEST_DIR = 'tests';
 
-    /** Blade markers that reveal a package without a class reference: package => markers. */
-    private const array BLADE_MARKERS = [
-        'livewire/livewire' => ['@livewire', '<livewire:', 'wire:model', 'wire:click', '@livewireStyles', '@livewireScripts'],
-        'filament/filament' => ['<x-filament'],
-        'inertiajs/inertia-laravel' => ['@inertia'],
-    ];
-
-    /** @var Collection<string, string> namespace prefix (lower case, trailing backslash) => package, longest first */
-    private Collection $namespaces;
-
-    /** @var Collection<string, string|null> */
-    private Collection $resolved;
+    private NamespaceIndex $namespaces;
 
     public function __construct(private readonly ProjectInspector $project)
     {
-        $this->namespaces = new Collection;
-        $this->resolved = new Collection;
+        $this->namespaces = new NamespaceIndex([]);
     }
 
     public function build(): UsageMap
     {
-        $installed = $this->project->installedPackages();
-        $this->indexNamespaces($installed);
+        $installed = $this->project->composer()->installedPackages();
+        $this->namespaces = new NamespaceIndex($installed);
 
         $references = new Collection($this->references());
-        $direct = $this->project->directPackages();
-        $dontDiscover = array_map('strtolower', Read::strings($this->project->composerJson(), 'extra.laravel.dont-discover'));
-        $scripts = $this->scriptText();
+        $direct = $this->project->composer()->directPackages();
+        $dontDiscover = array_map('strtolower', Read::strings($this->project->composer()->composerJson(), 'extra.laravel.dont-discover'));
+        $binaryUsage = new BinaryUsage($this->project);
 
         $packages = [];
 
@@ -78,7 +60,7 @@ final class UsageMapBuilder
                     && ! in_array('*', $dontDiscover, true)
                     && ! in_array($name, $dontDiscover, true),
                 binaries: $binaries,
-                binaryUsed: $this->binaryUsed($binaries, $scripts),
+                binaryUsed: $binaryUsage->used($binaries),
                 hasFilesAutoload: $package !== null && $package->hasFilesAutoload,
             );
         }
@@ -99,20 +81,6 @@ final class UsageMapBuilder
             'Global helper functions from "files" autoloads are not detected (see has_files_autoload).',
             'Dynamic class names built from strings are not detected.',
         ]);
-    }
-
-    /** @param list<InstalledPackage> $installed */
-    private function indexNamespaces(array $installed): void
-    {
-        $namespaces = new Collection;
-
-        foreach ($installed as $package) {
-            foreach ($package->namespaces as $namespace) {
-                $namespaces->put(strtolower($namespace).'\\', $package->name);
-            }
-        }
-
-        $this->namespaces = $namespaces->sortKeysUsing(fn (string $a, string $b): int => strlen($b) <=> strlen($a));
     }
 
     /** @param list<InstalledPackage> $installed */
@@ -164,80 +132,16 @@ final class UsageMapBuilder
     {
         $code = (string) file_get_contents($this->project->path($file));
         $blade = str_ends_with($file, '.blade.php');
-        $packages = array_values(array_filter(array_map(
-            fn (string $name): ?string => $this->packageFor($name),
-            $blade ? $this->bladeNames($code) : $this->phpNames($code),
-        )));
-
-        if ($blade) {
-            foreach (self::BLADE_MARKERS as $package => $markers) {
-                foreach ($markers as $marker) {
-                    if (str_contains($code, $marker)) {
-                        $packages[] = $package;
-
-                        break;
-                    }
-                }
-            }
-        }
+        $packages = [
+            ...array_filter(array_map($this->namespaces->packageFor(...), ClassNames::in($code, $blade))),
+            ...($blade ? ClassNames::bladePackages($code) : []),
+        ];
 
         return (new Collection($packages))
             ->countBy()
             ->map(fn (int $count, int|string $package): array => [(string) $package, $count])
             ->values()
             ->all();
-    }
-
-    /** @return list<string> */
-    private function phpNames(string $code): array
-    {
-        $names = [];
-        $skipNext = false;
-
-        foreach (@token_get_all($code) as $token) {
-            if (! is_array($token)) {
-                continue;
-            }
-
-            [$id, $text] = $token;
-
-            if ($id === T_NAMESPACE) {
-                $skipNext = true;
-
-                continue;
-            }
-
-            if ($id === T_NAME_QUALIFIED || $id === T_NAME_FULLY_QUALIFIED) {
-                if (! $skipNext) {
-                    $names[] = ltrim($text, '\\');
-                }
-
-                $skipNext = false;
-            } elseif ($id !== T_WHITESPACE) {
-                $skipNext = false;
-            }
-        }
-
-        return $names;
-    }
-
-    /** @return list<string> */
-    private function bladeNames(string $code): array
-    {
-        return Regex::all('/\\\\?([A-Z][A-Za-z0-9_]*(?:\\\\[A-Z][A-Za-z0-9_]*)+)/', $code);
-    }
-
-    private function packageFor(string $name): ?string
-    {
-        $key = strtolower($name).'\\';
-
-        if (! $this->resolved->has($key)) {
-            $this->resolved->put($key, $this->namespaces->first(
-                fn (string $package, string $prefix): bool => str_starts_with($key, $prefix),
-            ));
-        }
-
-        return $this->resolved->get($key);
     }
 
     /**
@@ -255,34 +159,5 @@ final class UsageMapBuilder
             ->map(fn (int|string $file): string => (string) $file)
             ->values()
             ->all();
-    }
-
-    private function scriptText(): string
-    {
-        $text = json_encode(Read::array($this->project->composerJson(), 'scripts')).json_encode(Read::array($this->project->packageJson(), 'scripts'));
-
-        foreach (glob($this->project->path('.github/workflows').'/*.{yml,yaml}', GLOB_BRACE) ?: [] as $workflow) {
-            $text .= (string) file_get_contents($workflow);
-        }
-
-        foreach (['Makefile', 'Taskfile.yml'] as $file) {
-            if (is_file($this->project->path($file))) {
-                $text .= (string) file_get_contents($this->project->path($file));
-            }
-        }
-
-        return $text;
-    }
-
-    /** @param list<string> $binaries */
-    private function binaryUsed(array $binaries, string $scripts): bool
-    {
-        foreach ($binaries as $binary) {
-            if ($binary !== '' && preg_match('/(^|[\s\/"\'])'.preg_quote($binary, '/').'([\s"\']|$)/', $scripts) === 1) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

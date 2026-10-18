@@ -5,15 +5,12 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Audits\DependenciesAudit;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
 use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * preflight/summary.json — the first file every agent reads.
- */
 final readonly class PreflightSummary
 {
     public function __construct(

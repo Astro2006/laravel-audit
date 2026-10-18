@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Run;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Experimental, no grade: Σ weight[severity] × factor[confidence].
- * Only meant to calibrate a later score formula.
- */
 final class RiskPoints
 {
     /**

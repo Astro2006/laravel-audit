@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Audits;
 
 use Astro2006\LaravelAudit\Enums\AuditType;
+use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Enums\Stage;
 
-/**
- * One small, focused piece of an audit: a few related checks that read the
- * same code, run as one agent call. Tasks run in parallel unless they
- * depend on another task's output (its sections are injected as context).
- * Every audit ends with a summary task that only sees the merged findings.
- */
 final readonly class AuditTask
 {
     public const string SUMMARY = 'summary';
@@ -22,6 +18,9 @@ final readonly class AuditTask
      * @param  list<string>  $checks  check slugs this task owns
      * @param  list<string>  $sections  audit-specific report sections this task writes
      * @param  list<string>  $dependsOn  names of tasks in the same audit whose output this task needs
+     * @param  list<SnapshotType>  $snapshots  preflight data shown in the prompt (the status of all steps is always shown)
+     * @param  Stage  $stage  when an orchestrating agent runs the task: analyse, standards or security
+     * @param  int|null  $maxTurns  tool calls the task may take before it has to answer; null = agent.max_turns
      */
     public function __construct(
         public AuditType $audit,
@@ -30,9 +29,11 @@ final readonly class AuditTask
         public array $checks,
         public array $sections = [],
         public array $dependsOn = [],
+        public array $snapshots = [],
+        public Stage $stage = Stage::Standards,
+        public ?int $maxTurns = null,
     ) {}
 
-    /** Unique across the run, e.g. backend.injection. */
     public function key(): string
     {
         return $this->audit->value.'.'.$this->name;
@@ -49,19 +50,17 @@ final readonly class AuditTask
         return $this->name === self::SUMMARY;
     }
 
-    /** Template below resources/prompts. Summary and custom tasks share one per kind. */
     public function promptFile(): string
     {
         return match ($this->name) {
-            self::SUMMARY => 'tasks/_summary.md',
-            self::CUSTOM => 'tasks/_custom.md',
-            default => 'tasks/'.$this->audit->value.'/'.$this->name.'.md',
+            self::SUMMARY => 'shared/summary.md',
+            self::CUSTOM => 'shared/custom.md',
+            default => $this->audit->value.'/tasks/'.$this->name.'.md',
         };
     }
 
-    /** Optional audit-specific addition to a shared template (e.g. tasks/tests/summary.md). */
     public function extraPromptFile(): ?string
     {
-        return $this->isSummary() ? 'tasks/'.$this->audit->value.'/summary.md' : null;
+        return $this->isSummary() ? $this->audit->value.'/tasks/summary.md' : null;
     }
 }

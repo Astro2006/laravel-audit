@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 
-/**
- * Deterministic numbers straight from the preflight.
- */
 final class Metrics
 {
     /** @return list<Metric> */

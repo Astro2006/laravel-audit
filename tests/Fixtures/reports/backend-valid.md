@@ -20,6 +20,7 @@ The backend follows the project's action pattern. One mass assignment issue stan
 **Evidence**
 ```php
 $order->fill($data)->save();
+return $order;
 ---
 ### not a heading, this is inside a fence
 | Severity | critical |

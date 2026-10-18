@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\StackData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\StackDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Read;
 
 final class StackStep implements Step
 {
-    /** stack label => composer packages and npm packages that reveal it */
     private const array FRONTEND = [
         'livewire' => [['livewire/livewire'], []],
         'inertia' => [['inertiajs/inertia-laravel'], ['@inertiajs/vue3', '@inertiajs/react', '@inertiajs/svelte']],
@@ -47,16 +47,16 @@ final class StackStep implements Step
             }
         }
 
-        return StepResult::ok($this->step(), new StackData(
+        return StepResult::ok($this->step(), new StackDTO(
             frontend: $frontend,
             testFramework: match (true) {
                 $project->usesPest() => 'pest',
                 $project->isInstalled('phpunit/phpunit') => 'phpunit',
                 default => 'none',
             },
-            pestVersion: $project->majorVersion('pestphp/pest'),
+            pestVersion: $project->composer()->majorVersion('pestphp/pest'),
             browserPlugin: $project->hasBrowserPlugin(),
-            boost: $project->boostMcpServer() !== null,
+            boost: McpServer::forProject($project) !== null,
             packageManager: $project->packageManager()->value,
         ));
     }

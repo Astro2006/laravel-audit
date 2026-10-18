@@ -6,10 +6,6 @@ namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * Fixes trivial format slips without asking the agent again: heading
- * separators, ID padding, enum casing, decorated values and body labels.
- */
 final class ReportNormalizer
 {
     public function normalize(string $markdown): string

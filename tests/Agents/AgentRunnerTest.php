@@ -3,7 +3,8 @@
 use Astro2006\LaravelAudit\Agents\AgentJob;
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentRunner;
-use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
 use Astro2006\LaravelAudit\Audits\BackendAudit;
 use Astro2006\LaravelAudit\Enums\AuditStatus;
@@ -12,11 +13,20 @@ use Astro2006\LaravelAudit\Reports\ReportLinter;
 use Astro2006\LaravelAudit\Reports\ReportSpec;
 use Astro2006\LaravelAudit\Reports\ReportValidator;
 use Astro2006\LaravelAudit\Reports\RequiredFinding;
+use Astro2006\LaravelAudit\Support\ChildEnvironment;
 use Illuminate\Support\Facades\Process;
 
 function runner(string $logs, int $concurrency = 2): AgentRunner
 {
     return new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, concurrency: $concurrency, pollMicroseconds: 1000);
+}
+
+function openCodeAnswerLine(string $text): string
+{
+    return implode("\n", [
+        json_encode(['type' => 'text', 'timestamp' => 2, 'sessionID' => 'ses_slow', 'part' => ['messageID' => 'm1', 'text' => $text]]),
+        json_encode(['type' => 'step_finish', 'timestamp' => 3, 'sessionID' => 'ses_slow', 'part' => ['messageID' => 'm1', 'reason' => 'stop', 'tokens' => ['input' => 10, 'output' => 5]]]),
+    ])."\n";
 }
 
 function backendJob(array $required = []): AgentJob
@@ -48,6 +58,64 @@ it('validates a good answer without a repair pass', function () {
     Process::assertRanTimes(fn ($process) => $process->input === 'Audit the backend.' && $process->environment['AUDIT_TASK'] === 'backend', 1);
 });
 
+it('writes a JSON Lines answer as one formatted JSON document', function () {
+    $stream = file_get_contents(fixture('agents/opencode-run.jsonl'))."{\"type\":\"tool_use\"\n";
+    Process::fake(['*' => Process::result($stream)]);
+    $logs = tempDir('logs');
+    $runner = new AgentRunner(new OpenCodeDriver(fixture('project')), new ReportValidator(new ReportLinter(fixture('project'))), $logs, pollMicroseconds: 1000);
+
+    $runner->run([backendJob()]);
+
+    $events = json_decode(file_get_contents($logs.'/backend.json'), true);
+
+    expect($events)->toBeList()
+        ->and($events[0]['type'])->toBe('step_start')
+        ->and(end($events))->toBe('{"type":"tool_use"')
+        ->and(file_get_contents($logs.'/backend.json'))->toContain("\n    ");
+});
+
+it('stops an agent that runs past the timeout and fails its task', function () {
+    Process::fake(['*' => Process::describe()->output('partial')->errorOutput('still thinking')->runsFor(iterations: 1000)]);
+    $logs = tempDir('logs');
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), $logs, timeout: 0, pollMicroseconds: 1000);
+
+    [$outcome] = $runner->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Failed)
+        ->and($outcome->reason)->toContain('timed out after 0 seconds')
+        ->and($outcome->repaired)->toBeFalse()
+        ->and($logs.'/backend.json')->toBeFile();
+
+    Process::assertRanTimes(fn () => true, 1);
+});
+
+it('asks an agent that ran out of time for its report in the same session', function () {
+    $session = json_encode(['type' => 'step_start', 'timestamp' => 1, 'sessionID' => 'ses_slow', 'part' => []])."\n";
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::describe()->output($session)->runsFor(iterations: 1000))
+        ->push(Process::result(openCodeAnswerLine(file_get_contents(fixture('reports/backend-valid.md')))))]);
+    $runner = new AgentRunner(new OpenCodeDriver(fixture('project')), new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), timeout: 0, pollMicroseconds: 1000);
+
+    [$outcome] = $runner->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed)
+        ->and($outcome->repaired)->toBeTrue();
+
+    Process::assertRan(fn ($process) => in_array('ses_slow', (array) $process->command, true) && str_contains((string) $process->input, 'You ran out of time'));
+});
+
+it('removes the variables loaded from .env from the agent environment', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))]))]);
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), pollMicroseconds: 1000, environment: new ChildEnvironment(['APP_KEY' => 'base64:x', 'DB_PASSWORD' => 'secret']));
+
+    $runner->run([backendJob()]);
+
+    Process::assertRan(fn ($process) => $process->environment['APP_KEY'] === false
+        && $process->environment['DB_PASSWORD'] === false
+        && $process->environment['CLAUDECODE'] === false
+        && $process->environment['AUDIT_TASK'] === 'backend');
+});
+
 it('repairs an invalid answer in the same session', function () {
     $broken = str_replace("## Limitations\nQueues were not inspected.\n", '', file_get_contents(fixture('reports/backend-valid.md')));
 
@@ -67,6 +135,34 @@ it('repairs an invalid answer in the same session', function () {
     Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
         && str_contains($process->input, 'Missing section `## Limitations`.')
         && str_contains($process->input, 'starting with the `## Summary` line'));
+});
+
+it('asks for the report once the turn limit is reached', function () {
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['subtype' => 'error_max_turns', 'is_error' => true, 'result' => ''])))
+        ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))])))]);
+
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed);
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'You reached the turn limit.'));
+});
+
+it('asks an agent that never opened a file to check its findings once', function () {
+    $valid = file_get_contents(fixture('reports/backend-valid.md'));
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['result' => $valid, 'num_turns' => 1])))
+        ->push(Process::result(claudeJson(['result' => $valid, 'num_turns' => 4])))]);
+
+    [$outcome] = runner(tempDir('logs'))->run([backendJob()]);
+
+    expect($outcome->status)->toBe(AuditStatus::Completed)
+        ->and($outcome->repaired)->toBeTrue();
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'without opening a single file'));
 });
 
 it('fails after an unsuccessful repair pass', function () {
@@ -159,6 +255,20 @@ it('runs one task at a time with a concurrency of 1', function () {
     expect($events)->toBe(['start backend.a', 'finish backend.a', 'start backend.b', 'finish backend.b']);
 });
 
+it('starts the jobs others wait on first', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+    $started = [];
+
+    runner(tempDir('logs'), concurrency: 1)->run(
+        [taskJob('backend.a'), taskJob('backend.b'), taskJob('backend.c', dependsOn: ['backend.b'])],
+        function (AgentJob $job) use (&$started) {
+            $started[] = $job->key;
+        },
+    );
+
+    expect($started)->toBe(['backend.b', 'backend.a', 'backend.c']);
+});
+
 it('reports every poll round and the start of a repair pass', function () {
     $broken = str_replace("## Limitations\nQueues were not inspected.\n", '', file_get_contents(fixture('reports/backend-valid.md')));
 
@@ -180,4 +290,55 @@ it('reports every poll round and the start of a repair pass', function () {
 
     expect($ticks)->toBeGreaterThanOrEqual(3)
         ->and($repairs)->toBe(['backend']);
+});
+
+it('starts no more tasks after two agent calls in a row failed', function () {
+    Process::fake(['*' => Process::result('{"type":"error","timestamp":1,"sessionID":"ses_1","error":{"name":"APIError","data":{"message":"Too many queued requests"}}}', exitCode: 1)]);
+    $runner = new AgentRunner(new OpenCodeDriver('/app'), new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), concurrency: 1, pollMicroseconds: 1000);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b'), taskJob('backend.c'), taskJob('backend.d')]);
+    $byKey = collect($outcomes)->keyBy('key');
+
+    expect($outcomes)->toHaveCount(4)
+        ->and($byKey['backend.a']->reason)->toContain('Too many queued requests')
+        ->and($byKey['backend.c']->reason)->toBe('Not started: the last 2 agent calls failed, so the model is not answering.')
+        ->and($byKey['backend.d']->status)->toBe(AuditStatus::Failed);
+
+    Process::assertRanTimes(fn () => true, 2);
+});
+
+it('pauses the batch when the model hits a usage limit and keeps the tasks pending', function () {
+    Process::fake(['*' => Process::result(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'Usage limit reached. Your limit resets 2026-08-08 00:00 UTC.']), exitCode: 1)]);
+    $runner = runner(tempDir('logs'), concurrency: 1);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b'), taskJob('backend.c')]);
+
+    expect($outcomes)->toBe([])
+        ->and($runner->pause())->reason->toBe('limit')->pending->toBe(['backend.a', 'backend.b', 'backend.c'])->resetsAt->toBe(strtotime('2026-08-08 00:00 UTC'));
+
+    Process::assertRanTimes(fn () => true, 1);
+});
+
+it('pauses before a task that would exceed the run budget', function () {
+    Process::fake(['*' => Process::result(claudeJson(['result' => "## Findings\nNo findings.\n\n## Limitations\nNone."]))]);
+    $runner = new AgentRunner(new ClaudeCodeDriver, new ReportValidator(new ReportLinter(fixture('project'))), tempDir('logs'), concurrency: 1, pollMicroseconds: 1000, budgetUsd: 0.5);
+
+    $outcomes = $runner->run([taskJob('backend.a'), taskJob('backend.b')]);
+
+    expect($outcomes)->toHaveCount(1)
+        ->and($runner->pause())->reason->toBe('budget')->pending->toBe(['backend.b'])
+        ->and($runner->pause()->message)->toContain('0.5 USD reached: 0.42 USD spent');
+});
+
+it('asks the repair pass to fix the linter warnings too', function () {
+    $broken = (string) preg_replace('/\| Check \| [a-z-]+ \|/', '| Check | other |', str_replace("## Limitations\nQueues were not inspected.\n", '', file_get_contents(fixture('reports/backend-valid.md'))), 1);
+    Process::fake(['*' => Process::sequence()
+        ->push(Process::result(claudeJson(['result' => $broken])))
+        ->push(Process::result(claudeJson(['result' => file_get_contents(fixture('reports/backend-valid.md'))])))]);
+
+    runner(tempDir('logs'))->run([backendJob()]);
+
+    Process::assertRan(fn ($process) => in_array('--resume', (array) $process->command, true)
+        && str_contains($process->input, 'Fix these too:')
+        && str_contains($process->input, 'check "other" — consider a more specific check.'));
 });

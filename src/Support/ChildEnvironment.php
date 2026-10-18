@@ -6,30 +6,22 @@ namespace Astro2006\LaravelAudit\Support;
 
 use Dotenv\Dotenv;
 
-/**
- * `php artisan audit` has loaded the app's .env into its own process
- * environment, and child processes inherit it. A test run would then keep
- * APP_ENV=local or the app's DB_DATABASE, because phpunit.xml <env> without
- * force="true" does not override existing variables. Child processes
- * therefore start without the variables that came from .env, like a fresh
- * shell, and resolve their own environment (.env.testing, phpunit.xml).
- */
 final readonly class ChildEnvironment
 {
-    /**
-     * Variables coding agents set. Tools such as PHPStan switch to an
-     * "agent" output format when they see one, ignoring --error-format, so
-     * an audit started from inside an agent session would lose their JSON.
-     */
     public const array AGENT_VARIABLES = [
         'AI_AGENT', 'CLAUDECODE', 'CLAUDE_CODE', 'OPENCODE', 'OPENCODE_CLIENT', 'CODEX_SANDBOX', 'CODEX_THREAD_ID',
         'CURSOR_AGENT', 'CURSOR_TRACE_ID', 'GEMINI_CLI', 'AUGMENT_AGENT', 'AMP_CURRENT_THREAD_ID', 'REPL_ID',
     ];
 
-    /** @param list<string> $dotenvNames */
+    /** @param array<string, string> $dotenv  the variables in the app's .env file, name => value */
     public function __construct(
-        public array $dotenvNames = [],
+        public array $dotenv = [],
     ) {}
+
+    public static function forApp(ProjectInspector $project): self
+    {
+        return self::for($project, app()->environmentFile());
+    }
 
     public static function for(ProjectInspector $project, string $environmentFile = '.env'): self
     {
@@ -40,21 +32,33 @@ final readonly class ChildEnvironment
         }
 
         try {
-            return new self(array_keys(Dotenv::parse((string) file_get_contents($path))));
+            return new self(array_map(fn (?string $value): string => (string) $value, Dotenv::parse((string) file_get_contents($path))));
         } catch (\Throwable) {
             return new self;
         }
     }
 
     /**
-     * Environment for child processes: every .env variable and every
-     * agent marker is removed.
+     * Environment for agent CLIs: every variable named in .env and every
+     * agent marker is removed, whatever its origin, so no secret reaches them.
      *
      * @return array<string, false>
      */
     public function overrides(): array
     {
-        return array_fill_keys([...$this->dotenvNames, ...self::AGENT_VARIABLES], false);
+        return array_fill_keys([...array_keys($this->dotenv), ...self::AGENT_VARIABLES], false);
+    }
+
+    /**
+     * Environment for the preflight tools: like a fresh shell. Variables this
+     * process loaded from .env are removed; a variable exported in the shell
+     * keeps its value, because Laravel never lets .env overwrite it.
+     *
+     * @return array<string, false>
+     */
+    public function toolOverrides(): array
+    {
+        return array_fill_keys([...$this->loadedFromDotenv(), ...self::AGENT_VARIABLES], false);
     }
 
     /**
@@ -65,6 +69,21 @@ final readonly class ChildEnvironment
      */
     public function inherited(): array
     {
-        return array_diff_key(getenv(), array_flip($this->dotenvNames));
+        return array_diff_key(getenv(), array_flip($this->loadedFromDotenv()));
+    }
+
+    /**
+     * A variable that holds its .env value came from .env, or was exported
+     * with the same value, which makes no difference to the child.
+     *
+     * @return list<string>
+     */
+    private function loadedFromDotenv(): array
+    {
+        return array_keys(array_filter(
+            $this->dotenv,
+            fn (string $value, string $name): bool => ! in_array(getenv($name), [false, ''], true) ? getenv($name) === $value : true,
+            ARRAY_FILTER_USE_BOTH,
+        ));
     }
 }

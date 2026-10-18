@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
-use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteTestMapper;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuardResult;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
@@ -54,14 +53,14 @@ final class TestsStep implements AsyncStep
     {
         $project = $context->project;
 
-        if ($project->phpunitConfigPath() === null && ! is_dir($project->path('tests'))) {
+        if ($project->phpunit()->path() === null && ! is_dir($project->path('tests'))) {
             return StepResult::skipped($this->step(), SkipReason::NoConfig);
         }
 
         $this->database = $this->guard->check();
 
-        if (! $this->database->safe && ! $context->config('preflight.allow_shared_database', false)) {
-            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsData(database: $this->database));
+        if (! $this->database->safe && ! $context->config->bool('preflight.allow_shared_database')) {
+            return StepResult::skipped($this->step(), SkipReason::SharedDatabase, new TestsDTO(database: $this->database));
         }
 
         $junit = $context->path('tests/junit.xml');
@@ -70,10 +69,10 @@ final class TestsStep implements AsyncStep
         @unlink($clover);
 
         $driver = $project->coverageDriver();
-        $this->coverage = (bool) $context->config('preflight.tests.coverage', true)
-            && ! $context->selection->skips(OptionalStep::Coverage)
+        $this->coverage = $context->config->bool('preflight.tests.coverage')
+            && $context->selection->wantsCoverage()
             && $driver !== null;
-        $this->parallel = (bool) $context->config('preflight.tests.parallel', true) && $project->canRunParallel();
+        $this->parallel = $context->config->bool('preflight.tests.parallel') && $project->canRunParallel();
         $this->suites = $this->suitesWithoutBrowser($context);
 
         $flags = ['--log-junit='.$junit];
@@ -86,13 +85,20 @@ final class TestsStep implements AsyncStep
             $flags[] = '--testsuite='.implode(',', $this->suites);
         }
 
-        $custom = $context->config('preflight.tests.command');
-        $command = is_string($custom) && $custom !== ''
+        $custom = $context->config->nullableString('preflight.tests.command');
+        $command = $custom !== null
             ? $custom.' '.implode(' ', array_map('escapeshellarg', $flags))
             : $context->artisan(['test', ...($this->parallel ? ['--parallel'] : []), ...$flags]);
 
-        return $context->process($driver === 'xdebug' && $this->coverage ? ['XDEBUG_MODE' => 'coverage'] : [])
-            ->timeout((int) $context->config('preflight.tests.timeout', 1800))
+        $environment = match (true) {
+            ! $this->coverage => [],
+            $driver === 'herd' => ['PHPRC' => (string) $project->herdCoverageIni(), 'XDEBUG_MODE' => 'coverage'],
+            $driver === 'xdebug' => ['XDEBUG_MODE' => 'coverage'],
+            default => [],
+        };
+
+        return $context->process($environment)
+            ->timeout($context->config->int('preflight.tests.timeout'))
             ->start($command);
     }
 
@@ -106,7 +112,7 @@ final class TestsStep implements AsyncStep
             return StepResult::error(
                 $this->step(),
                 'The test run produced no JUnit report (see logs/tests.log): '.PreflightContext::tail($result->errorOutput() ?: $result->output(), 8),
-                new TestsData(database: $this->database),
+                new TestsDTO(database: $this->database),
             );
         }
 
@@ -122,7 +128,7 @@ final class TestsStep implements AsyncStep
 
         $this->writeRouteTestMap($context);
 
-        return StepResult::ok($this->step(), TestsData::fromReport($report, $coverage?->linesPct, $this->parallel, $this->suites, $this->database));
+        return StepResult::ok($this->step(), TestsDTO::fromReport($report, $coverage?->linesPct, $this->parallel, $this->suites, $this->database));
     }
 
     /**
@@ -133,8 +139,8 @@ final class TestsStep implements AsyncStep
      */
     private function suitesWithoutBrowser(PreflightContext $context): array
     {
-        $suites = $context->project->testSuites();
-        $browser = (string) $context->config('preflight.browser.testsuite', 'Browser');
+        $suites = $context->project->phpunit()->testSuites();
+        $browser = $context->config->string('preflight.browser.testsuite');
 
         if (! in_array($browser, $suites, true)) {
             return [];

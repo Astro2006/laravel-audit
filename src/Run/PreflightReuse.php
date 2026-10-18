@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Run;
 
-use Astro2006\LaravelAudit\Data\Run\RunFrontmatter;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\PreflightSummary;
+use Astro2006\LaravelAudit\Run\Data\RunFrontmatter;
 
-/**
- * --reuse-preflight: finds an earlier run and copies its preflight into the
- * new run folder (a copy, not a symlink, so it works on Windows).
- */
 final class PreflightReuse
 {
     public function find(string $outputRoot, ?string $runId, string $excludeRunId): ?RunFrontmatter

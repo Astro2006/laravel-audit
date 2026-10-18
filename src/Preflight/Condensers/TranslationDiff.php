@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Translations\MissingTranslations;
-use Astro2006\LaravelAudit\Data\Translations\TranslationReport;
+use Astro2006\LaravelAudit\Preflight\Data\Translations\MissingTranslations;
+use Astro2006\LaravelAudit\Preflight\Data\Translations\TranslationReport;
 use Illuminate\Support\Collection;
 
-/**
- * Translation keys that exist in the default locale but not in another one.
- */
 final class TranslationDiff
 {
     private const int MAX_KEYS = 50;

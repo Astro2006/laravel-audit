@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Agents;
 
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Token, cost and time usage of one or more agent calls.
- */
 final readonly class Telemetry
 {
     public function __construct(

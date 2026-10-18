@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-/**
- * Lenient, typed reads from foreign data (tool JSON, config, decoded files).
- * Missing keys and wrong types fall back to the default instead of failing.
- * Keys use dot notation, like data_get().
- */
 final class Read
 {
     /** @param array<mixed>|object $data */

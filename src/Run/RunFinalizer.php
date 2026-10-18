@@ -10,9 +10,6 @@ use Astro2006\LaravelAudit\Preflight\PreflightSummary;
 use Astro2006\LaravelAudit\Reports\OverlapDetector;
 use Astro2006\LaravelAudit\Reports\ReportWriter;
 
-/**
- * Writes the reports and completes run.md after the agents are done.
- */
 final class RunFinalizer
 {
     public function __construct(
@@ -35,7 +32,6 @@ final class RunFinalizer
 
             foreach ($outcome->tasks as $task) {
                 if (! $task->completed() && $task->body !== null) {
-                    // Kept for inspection; not part of the report.
                     file_put_contents($run->logsDir().'/'.$task->key.'.invalid.md', $task->body);
                 }
             }

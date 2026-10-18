@@ -1,12 +1,5 @@
 <?php
 
-use Astro2006\LaravelAudit\Data\Composer\AbandonedPackage;
-use Astro2006\LaravelAudit\Data\Composer\DependencyFactsReport;
-use Astro2006\LaravelAudit\Data\Composer\PackageCandidate;
-use Astro2006\LaravelAudit\Data\Phpstan\FileCount;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Tests\ClassCoverage;
 use Astro2006\LaravelAudit\Preflight\Condensers\CoverageCondenser;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\JunitCondenser;
@@ -16,6 +9,13 @@ use Astro2006\LaravelAudit\Preflight\Condensers\RouteFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\RouteTestMapper;
 use Astro2006\LaravelAudit\Preflight\Condensers\TranslationDiff;
 use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\AbandonedPackage;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\DependencyFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Composer\PackageCandidate;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\FileCount;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Tests\ClassCoverage;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
@@ -95,6 +95,26 @@ it('handles unauthenticated write routes without a name', function () {
     ]);
 
     expect(uris((new RouteFacts)->facts($routes)->unauthenticatedWrite))->toBe(['/webhook']);
+});
+
+it('counts only middleware that turns guests away as authentication', function () {
+    $route = fn (string $uri, array $middleware) => ['method' => 'POST', 'uri' => $uri, 'name' => null, 'action' => 'Closure', 'middleware' => $middleware];
+    $routes = RouteDefinition::listFromJson([
+        $route('guest-only', ['web', 'Illuminate\\Auth\\Middleware\\RedirectIfAuthenticated']),
+        $route('session-only', ['web', 'Illuminate\\Session\\Middleware\\AuthenticateSession']),
+        $route('authenticated', ['web', 'Illuminate\\Auth\\Middleware\\Authenticate:sanctum']),
+        $route('aliased', ['web', 'auth:web']),
+        $route('policy', ['web', 'Illuminate\\Auth\\Middleware\\Authorize:update,order']),
+        $route('custom', ['App\\Http\\Middleware\\AuthenticateApiKey']),
+    ]);
+
+    expect(uris((new RouteFacts)->facts($routes)->unauthenticatedWrite))->toBe(['/guest-only', '/session-only']);
+});
+
+it('keeps middleware parameters with commas together', function () {
+    [$route] = RouteDefinition::listFromJson([['method' => 'POST', 'uri' => 'login', 'name' => null, 'action' => 'Closure', 'middleware' => "web\nthrottle:60,1"]]);
+
+    expect($route->middleware)->toBe(['web', 'throttle:60,1']);
 });
 
 it('condenses clover coverage for app classes only, lowest first', function () {

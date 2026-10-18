@@ -4,24 +4,22 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
-use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
+use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\PhpstanConfig;
 use Astro2006\LaravelAudit\Preflight\Condensers\PhpstanGrouper;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PhpstanDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
 use Astro2006\LaravelAudit\Support\Read;
+use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Contracts\Process\ProcessResult;
 
-/**
- * One PHPStan run with the project's own config and level. Baseline
- * entries are read from the config instead of a second run.
- */
-final class PhpstanStep implements Step
+final class PhpstanStep implements AsyncStep
 {
     public function __construct(private readonly PhpstanGrouper $grouper = new PhpstanGrouper) {}
 
@@ -32,14 +30,17 @@ final class PhpstanStep implements Step
 
     public function run(PreflightContext $context): StepResult
     {
+        $started = $this->start($context);
+
+        return $started instanceof StepResult ? $started : $this->finish($context, $started->wait());
+    }
+
+    public function start(PreflightContext $context): InvokedProcess|StepResult
+    {
         $project = $context->project;
 
         if ($context->selection->skips(OptionalStep::Phpstan)) {
             return StepResult::skipped($this->step(), SkipReason::Without);
-        }
-
-        if (! $context->config('preflight.phpstan.enabled', true)) {
-            return StepResult::skipped($this->step(), SkipReason::Disabled);
         }
 
         if (! $project->hasVendorBinary('phpstan')) {
@@ -52,23 +53,29 @@ final class PhpstanStep implements Step
             return StepResult::skipped($this->step(), SkipReason::NoConfig);
         }
 
-        $override = $context->config('preflight.phpstan.level');
-        $override = $override === null || $override === '' ? null : (string) $override;
+        $override = $context->config->nullableString('preflight.phpstan.level');
         $arguments = [
             'analyse',
             '--error-format=json',
             '--no-progress',
             '--no-interaction',
-            '--memory-limit='.$context->config('preflight.phpstan.memory_limit', '2G'),
+            '--memory-limit='.$context->config->string('preflight.phpstan.memory_limit'),
         ];
 
         if ($override !== null) {
             $arguments[] = '--level='.$override;
         }
 
-        $result = $context->process()
-            ->timeout((int) $context->config('preflight.phpstan.timeout', 1800))
-            ->run($context->vendorBinary('phpstan', $arguments));
+        return $context->process()
+            ->timeout($context->config->int('preflight.phpstan.timeout'))
+            ->start($context->vendorBinary('phpstan', $arguments));
+    }
+
+    public function finish(PreflightContext $context, ProcessResult $result): StepResult
+    {
+        $project = $context->project;
+        $configPath = (string) $project->phpstanConfigPath();
+        $override = $context->config->nullableString('preflight.phpstan.level');
 
         file_put_contents($context->logPath('phpstan.log'), $result->errorOutput());
 
@@ -81,7 +88,7 @@ final class PhpstanStep implements Step
         $context->writeJson('phpstan/phpstan.json', $json);
 
         $config = new PhpstanConfig($configPath);
-        $level = $override ?? $this->dumpedLevel($context) ?? $config->level() ?? 'unknown';
+        $level = $override ?? $config->level() ?? $this->dumpedLevel($context) ?? 'unknown';
 
         $report = $this->grouper->group(
             $level,
@@ -92,7 +99,7 @@ final class PhpstanStep implements Step
 
         $context->writeJson('phpstan/phpstan-grouped.json', $report);
 
-        return StepResult::ok($this->step(), new PhpstanData(
+        return StepResult::ok($this->step(), new PhpstanDTO(
             level: $level,
             levelSource: $override !== null ? 'config/audit.php' : basename($configPath),
             errors: $report->errors,
@@ -101,7 +108,6 @@ final class PhpstanStep implements Step
         ));
     }
 
-    /** PHPStan resolves includes and "max" itself; ask it first. */
     private function dumpedLevel(PreflightContext $context): ?string
     {
         $result = $context->process()

@@ -6,12 +6,7 @@ namespace Astro2006\LaravelAudit\Contracts;
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
 use Astro2006\LaravelAudit\Agents\AgentResult;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 
-/**
- * Starts an agent CLI headless. The prompt always goes through STDIN. Names
- * follow Laravel Boost's agent names (claude_code, opencode, codex).
- */
 interface AgentDriver
 {
     public function name(): string;
@@ -20,14 +15,10 @@ interface AgentDriver
 
     public function binary(): string;
 
-    /** The model from the config, or null for the CLI default. */
     public function model(): ?string;
 
     public function isAvailable(): bool;
 
-    public function readProtection(): ReadProtection;
-
-    /** One sentence for the prompt: which tools the agent has and what is blocked. */
     public function toolsNote(): string;
 
     /**
@@ -47,6 +38,15 @@ interface AgentDriver
      * @return list<string> argv
      */
     public function resumeCommand(AgentResult $previous, AgentRequest $request): array;
+
+    /**
+     * Starts the orchestrating session: it may run `php artisan audit:tool`
+     * and nothing else; $request->maxTurns caps its turns.
+     *
+     * @param  float|null  $maxBudgetUsd  what the session may spend, where the CLI can enforce it
+     * @return list<string> argv
+     */
+    public function orchestratorCommand(AgentRequest $request, ?float $maxBudgetUsd = null): array;
 
     public function parse(string $stdout, int $exitCode): AgentResult;
 

@@ -6,19 +6,26 @@ namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Contracts\AsyncStep;
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Enums\GateDecision;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
-use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\Steps\AboutStep;
+use Astro2006\LaravelAudit\Preflight\Steps\BrowserStep;
+use Astro2006\LaravelAudit\Preflight\Steps\CandidatesStep;
+use Astro2006\LaravelAudit\Preflight\Steps\ComposerStep;
+use Astro2006\LaravelAudit\Preflight\Steps\LinesOfCodeStep;
+use Astro2006\LaravelAudit\Preflight\Steps\MigrationsStep;
+use Astro2006\LaravelAudit\Preflight\Steps\PhpstanStep;
+use Astro2006\LaravelAudit\Preflight\Steps\PintStep;
+use Astro2006\LaravelAudit\Preflight\Steps\RoutesStep;
+use Astro2006\LaravelAudit\Preflight\Steps\StackStep;
+use Astro2006\LaravelAudit\Preflight\Steps\TestsStep;
+use Astro2006\LaravelAudit\Preflight\Steps\TranslationsStep;
+use Astro2006\LaravelAudit\Run\RunPlan;
 use Closure;
 use Illuminate\Contracts\Process\InvokedProcess;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Throwable;
 
-/**
- * Runs the preflight in two strands: the heavy steps (tests → gate →
- * browser → phpstan) one after another, the light steps meanwhile. Tests
- * start in the background first, so the light steps run while they do.
- */
 final class PreflightRunner
 {
     /** @var Collection<string, Step> */
@@ -30,35 +37,63 @@ final class PreflightRunner
         $this->steps = (new Collection($steps))->keyBy(fn (Step $step): string => $step->step()->value);
     }
 
+    public static function forPlan(RunPlan $plan): self
+    {
+        return self::standard($plan->guard, (string) config('app.locale', 'en'));
+    }
+
+    public static function standard(DatabaseGuard $guard, string $locale): self
+    {
+        return new self([
+            new AboutStep,
+            new StackStep,
+            new LinesOfCodeStep,
+            new PintStep,
+            new RoutesStep,
+            new TranslationsStep($locale),
+            new ComposerStep,
+            new MigrationsStep,
+            new CandidatesStep,
+            new TestsStep($guard),
+            new BrowserStep($guard),
+            new PhpstanStep,
+        ]);
+    }
+
     /**
      * @param  Closure(StepResult): void  $onResult  called after every step
-     * @param  Closure(StepResult): GateDecision  $gate  called with the test result
      * @param  (Closure(PreflightStep): void)|null  $onStart
      */
-    public function run(PreflightContext $context, Closure $onResult, Closure $gate, ?Closure $onStart = null): GateDecision
+    public function run(PreflightContext $context, Closure $onResult, ?Closure $onStart = null): void
     {
         $required = $context->selection->requiredSteps();
         $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && $this->steps->has($step->value);
+        $background = [PreflightStep::Tests, ...($context->config->bool('preflight.phpstan.parallel') ? [PreflightStep::Phpstan] : [])];
 
-        $testsRunning = null;
-        $testsStarted = 0.0;
+        /** @var array<string, array{AsyncStep, InvokedProcess, float}> $running */
+        $running = [];
 
-        $tests = $this->step(PreflightStep::Tests);
+        foreach ($background as $step) {
+            if (! $has($step)) {
+                continue;
+            }
 
-        if ($has(PreflightStep::Tests) && $tests !== null) {
-            $onStart?->__invoke(PreflightStep::Tests);
-            $testsStarted = microtime(true);
+            $async = $this->step($step);
 
-            if ($tests instanceof AsyncStep) {
-                $started = $this->attempt(PreflightStep::Tests, fn () => $tests->start($context));
-
-                if ($started instanceof InvokedProcess) {
-                    $testsRunning = $started;
-                } else {
-                    $this->record($context, $started->withDuration(microtime(true) - $testsStarted), $onResult);
+            if (! $async instanceof AsyncStep) {
+                if ($step === PreflightStep::Tests) {
+                    $onStart?->__invoke($step);
+                    $this->runStep($context, $async, $onResult);
                 }
-            } else {
-                $this->runStep($context, $tests, $onResult);
+
+                continue;
+            }
+
+            $onStart?->__invoke($step);
+            $started = $this->startInBackground($context, $async, $onResult);
+
+            if ($started !== null) {
+                $running[$step->value] = $started;
             }
         }
 
@@ -69,31 +104,60 @@ final class PreflightRunner
 
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
+            $this->drain($running);
         }
 
-        if ($testsRunning !== null && $tests instanceof AsyncStep) {
-            $result = $this->attempt(PreflightStep::Tests, fn () => $tests->finish($context, $testsRunning->wait()));
-            $this->record($context, $result->withDuration(microtime(true) - $testsStarted), $onResult);
-        }
+        foreach ([PreflightStep::Tests, PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
+            if (Arr::has($running, $step->value)) {
+                [$async, $process, $startedAt] = Arr::get($running, $step->value);
+                $result = $this->attempt($step, fn () => $async->finish($context, $process->wait()));
+                $this->record($context, $result->withDuration(microtime(true) - $startedAt), $onResult);
 
-        $decision = $gate($context->results->get(PreflightStep::Tests) ?? StepResult::skipped(PreflightStep::Tests, SkipReason::Disabled));
-
-        foreach ([PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
-            if (! $has($step) || $context->results->get($step) !== null) {
                 continue;
             }
 
-            if (! $decision->allowsAgents()) {
-                $this->record($context, StepResult::skipped($step, SkipReason::GateAborted), $onResult);
-
+            if (! $has($step) || $context->results->get($step) !== null) {
                 continue;
             }
 
             $onStart?->__invoke($step);
             $this->runStep($context, $this->step($step), $onResult);
         }
+    }
 
-        return $decision;
+    /**
+     * Reads what the background processes wrote so far. A process whose
+     * output pipe is full stops until someone reads it, and Symfony only
+     * reads while it is asked for the status.
+     *
+     * @param  array<string, array{AsyncStep, InvokedProcess, float}>  $running
+     */
+    private function drain(array $running): void
+    {
+        foreach ($running as [, $process]) {
+            $process->running();
+        }
+    }
+
+    /**
+     * Starts an async step in the background. Returns null when it finished
+     * right away (skipped, crashed).
+     *
+     * @param  Closure(StepResult): void  $onResult
+     * @return array{AsyncStep, InvokedProcess, float}|null
+     */
+    private function startInBackground(PreflightContext $context, AsyncStep $async, Closure $onResult): ?array
+    {
+        $startedAt = microtime(true);
+        $started = $this->attempt($async->step(), fn () => $async->start($context));
+
+        if ($started instanceof InvokedProcess) {
+            return [$async, $started, $startedAt];
+        }
+
+        $this->record($context, $started->withDuration(microtime(true) - $startedAt), $onResult);
+
+        return null;
     }
 
     private function step(PreflightStep $step): ?Step

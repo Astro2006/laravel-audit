@@ -11,6 +11,10 @@ final readonly class AgentRequest
      * @param  string  $workingDirectory  project root; the agent can only read below it
      * @param  string|null  $configFile  the driver's per-run config (see AgentDriver::writeConfig())
      * @param  list<string>  $extraDirectories  directories outside the project the agent may read
+     * @param  array<string, string>  $environment  extra variables for the agent process
+     * @param  bool  $verify  a verify call, which gets fewer turns
+     * @param  bool  $answerOnly  no tools, one turn: the agent answers from the prompt alone
+     * @param  int|null  $maxTurns  the task's own turn cap; null = the driver's
      */
     public function __construct(
         public string $key,
@@ -18,5 +22,9 @@ final readonly class AgentRequest
         public string $workingDirectory,
         public ?string $configFile = null,
         public array $extraDirectories = [],
+        public array $environment = [],
+        public bool $verify = false,
+        public bool $answerOnly = false,
+        public ?int $maxTurns = null,
     ) {}
 }

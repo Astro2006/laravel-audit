@@ -5,22 +5,18 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Install;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
-use Astro2006\LaravelAudit\Enums\AuditType;
+use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
+use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * Collects what is missing. Larastan and Pint come with this package; the
- * plan only contains optional parts: Boost, paratest, the Pest browser
- * plugin and Playwright.
- */
 final class InstallPlanner
 {
-    /** @param array<string, mixed> $config */
     public function __construct(
         private readonly ProjectInspector $project,
-        private readonly array $config,
+        private readonly AuditConfig $config,
         private readonly ?DatabaseGuard $guard = null,
         private readonly ?AgentDriver $driver = null,
     ) {}
@@ -40,22 +36,20 @@ final class InstallPlanner
             $plan->present[] = 'playwright';
         }
 
-        // The audit starts Boost's MCP server itself (php artisan boost:mcp),
-        // so an installed Boost needs no further setup.
         if (! $project->isInstalled('laravel/boost')) {
             $plan->packages[] = new PlannedPackage('laravel/boost', 'composer');
             $plan->setup[] = 'boost';
         }
 
-        if ($this->active(AuditType::Tests) && ! $project->canRunParallel() && $project->isInstalled('phpunit/phpunit')) {
+        if ($this->needs(PreflightStep::Tests) && ! $project->canRunParallel() && $project->isInstalled('phpunit/phpunit')) {
             $plan->packages[] = new PlannedPackage('brianium/paratest', 'composer');
         }
 
-        if (($this->active(AuditType::Tests) || $this->active(AuditType::Frontend)) && Read::bool($this->config, 'preflight.browser.enabled', true)) {
+        if ($this->needs(PreflightStep::Browser)) {
             $this->planBrowser($plan);
         }
 
-        if ($project->phpstanConfigPath() === null && ($this->active(AuditType::Tests) || $this->active(AuditType::Backend))) {
+        if ($project->phpstanConfigPath() === null && $this->needs(PreflightStep::Phpstan)) {
             $plan->setup[] = 'phpstan-stub';
         }
 
@@ -67,7 +61,7 @@ final class InstallPlanner
     private function planBrowser(InstallPlan $plan): void
     {
         $project = $this->project;
-        $pestMajor = $project->majorVersion('pestphp/pest');
+        $pestMajor = $project->composer()->majorVersion('pestphp/pest');
         $pestPlanned = false;
 
         if (! $project->usesPest()) {
@@ -92,8 +86,8 @@ final class InstallPlanner
         }
 
         $location = $project->browserTests(
-            Read::string($this->config, 'preflight.browser.testsuite', 'Browser'),
-            Read::string($this->config, 'preflight.browser.path', 'tests/Browser'),
+            $this->config->string('preflight.browser.testsuite'),
+            $this->config->string('preflight.browser.path'),
         );
 
         if ($location === null) {
@@ -105,7 +99,7 @@ final class InstallPlanner
     {
         $project = $this->project;
 
-        if ($this->active(AuditType::Tests) && $project->coverageDriver() === null) {
+        if ($this->needs(PreflightStep::Tests) && $project->coverageDriver() === null) {
             $plan->manual[] = 'requirements.coverage_missing';
         }
 
@@ -117,7 +111,7 @@ final class InstallPlanner
             $plan->manual[] = 'node';
         }
 
-        if ($this->guard !== null && $this->active(AuditType::Tests)) {
+        if ($this->guard !== null && $this->needs(PreflightStep::Tests)) {
             $database = $this->guard->check();
 
             if (! $database->safe) {
@@ -126,7 +120,6 @@ final class InstallPlanner
         }
     }
 
-    /** Playwright keeps its browsers in a cache folder outside the project. */
     private function playwrightBrowsersInstalled(): bool
     {
         $home = (string) (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '');
@@ -143,8 +136,12 @@ final class InstallPlanner
         return (glob($home.'/chromium*') ?: []) !== [];
     }
 
-    private function active(AuditType $audit): bool
+    private function needs(PreflightStep $step): bool
     {
-        return Read::bool($this->config, 'audits.'.$audit->value, true);
+        try {
+            return RunSelection::resolve($this->config->array('audits'), [], [])->needs($step);
+        } catch (InvalidSelection) {
+            return false;
+        }
     }
 }

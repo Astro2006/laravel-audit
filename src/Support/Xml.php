@@ -28,7 +28,6 @@ final class Xml
         return $value === null || (string) $value === '' ? $default : (string) $value;
     }
 
-    /** The first child element with this name, or null. */
     public static function child(SimpleXMLElement $node, string $name): ?SimpleXMLElement
     {
         foreach ($node->children() as $child) {

@@ -9,10 +9,8 @@ use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Reports\AssembledReport;
 use Astro2006\LaravelAudit\Reports\Finding;
 use Astro2006\LaravelAudit\Reports\LintResult;
+use Illuminate\Support\Arr;
 
-/**
- * The result of one audit: the assembled report of its tasks.
- */
 final readonly class AuditOutcome
 {
     /**
@@ -47,7 +45,6 @@ final readonly class AuditOutcome
      */
     public static function fromTasks(AuditType $audit, array $tasks, AssembledReport $report, string $body, LintResult $lint, string $promptHash): self
     {
-        // A failed verify job leaves its task's findings unchanged; the audit is not partial because of it.
         $failed = array_values(array_filter($tasks, fn (TaskOutcome $task): bool => ! $task->completed() && ! $task->isVerify()));
         $status = match (true) {
             $failed === [] => AuditStatus::Completed,
@@ -62,7 +59,7 @@ final readonly class AuditOutcome
             $telemetry = $telemetry->plus($task->telemetry);
 
             if ($task->model !== null) {
-                $models[$task->model] = ($models[$task->model] ?? 0) + 1;
+                $models[$task->model] = Arr::get($models, $task->model, 0) + 1;
             }
         }
 
@@ -78,7 +75,6 @@ final readonly class AuditOutcome
             findings: $lint->findings,
             errors: $lint->errors,
             warnings: $lint->warnings,
-            // Tasks run in parallel: the audit took wall-clock time, not the sum.
             telemetry: new Telemetry(
                 inputTokens: $telemetry->inputTokens,
                 outputTokens: $telemetry->outputTokens,

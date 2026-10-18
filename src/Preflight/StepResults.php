@@ -4,24 +4,22 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight;
 
-use Astro2006\LaravelAudit\Contracts\StepData;
-use Astro2006\LaravelAudit\Data\Steps\AboutData;
-use Astro2006\LaravelAudit\Data\Steps\BrowserData;
-use Astro2006\LaravelAudit\Data\Steps\ComposerData;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
-use Astro2006\LaravelAudit\Data\Steps\PhpstanData;
-use Astro2006\LaravelAudit\Data\Steps\PintData;
-use Astro2006\LaravelAudit\Data\Steps\RoutesData;
-use Astro2006\LaravelAudit\Data\Steps\StackData;
-use Astro2006\LaravelAudit\Data\Steps\TestsData;
-use Astro2006\LaravelAudit\Data\Steps\TranslationsData;
+use Astro2006\LaravelAudit\Contracts\StepDTO;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\StepStatus;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\AboutDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\CandidatesDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\ComposerDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\LinesOfCodeDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\MigrationsDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PhpstanDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PintDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\RoutesDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\StackDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TranslationsDTO;
 
-/**
- * The results of all preflight steps, with typed access to their data.
- * Typed getters only return data of steps that ran successfully.
- */
 final class StepResults
 {
     /** @var list<StepResult> */
@@ -97,63 +95,73 @@ final class StepResults
         return false;
     }
 
-    public function about(): ?AboutData
+    public function about(): ?AboutDTO
     {
-        return $this->typed(PreflightStep::About, AboutData::class);
+        return $this->typed(PreflightStep::About, AboutDTO::class);
     }
 
-    public function stack(): ?StackData
+    public function stack(): ?StackDTO
     {
-        return $this->typed(PreflightStep::Stack, StackData::class);
+        return $this->typed(PreflightStep::Stack, StackDTO::class);
     }
 
-    public function linesOfCode(): ?LinesOfCodeData
+    public function linesOfCode(): ?LinesOfCodeDTO
     {
-        return $this->typed(PreflightStep::LinesOfCode, LinesOfCodeData::class);
+        return $this->typed(PreflightStep::LinesOfCode, LinesOfCodeDTO::class);
     }
 
-    public function pint(): ?PintData
+    public function pint(): ?PintDTO
     {
-        return $this->typed(PreflightStep::Pint, PintData::class);
+        return $this->typed(PreflightStep::Pint, PintDTO::class);
     }
 
-    public function routes(): ?RoutesData
+    public function routes(): ?RoutesDTO
     {
-        return $this->typed(PreflightStep::Routes, RoutesData::class);
+        return $this->typed(PreflightStep::Routes, RoutesDTO::class);
     }
 
-    public function translations(): ?TranslationsData
+    public function translations(): ?TranslationsDTO
     {
-        return $this->typed(PreflightStep::Translations, TranslationsData::class);
+        return $this->typed(PreflightStep::Translations, TranslationsDTO::class);
     }
 
-    public function composer(): ?ComposerData
+    public function migrations(): ?MigrationsDTO
     {
-        return $this->typed(PreflightStep::Composer, ComposerData::class);
+        return $this->typed(PreflightStep::Migrations, MigrationsDTO::class);
     }
 
-    public function tests(): ?TestsData
+    public function candidates(): ?CandidatesDTO
     {
-        return $this->typed(PreflightStep::Tests, TestsData::class);
+        return $this->typed(PreflightStep::Candidates, CandidatesDTO::class);
     }
 
-    public function browser(): ?BrowserData
+    public function composer(): ?ComposerDTO
     {
-        return $this->typed(PreflightStep::Browser, BrowserData::class);
+        return $this->typed(PreflightStep::Composer, ComposerDTO::class);
     }
 
-    public function phpstan(): ?PhpstanData
+    public function tests(): ?TestsDTO
     {
-        return $this->typed(PreflightStep::Phpstan, PhpstanData::class);
+        return $this->typed(PreflightStep::Tests, TestsDTO::class);
+    }
+
+    public function browser(): ?BrowserDTO
+    {
+        return $this->typed(PreflightStep::Browser, BrowserDTO::class);
+    }
+
+    public function phpstan(): ?PhpstanDTO
+    {
+        return $this->typed(PreflightStep::Phpstan, PhpstanDTO::class);
     }
 
     /**
-     * @template T of StepData
+     * @template T of StepDTO
      *
      * @param  class-string<T>  $class
      * @return T|null
      */
-    private function typed(PreflightStep $step, string $class): ?StepData
+    private function typed(PreflightStep $step, string $class): ?StepDTO
     {
         $result = $this->get($step);
 

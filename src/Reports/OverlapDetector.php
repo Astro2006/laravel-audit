@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * Lists findings from different audits that point at the same place:
- * overlapping lines in a file, the same route or the same package.
- * Purely deterministic; nothing is merged or dropped.
- */
+use Illuminate\Support\Arr;
+
 final class OverlapDetector
 {
     /**
@@ -29,8 +26,8 @@ final class OverlapDetector
 
             foreach ($findings as $i => $findingA) {
                 foreach (array_slice($findings, $i + 1) as $findingB) {
-                    $taskA = $findingTasks[$audit][$findingA->id] ?? null;
-                    $taskB = $findingTasks[$audit][$findingB->id] ?? null;
+                    $taskA = Arr::get(Arr::get($findingTasks, $audit, []), $findingA->id);
+                    $taskB = Arr::get(Arr::get($findingTasks, $audit, []), $findingB->id);
 
                     if ($taskA === null || $taskB === null || $taskA === $taskB) {
                         continue;

@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Routes\RouteDefinition;
-use Astro2006\LaravelAudit\Data\Routes\RouteFactsReport;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteDefinition;
+use Astro2006\LaravelAudit\Preflight\Data\Routes\RouteFactsReport;
 use Closure;
+use Illuminate\Support\Str;
 
-/**
- * Candidates from route:list — not findings. The frontend agent confirms
- * or rejects each one.
- */
 final class RouteFacts
 {
     private const array WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
     private const array MUTATING_ACTIONS = ['store', 'update', 'destroy', 'delete', 'remove'];
+
+    private const array AUTH_ALIASES = ['auth', 'auth.basic', 'can', 'verified'];
+
+    private const array AUTH_CLASSES = ['Authorize', 'EnsureEmailIsVerified'];
 
     private const string SENSITIVE_FORMS = '/login|register|password|forgot|reset|two-factor|2fa|verif|contact|newsletter|subscribe/i';
 
@@ -24,7 +25,6 @@ final class RouteFacts
 
     private const string PUBLIC_WRITES = '#^/?(login|logout|register|forgot-password|reset-password|email/verification-notification|two-factor-challenge|livewire(-[a-z0-9]+)?/|broadcasting/auth|sanctum/|_ignition|_boost/)#i';
 
-    // Local disk serve/upload routes (Laravel 12+) check a signed URL themselves.
     private const string FRAMEWORK_SIGNED_ROUTES = '/^storage\.[\w-]+\.(serve|upload)$/';
 
     /** @var Closure(string): bool */
@@ -82,11 +82,22 @@ final class RouteFacts
         return new RouteFactsReport(count($routes), $unauthenticatedWrite, $stateChangingGet, $missingThrottle, $debugRoutes, $brokenRoutes);
     }
 
-    /** @param list<string> $middleware */
+    /**
+     * route:list names middleware by alias or by class, with parameters
+     * after a colon. Only middleware that turns guests away counts;
+     * RedirectIfAuthenticated (guest) and AuthenticateSession do not.
+     *
+     * @param  list<string>  $middleware
+     */
     private function hasAuth(array $middleware): bool
     {
         foreach ($middleware as $item) {
-            if (stripos($item, 'auth') !== false || str_starts_with($item, 'can:') || stripos($item, 'Authorize') !== false) {
+            $name = Str::before($item, ':');
+            $class = Str::afterLast($name, '\\');
+
+            if (in_array($name, self::AUTH_ALIASES, true)
+                || in_array($class, self::AUTH_CLASSES, true)
+                || (str_starts_with($class, 'Authenticate') && $class !== 'AuthenticateSession')) {
                 return true;
             }
         }

@@ -6,10 +6,6 @@ namespace Astro2006\LaravelAudit\Install;
 
 use Astro2006\LaravelAudit\Support\Regex;
 
-/**
- * Reads the output of `composer require … --dry-run` and lists changes to
- * packages the user did not ask for: upgrades, downgrades and removals.
- */
 final class ComposerPreview
 {
     /**

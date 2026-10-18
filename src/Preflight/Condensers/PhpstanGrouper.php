@@ -4,17 +4,13 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Preflight\Condensers;
 
-use Astro2006\LaravelAudit\Data\Phpstan\BaselineEntry;
-use Astro2006\LaravelAudit\Data\Phpstan\FileCount;
-use Astro2006\LaravelAudit\Data\Phpstan\IdentifierGroup;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanMessage;
-use Astro2006\LaravelAudit\Data\Phpstan\PhpstanReport;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\BaselineEntry;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\FileCount;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\IdentifierGroup;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanMessage;
+use Astro2006\LaravelAudit\Preflight\Data\Phpstan\PhpstanReport;
 use Illuminate\Support\Collection;
 
-/**
- * Groups PHPStan errors by identifier and file, and adds the baseline
- * entries as "baselined" so hidden errors stay visible.
- */
 final class PhpstanGrouper
 {
     /**

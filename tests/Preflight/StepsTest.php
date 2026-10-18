@@ -28,8 +28,8 @@ function stepContext(array $without = [], array $config = [], ?string $project =
         new ProjectInspector($project ?? fixture('project')),
         $dir.'/preflight',
         $dir.'/logs',
-        array_replace_recursive(require dirname(__DIR__, 2).'/config/audit.php', $config),
-        RunSelection::resolve(['tests' => true, 'frontend' => true, 'backend' => true, 'dependencies' => true], [], $without),
+        auditConfig($config),
+        RunSelection::resolve(auditsConfig(), [], $without),
     );
 }
 
@@ -39,13 +39,13 @@ function safeGuard(ProjectInspector $project): DatabaseGuard
 }
 
 it('reads app info from artisan about', function () {
-    Process::fake(['*about*' => Process::result(json_encode(['environment' => ['application_name' => 'Shop', 'laravel_version' => '13.2.0', 'php_version' => '8.4.1', 'environment' => 'local']]))]);
+    Process::fake(['*about*' => Process::result(json_encode(['environment' => ['application_name' => 'Shop', 'laravel_version' => '13.2.0', 'php_version' => '8.4.1', 'environment' => 'local'], 'drivers' => ['database' => 'pgsql', 'queue' => 'database']]))]);
     $context = stepContext();
 
     $result = (new AboutStep)->run($context);
 
     expect($result->status)->toBe(StepStatus::Ok)
-        ->and($result->data)->name->toBe('Shop')->laravel->toBe('13.2.0')->php->toBe('8.4.1')
+        ->and($result->data)->name->toBe('Shop')->laravel->toBe('13.2.0')->php->toBe('8.4.1')->drivers->toBe(['database' => 'pgsql', 'queue' => 'database'])
         ->and($context->preflightDir.'/about.json')->toBeFile();
 });
 
@@ -174,15 +174,57 @@ it('starts the test run without the variables the audit process loaded from .env
         new ProjectInspector(fixture('project')),
         $dir.'/preflight',
         $dir.'/logs',
-        require dirname(__DIR__, 2).'/config/audit.php',
-        RunSelection::resolve(['tests' => true, 'frontend' => false, 'backend' => false, 'dependencies' => false], [], ['coverage']),
-        new ChildEnvironment(['APP_ENV', 'DB_DATABASE']),
+        auditConfig(),
+        RunSelection::resolve(auditsConfig(['tests']), [], ['coverage']),
+        new ChildEnvironment(['APP_ENV' => (string) getenv('APP_ENV'), 'DB_DATABASE' => 'shop']),
     );
 
     (new TestsStep(safeGuard($context->project)))->start($context)->wait();
 
-    Process::assertRan(fn ($process) => $process->environment === (new ChildEnvironment(['APP_ENV', 'DB_DATABASE']))->overrides()
+    Process::assertRan(fn ($process) => $process->environment === (new ChildEnvironment(['APP_ENV' => (string) getenv('APP_ENV'), 'DB_DATABASE' => 'shop']))->toolOverrides()
         && $process->environment['APP_ENV'] === false && $process->environment['CLAUDECODE'] === false);
+});
+
+it('measures coverage only when the tests audit runs', function () {
+    Process::fake(['*artisan*test*' => Process::result('')]);
+    $dir = tempDir('steps');
+    $project = new class(fixture('project')) extends ProjectInspector
+    {
+        public function coverageDriver(): ?string
+        {
+            return 'pcov';
+        }
+    };
+    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', auditConfig(), RunSelection::resolve(auditsConfig(['backend']), [], []));
+
+    (new TestsStep(safeGuard($project)))->start($context)->wait();
+
+    Process::assertRan(fn ($process) => str_contains(implode(' ', (array) $process->command), 'artisan')
+        && ! str_contains(implode(' ', (array) $process->command), '--coverage-clover'));
+});
+
+it('runs coverage through Herd\'s Xdebug ini so the processes the test runner starts load it too', function () {
+    Process::fake(['*artisan*test*' => Process::result('')]);
+    $dir = tempDir('steps');
+    $project = new class(fixture('project')) extends ProjectInspector
+    {
+        public function coverageDriver(): ?string
+        {
+            return 'herd';
+        }
+
+        public function herdCoverageIni(): ?string
+        {
+            return '/herd/debug.ini';
+        }
+    };
+    $context = new PreflightContext($project, $dir.'/preflight', $dir.'/logs', auditConfig(), RunSelection::resolve(auditsConfig(['tests']), [], []));
+
+    (new TestsStep(safeGuard($project)))->start($context)->wait();
+
+    Process::assertRan(fn ($process) => $process->environment['PHPRC'] === '/herd/debug.ini'
+        && $process->environment['XDEBUG_MODE'] === 'coverage'
+        && str_contains(implode(' ', (array) $process->command), '--coverage-clover'));
 });
 
 it('refuses to run tests against the app database', function () {

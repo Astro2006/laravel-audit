@@ -5,26 +5,19 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Reports;
 
 use Astro2006\LaravelAudit\Agents\TaskOutcome;
+use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
-use Astro2006\LaravelAudit\Contracts\Audit;
-use Astro2006\LaravelAudit\Enums\Severity;
-use Astro2006\LaravelAudit\Run\RunManifest;
 use Astro2006\LaravelAudit\Support\Regex;
+use Illuminate\Support\Arr;
 
-/**
- * Puts the task reports of one audit together into the audit report:
- * findings in task order with new IDs (Related is remapped), each section
- * from the task that owns it, positive observations and limitations merged,
- * failed tasks listed. The summary comes from the summary task, or a short
- * generated one when it failed.
- */
 final class AuditAssembler
 {
     private const int MAX_POSITIVE = 5;
 
-    private const string OUT_OF_SCOPE = '/^###\s+Out of scope observations/i';
-
-    public function __construct(private readonly ReportParser $parser = new ReportParser) {}
+    public function __construct(
+        private readonly ReportParser $parser = new ReportParser,
+        private readonly FindingEditor $editor = new FindingEditor,
+    ) {}
 
     /**
      * @param  list<AuditTask>  $tasks
@@ -35,32 +28,28 @@ final class AuditAssembler
      */
     public function assemble(Audit $audit, array $tasks, array $outcomes, ?string $summary = null, array $summarySections = [], array $skipped = []): AssembledReport
     {
-        $blocks = [];
-        $findingTasks = [];
         $sections = $summarySections;
-        $positive = [];
         $limitations = [];
-        $outOfScope = [];
         $completed = [];
         $failed = [];
-        $findings = [];
-        $rejected = 0;
         $skippedTasks = [];
-        $number = 0;
+        $reports = [];
+        $byTask = [];
+        $rejected = 0;
 
         foreach ($tasks as $task) {
             if ($task->isSummary()) {
                 continue;
             }
 
-            $outcome = $outcomes[$task->key()] ?? null;
+            $outcome = Arr::get($outcomes, $task->key());
 
-            if (isset($skipped[$task->key()])) {
+            if (Arr::has($skipped, $task->key())) {
                 $skippedTasks[] = $task->key();
-                $limitations[] = sprintf('- The task `%s` (%s) was skipped: %s', $task->key(), $task->title, $skipped[$task->key()]);
+                $limitations[] = sprintf('- The task `%s` (%s) was skipped: %s', $task->key(), $task->title, Arr::get($skipped, $task->key()));
 
                 foreach ($task->sections as $title) {
-                    $sections[$title] = 'Skipped: '.$skipped[$task->key()];
+                    $sections[$title] = 'Skipped: '.Arr::get($skipped, $task->key());
                 }
 
                 continue;
@@ -80,70 +69,80 @@ final class AuditAssembler
             }
 
             $completed[] = $task->key();
-            array_push($findings, ...$outcome->findings);
+            $reports[$task->key()] = $this->parser->parse($outcome->body);
+            $byTask[$task->key()] = $outcome->findings;
             $rejected += count($outcome->rejected);
-            $report = $this->parser->parse($outcome->body);
+        }
 
-            $ids = [];
+        $ordered = FindingOrder::sort($byTask, $audit->idPrefix());
+        $maps = [];
+        $findingTasks = [];
+        $findings = [];
+        $blocks = [];
 
-            foreach ($report->findings as $parsed) {
-                $ids[$parsed->id] = sprintf('%s-%03d', $audit->idPrefix(), ++$number);
-                $findingTasks[$ids[$parsed->id]] = $task->key();
+        foreach ($ordered as $entry) {
+            $finding = Arr::get($entry, 'finding');
+            $maps[Arr::get($entry, 'task')][Arr::get($entry, 'from')] = $finding->id;
+            $findingTasks[$finding->id] = Arr::get($entry, 'task');
+            $findings[] = $finding;
+        }
+
+        foreach ($ordered as $entry) {
+            $body = (string) Arr::get($outcomes, Arr::get($entry, 'task'))->body;
+            $block = $this->editor->blocks($body, [Arr::get($entry, 'from')]);
+            $blocks[] = FindingRenumberer::trimTitle(FindingRenumberer::renumber($block, Arr::get($maps, Arr::get($entry, 'task'), [])));
+        }
+
+        $positive = [];
+        $taskLimitations = [];
+        $outOfScope = [];
+
+        foreach ($tasks as $task) {
+            $report = Arr::get($reports, $task->key());
+
+            if ($report === null) {
+                continue;
             }
 
-            $block = $this->renumber((string) $report->section('Findings'), $ids);
-
-            if ($block !== '') {
-                $blocks[] = $block;
-            }
+            $ids = Arr::get($maps, $task->key(), []);
 
             foreach ($task->sections as $title) {
-                $sections[$title] = trim((string) $report->section($title));
+                $sections[$title] = FindingRenumberer::remap(trim((string) $report->section($title)), $ids);
             }
 
             foreach (Regex::lines((string) $report->section('Positive observations')) as $line) {
                 if (preg_match('/^\s*[-*]\s+\S/', $line) === 1) {
-                    $positive[] = rtrim($line);
+                    $positive[] = FindingRenumberer::remap(rtrim($line), $ids);
                 }
             }
 
-            $scope = false;
-
-            foreach (Regex::lines((string) $report->section('Limitations')) as $line) {
-                if (preg_match(self::OUT_OF_SCOPE, $line) === 1) {
-                    $scope = true;
-
-                    continue;
-                }
-
-                $line = $this->bullet($line);
-
-                if ($line === null) {
-                    continue;
-                }
-
-                if ($scope) {
-                    $outOfScope[] = $line;
-                } else {
-                    $limitations[] = $line;
-                }
-            }
+            [$bullets, $scope] = LimitationsMerger::split((string) $report->section('Limitations'));
+            $taskLimitations[$task->key()] = ['title' => $task->title, 'bullets' => array_map(fn (string $bullet): string => FindingRenumberer::remap($bullet, $ids), $bullets)];
+            array_push($outOfScope, ...array_map(fn (string $bullet): string => FindingRenumberer::remap($bullet, $ids), $scope));
         }
+
+        array_push($limitations, ...LimitationsMerger::merge($taskLimitations));
 
         if ($rejected > 0) {
             $limitations[] = sprintf('- %d findings were dropped because their evidence was not in the project, contradicted the preflight, or failed the verify pass. run.md lists them.', $rejected);
         }
 
+        $outOfScope = LimitationsMerger::outOfScope($outOfScope, $findings);
+
         $body = implode("\n", [
             '## Summary',
             '',
-            trim($summary ?? $this->generatedSummary($findings, $completed, $failed, $skippedTasks)),
+            trim($summary ?? GeneratedSummary::write($findings, $completed, $failed, $skippedTasks)),
             '',
             '## Findings',
             '',
             $blocks === [] ? 'No findings.' : implode("\n\n", $blocks),
             '',
             ...$this->auditSections($audit, $tasks, $sections, $failed),
+            '## Checks',
+            '',
+            ChecksTable::render($tasks, $outcomes, $skipped, $findings, $findingTasks),
+            '',
             '## Positive observations',
             '',
             $positive === [] ? 'None noted.' : implode("\n", array_slice(array_values(array_unique($positive)), 0, self::MAX_POSITIVE)),
@@ -151,56 +150,10 @@ final class AuditAssembler
             '## Limitations',
             '',
             $limitations === [] ? 'None.' : implode("\n", array_values(array_unique($limitations))),
-            ...($outOfScope === [] ? [] : ['', '### Out of scope observations', '', ...array_values(array_unique($outOfScope))]),
+            ...($outOfScope === [] ? [] : ['', '### Out of scope observations', '', ...$outOfScope]),
         ])."\n";
 
         return new AssembledReport($body, $findingTasks, $completed, $failed);
-    }
-
-    /**
-     * Gives the findings of one task their audit-wide IDs and remaps
-     * references to them in the Related field.
-     *
-     * @param  array<string, string>  $ids  task ID => audit ID
-     */
-    private function renumber(string $findings, array $ids): string
-    {
-        $lines = [];
-
-        foreach (Regex::lines($findings) as $line) {
-            if (strcasecmp(trim($line), 'No findings.') === 0) {
-                continue;
-            }
-
-            $heading = Regex::groups('/^(###\s+)([A-Z]{2,4}-\d{3})(\s*[—–-].*)$/u', $line);
-
-            if ($heading !== null) {
-                [$hashes, $id, $rest] = $heading;
-                $line = $hashes.($ids[$id] ?? $id).$rest;
-            } elseif (preg_match('/^\|\s*Related\s*\|/i', $line) === 1) {
-                $line = (string) preg_replace_callback('/\b[A-Z]{2,4}-\d{3}\b/', fn (array $match): string => $ids[$match[0]] ?? $match[0], $line);
-            }
-
-            $lines[] = $line;
-        }
-
-        return trim(implode("\n", $lines));
-    }
-
-    /**
-     * One line of a merged list: plain text becomes a bullet, list items and
-     * table rows stay as they are, empty lines and "None." disappear.
-     */
-    private function bullet(string $line): ?string
-    {
-        $line = rtrim($line);
-        $text = trim($line);
-
-        if ($text === '' || preg_match('/^(none|n\/a|keine)\.?$/i', $text) === 1) {
-            return null;
-        }
-
-        return preg_match('/^\s*([-*|]|\d+\.)\s*/', $line) === 1 ? $line : '- '.$text;
     }
 
     /**
@@ -222,7 +175,7 @@ final class AuditAssembler
                 }
             }
 
-            $content = $sections[$title] ?? '';
+            $content = Arr::get($sections, $title, '');
 
             if ($content === '') {
                 $content = $owner !== null && in_array($owner->key(), $failed, true)
@@ -234,50 +187,5 @@ final class AuditAssembler
         }
 
         return $lines;
-    }
-
-    /**
-     * Used when the summary task is off, failed or has not run yet: counts,
-     * the most severe findings, and what did not run.
-     *
-     * @param  list<Finding>  $findings
-     * @param  list<string>  $completed
-     * @param  list<string>  $failed
-     * @param  list<string>  $skipped
-     */
-    private function generatedSummary(array $findings, array $completed, array $failed, array $skipped = []): string
-    {
-        $counts = RunManifest::severityCounts($findings);
-        $parts = [];
-
-        foreach ($counts as $severity => $count) {
-            if ($count > 0) {
-                $parts[] = $count.' '.$severity;
-            }
-        }
-
-        $sentences = [sprintf(
-            '%d findings from %d tasks%s.',
-            count($findings),
-            count($completed),
-            $parts === [] ? '' : ' ('.implode(', ', $parts).')',
-        )];
-
-        $top = array_filter($findings, fn (Finding $finding): bool => $finding->severity->rank() >= Severity::High->rank());
-        usort($top, fn (Finding $a, Finding $b): int => $b->severity->rank() <=> $a->severity->rank());
-
-        if ($top !== []) {
-            $sentences[] = 'Most severe: '.implode('; ', array_map(fn (Finding $finding): string => $finding->title, array_slice($top, 0, 3))).'.';
-        }
-
-        if ($failed !== []) {
-            $sentences[] = sprintf('%d tasks failed (%s); see Limitations.', count($failed), implode(', ', $failed));
-        }
-
-        if ($skipped !== []) {
-            $sentences[] = sprintf('%d tasks had nothing to audit and were skipped (%s).', count($skipped), implode(', ', $skipped));
-        }
-
-        return implode(' ', $sentences);
     }
 }

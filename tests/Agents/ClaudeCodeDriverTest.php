@@ -1,10 +1,9 @@
 <?php
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Agents\DeniedFiles;
+use Astro2006\LaravelAudit\Agents\Drivers\ClaudeCodeDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
 
@@ -30,8 +29,27 @@ it('builds a read-only headless command', function () {
         '--max-budget-usd', '3',
         '--add-dir', '/elsewhere',
     ])
-        ->and($driver->name())->toBe('claude_code')
-        ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
+        ->and($driver->name())->toBe('claude_code');
+});
+
+it('limits the turns', function () {
+    $command = implode(' ', (new ClaudeCodeDriver(maxTurns: 12))->command(new AgentRequest('k', 'p', '/app')));
+
+    expect($command)->toContain('--max-turns 12')
+        ->and(implode(' ', (new ClaudeCodeDriver)->command(new AgentRequest('k', 'p', '/app'))))->not->toContain('--max-turns');
+});
+
+it('gives verify calls fewer turns', function () {
+    $driver = new ClaudeCodeDriver(maxTurns: 15, verifyMaxTurns: 6);
+
+    expect(implode(' ', $driver->command(new AgentRequest('k.verify', 'p', '/app', verify: true))))->toContain('--max-turns 6')
+        ->and(implode(' ', $driver->command(new AgentRequest('k', 'p', '/app'))))->toContain('--max-turns 15');
+});
+
+it('answers without tools in one turn when only an answer is wanted', function () {
+    $command = (new ClaudeCodeDriver(model: 'haiku', maxTurns: 15, boostTools: ['application-info']))->command(new AgentRequest('skills', 'p', '/app', '/logs/mcp.json', answerOnly: true));
+
+    expect($command)->toBe(['claude', '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config', '--tools', '', '--model', 'haiku', '--max-turns', '1']);
 });
 
 it('allows no mcp tools without an mcp config', function () {
@@ -89,6 +107,17 @@ it('resolves denied files and keeps the allowed exceptions', function () {
         ->toBe(['.env', '.env.testing', 'auth.json', 'storage/oauth-private.key']);
 });
 
+it('resolves ** in denied globs to any depth', function () {
+    $dir = tempDir('deny');
+    mkdir($dir.'/storage/app/keys', 0777, true);
+    touch($dir.'/storage/oauth-private.key');
+    touch($dir.'/storage/app/keys/signing.key');
+    touch($dir.'/storage/app/keys/readme.txt');
+
+    expect(DeniedFiles::resolve($dir, ['storage/**/*.key', 'missing/**/*.pem'], []))
+        ->toBe(['storage/app/keys/signing.key', 'storage/oauth-private.key']);
+});
+
 it('writes an mcp config with only the boost server', function () {
     $dir = tempDir('mcp');
     file_put_contents($dir.'/composer.lock', json_encode(['packages-dev' => [['name' => 'laravel/boost', 'version' => '1.0.0']]]));
@@ -97,7 +126,7 @@ it('writes an mcp config with only the boost server', function () {
         'github' => ['command' => 'gh-mcp'],
     ]]));
 
-    $path = (new ClaudeCodeDriver(boost: (new ProjectInspector($dir))->boostMcpServer()))->writeConfig($dir);
+    $path = (new ClaudeCodeDriver(boost: McpServer::forProject(new ProjectInspector($dir))))->writeConfig($dir);
 
     expect(json_decode(file_get_contents($path), true))->toBe(['mcpServers' => ['laravel-boost' => ['command' => 'php', 'args' => ['artisan', 'boost:mcp']]]])
         ->and((new ClaudeCodeDriver)->writeConfig($dir))->toBeNull();
@@ -107,6 +136,39 @@ it('falls back to the default boost command without an .mcp.json entry', functio
     $dir = tempDir('boost');
     file_put_contents($dir.'/composer.lock', json_encode(['packages-dev' => [['name' => 'laravel/boost', 'version' => '2.8.0']]]));
 
-    expect((new ProjectInspector($dir))->boostMcpServer())->toEqual(McpServer::default())
-        ->and((new ProjectInspector(tempDir('noboost')))->boostMcpServer())->toBeNull();
+    expect(McpServer::forProject(new ProjectInspector($dir)))->toEqual(McpServer::default())
+        ->and(McpServer::forProject(new ProjectInspector(tempDir('noboost'))))->toBeNull();
+});
+
+it('maps usage and rate limits to a limit exit', function () {
+    $driver = new ClaudeCodeDriver;
+    $limit = $driver->parse(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => "You've reached your usage limit. Your limit resets 2026-08-08 00:00 UTC."]), 1);
+
+    expect($limit->exit)->toBe(AgentExit::Limit)
+        ->and($limit->error)->toContain('usage limit')
+        ->and($driver->parse(claudeJson(['subtype' => 'error_during_execution', 'is_error' => true, 'result' => 'API Error: 429 {"type":"error","error":{"type":"rate_limit_error"}}']), 1)->exit)->toBe(AgentExit::Limit)
+        ->and($driver->parse(claudeJson(['result' => 'Findings about the missing rate limit on POST /login']), 0)->exit)->toBe(AgentExit::Success);
+});
+
+it('lets a task raise its own turn cap', function () {
+    $driver = new ClaudeCodeDriver(maxTurns: 15, verifyMaxTurns: 6);
+
+    expect(implode(' ', $driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30))))->toContain('--max-turns 30')
+        ->and(implode(' ', $driver->command(new AgentRequest('backend.dead-code.verify', 'p', '/app', verify: true, maxTurns: 30))))->toContain('--max-turns 6');
+});
+
+it('gives the orchestrator a session that can only run audit:tool', function () {
+    $driver = new ClaudeCodeDriver(model: 'claude-haiku-5-5', boost: McpServer::default(), boostTools: ['application-info']);
+
+    $command = $driver->orchestratorCommand(new AgentRequest('orchestrator', 'p', '/app', '/logs/mcp.json', maxTurns: 300), 2.5);
+
+    expect($command)->toBe([
+        'claude', '-p', '--output-format', 'json', '--restricted', '--permission-prompts', 'none', '--strict-mcp-config',
+        '--tools', 'Bash',
+        '--allowedTools', 'Bash(php artisan audit:tool:*)',
+        '--disallowedTools=Edit,Write,NotebookEdit,WebFetch,WebSearch,Read,Grep,Glob,Agent,Skill',
+        '--model', 'claude-haiku-5-5',
+        '--max-turns', '300',
+        '--max-budget-usd', '2.5',
+    ]);
 });

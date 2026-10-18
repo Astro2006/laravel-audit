@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Enums;
 
-/**
- * Parts of the preflight that can be left out for a single run with --without.
- */
 enum OptionalStep: string
 {
     case Browser = 'browser';

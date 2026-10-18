@@ -6,11 +6,11 @@ namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Audits\DependenciesAudit;
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\ComposerData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
 use Astro2006\LaravelAudit\Preflight\Condensers\DependencyFacts;
 use Astro2006\LaravelAudit\Preflight\Condensers\UsageMapBuilder;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\ComposerDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
@@ -20,10 +20,6 @@ use Illuminate\Process\Pool;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Process;
 
-/**
- * Composer audit, show, outdated, licenses and validate in parallel, then
- * the usage map, "composer why" for flagged packages and the facts file.
- */
 final class ComposerStep implements Step
 {
     private const int MAX_WHY = 20;
@@ -50,11 +46,11 @@ final class ComposerStep implements Step
             'validate' => ['validate', '--no-check-publish'],
         ]);
 
-        if ($context->config('preflight.composer.outdated', true)) {
+        if ($context->config->bool('preflight.composer.outdated')) {
             $commands->put('outdated', ['outdated', '--direct', '--format=json']);
         }
 
-        if ($context->config('preflight.composer.licenses', true)) {
+        if ($context->config->bool('preflight.composer.licenses')) {
             $commands->put('licenses', ['licenses', '--format=json']);
         }
 
@@ -88,13 +84,13 @@ final class ComposerStep implements Step
             validateExitCode: (int) $validate?->exitCode(),
             usageMap: $usageMap,
             why: $why,
-            licenseAllowlist: array_values(array_map('strval', (array) $context->config('preflight.license_allowlist', []))),
+            licenseAllowlist: $context->config->strings('preflight.license_allowlist'),
         );
 
         $context->writeJson(DependenciesAudit::FACTS_FILE, $facts);
 
-        return StepResult::ok($this->step(), new ComposerData(
-            direct: count($project->directPackages()),
+        return StepResult::ok($this->step(), new ComposerDTO(
+            direct: count($project->composer()->directPackages()),
             advisories: count($facts->advisories),
             advisoryPackages: count($facts->advisoryPackages()),
             abandoned: count($facts->abandoned),

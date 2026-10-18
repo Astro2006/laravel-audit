@@ -5,14 +5,11 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\LinesOfCodeData;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\LinesOfCodeDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 
-/**
- * Non-blank lines in app/. Used to put finding counts in relation to size.
- */
 final class LinesOfCodeStep implements Step
 {
     public function step(): PreflightStep
@@ -33,6 +30,6 @@ final class LinesOfCodeStep implements Step
             }
         }
 
-        return StepResult::ok($this->step(), new LinesOfCodeData($lines, count($files)));
+        return StepResult::ok($this->step(), new LinesOfCodeDTO($lines, count($files)));
     }
 }

@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Eval;
 
-use Astro2006\LaravelAudit\Data\Run\FindingRecord;
 use Astro2006\LaravelAudit\Enums\Severity;
+use Astro2006\LaravelAudit\Run\Data\FindingRecord;
 use Astro2006\LaravelAudit\Support\Read;
 
-/**
- * A planted problem or a negative control in the fixture app.
- */
 final readonly class ExpectedFinding
 {
     public function __construct(

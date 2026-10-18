@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-/**
- * Where the Pest browser tests live.
- */
 final readonly class BrowserTestLocation
 {
     /**

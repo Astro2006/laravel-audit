@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Reports;
 
-/**
- * A level-2 section of a report and its raw lines.
- */
 final class ReportSection
 {
     /** @var list<ReportLine> */

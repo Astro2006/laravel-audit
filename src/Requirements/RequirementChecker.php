@@ -5,26 +5,21 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Requirements;
 
 use Astro2006\LaravelAudit\Contracts\AgentDriver;
-use Astro2006\LaravelAudit\Enums\AuditType;
 use Astro2006\LaravelAudit\Enums\CheckStatus;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
+use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Preflight\DatabaseGuard;
 use Astro2006\LaravelAudit\Run\RunSelection;
+use Astro2006\LaravelAudit\Support\AuditConfig;
+use Astro2006\LaravelAudit\Support\McpServer;
 use Astro2006\LaravelAudit\Support\Messages;
 use Astro2006\LaravelAudit\Support\ProjectInspector;
-use Illuminate\Support\Arr;
 
-/**
- * What `php artisan audit` checks before it starts. It never installs
- * anything; missing parts point to `php artisan audit:install`.
- */
 final class RequirementChecker
 {
-    /** @param array<string, mixed> $config */
     public function __construct(
         private readonly ProjectInspector $project,
-        private readonly array $config,
+        private readonly AuditConfig $config,
         private readonly DatabaseGuard $guard,
         private readonly AgentDriver $driver,
         private readonly Messages $messages,
@@ -37,15 +32,15 @@ final class RequirementChecker
             return [Check::failed($this->messages->get('requirements.production'))];
         }
 
-        $checks = [];
-        $tests = $selection->includes(AuditType::Tests);
-        $browserRelevant = ($tests || $selection->includes(AuditType::Frontend)) && ! $selection->skips(OptionalStep::Browser);
+        $checks = $this->legacyKeys();
+        $tests = $selection->needs(PreflightStep::Tests);
+        $browser = $selection->needs(PreflightStep::Browser) && ! $selection->skips(OptionalStep::Browser);
 
         if ($agents) {
             array_push($checks, ...$this->agent());
         }
 
-        if ($selection->includes(AuditType::Dependencies)
+        if ($selection->needs(PreflightStep::Composer)
             && $this->project->findExecutable('composer') === null
             && ! is_file($this->project->path('composer.phar'))) {
             $checks[] = Check::failed($this->messages->get('requirements.composer_missing'));
@@ -54,12 +49,12 @@ final class RequirementChecker
         $checks[] = $this->outputDirectory();
 
         if ($agents) {
-            $checks[] = $this->project->boostMcpServer() !== null
-                ? Check::ok($this->messages->get('requirements.boost', ['count' => count((array) $this->config('agent.boost_tools', []))]))
+            $checks[] = McpServer::forProject($this->project) !== null
+                ? Check::ok($this->messages->get('requirements.boost', ['count' => count($this->config->strings('agent.boost_tools'))]))
                 : Check::info($this->messages->get('requirements.boost_missing'));
         }
 
-        if (($tests || $selection->includes(AuditType::Backend)) && ! $selection->skips(OptionalStep::Phpstan) && $this->config('preflight.phpstan.enabled', true)) {
+        if ($selection->needs(PreflightStep::Phpstan) && ! $selection->skips(OptionalStep::Phpstan)) {
             $config = $this->project->phpstanConfigPath();
             $checks[] = $config !== null && $this->project->hasVendorBinary('phpstan')
                 ? Check::ok($this->messages->get('requirements.phpstan', ['config' => basename($config)]))
@@ -67,26 +62,26 @@ final class RequirementChecker
         }
 
         if ($tests) {
-            if ($this->config('preflight.tests.coverage', true) && ! $selection->skips(OptionalStep::Coverage)) {
+            if ($this->config->bool('preflight.tests.coverage') && $selection->wantsCoverage()) {
                 $driver = $this->project->coverageDriver();
                 $checks[] = $driver !== null
                     ? Check::ok($this->messages->get('requirements.coverage', ['driver' => $driver]))
                     : Check::warning($this->messages->get('requirements.coverage_missing'));
             }
 
-            if ($this->config('preflight.tests.parallel', true) && ! $this->project->canRunParallel()) {
+            if ($this->config->bool('preflight.tests.parallel') && ! $this->project->canRunParallel()) {
                 $checks[] = Check::info($this->messages->get('requirements.paratest_missing'));
             }
         }
 
-        if ($tests || $browserRelevant) {
+        if ($tests || $browser) {
             $database = $this->guard->check();
-            $checks[] = $database->safe || $this->config('preflight.allow_shared_database', false)
+            $checks[] = $database->safe || $this->config->bool('preflight.allow_shared_database')
                 ? Check::ok($this->messages->get('requirements.database_safe', ['test' => $database->testDatabase]))
                 : Check::warning($this->messages->get('requirements.database_shared', ['app' => $database->appDatabase]));
         }
 
-        if ($browserRelevant && $this->config('preflight.browser.enabled', true)) {
+        if ($browser) {
             $checks[] = $this->browser();
         }
 
@@ -115,19 +110,12 @@ final class RequirementChecker
             return [Check::failed($this->messages->get('requirements.agent_missing', $replace))];
         }
 
-        return [
-            Check::ok($this->messages->get('requirements.agent', $replace)),
-            ...match ($driver->readProtection()) {
-                ReadProtection::Enforced => [],
-                ReadProtection::Waived => [Check::warning($this->messages->get('requirements.agent_unprotected_waived', $replace))],
-                ReadProtection::Missing => [Check::failed($this->messages->get('requirements.agent_unprotected', [...$replace, 'key' => 'agent.drivers.'.$driver->name().'.allow_unrestricted_read']))],
-            },
-        ];
+        return [Check::ok($this->messages->get('requirements.agent', $replace))];
     }
 
     private function outputDirectory(): Check
     {
-        $path = (string) $this->config('output_path', $this->project->path('storage/audit'));
+        $path = $this->config->string('output_path');
         $existing = $path;
 
         while (! is_dir($existing) && dirname($existing) !== $existing) {
@@ -144,8 +132,8 @@ final class RequirementChecker
     private function browser(): Check
     {
         $location = $this->project->browserTests(
-            (string) $this->config('preflight.browser.testsuite', 'Browser'),
-            (string) $this->config('preflight.browser.path', 'tests/Browser'),
+            $this->config->string('preflight.browser.testsuite'),
+            $this->config->string('preflight.browser.path'),
         );
 
         if ($location === null) {
@@ -161,8 +149,21 @@ final class RequirementChecker
         ]));
     }
 
-    private function config(string $key, mixed $default = null): mixed
+    /**
+     * Keys a published config still sets although they are no longer read.
+     *
+     * @return list<Check>
+     */
+    private function legacyKeys(): array
     {
-        return Arr::get($this->config, $key, $default);
+        $checks = [];
+
+        foreach ($this->config->legacyKeys() as $old => $new) {
+            $checks[] = Check::warning($new === null
+                ? $this->messages->get('requirements.legacy_key_removed', ['old' => $old])
+                : $this->messages->get('requirements.legacy_key', ['old' => $old, 'new' => $new]));
+        }
+
+        return $checks;
     }
 }

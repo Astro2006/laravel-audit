@@ -6,9 +6,6 @@ namespace Astro2006\LaravelAudit\Preflight;
 
 use Astro2006\LaravelAudit\Enums\GateDecision;
 
-/**
- * Writes preflight/summary.json — the first file every agent reads.
- */
 final class SummaryBuilder
 {
     public function write(PreflightContext $context, string $runId, GateDecision $gate): PreflightSummary

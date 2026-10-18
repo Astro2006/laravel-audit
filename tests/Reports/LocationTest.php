@@ -16,7 +16,18 @@ it('parses file, line, range, route and package locations', function (string $ra
     'route' => ['route:put  /orders/{order}', 'route:PUT /orders/{order}', 'route:PUT /orders/{order}'],
     'route with pipe' => ['route:GET|HEAD /', 'route:GET|HEAD /', 'route:GET|HEAD /'],
     'package' => ['package:Guzzlehttp/Guzzle', 'package:guzzlehttp/guzzle', 'package:guzzlehttp/guzzle'],
+    'range with en dash' => ['app/Models/User.php:42–48', 'app/Models/User.php', 'app/Models/User.php:42-48'],
+    'github anchor' => ['app/Models/User.php#L42', 'app/Models/User.php', 'app/Models/User.php:42'],
+    'github range' => ['app/Models/User.php#L42-L48', 'app/Models/User.php', 'app/Models/User.php:42-48'],
+    'several lines' => ['app/Models/User.php:42, 57', 'app/Models/User.php', 'app/Models/User.php:42'],
 ]);
+
+it('tells paths from prose', function () {
+    expect(Location::parse('app/Models/User.php:42')->isPath())->toBeTrue()
+        ->and(Location::parse('resources/views/{page}.blade.php')->isPath())->toBeTrue()
+        ->and(Location::parse('app/Models/User.php (line 42)')->isPath())->toBeFalse()
+        ->and(Location::parse('route:GET /')->isPath())->toBeFalse();
+});
 
 it('parses a locations cell with backticks and commas', function () {
     $locations = Location::parseList('`app/A.php:1`, `route:GET /a`, `package:vendor/b`');

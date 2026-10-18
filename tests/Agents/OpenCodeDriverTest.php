@@ -1,9 +1,8 @@
 <?php
 
 use Astro2006\LaravelAudit\Agents\AgentRequest;
-use Astro2006\LaravelAudit\Agents\OpenCodeDriver;
+use Astro2006\LaravelAudit\Agents\Drivers\OpenCodeDriver;
 use Astro2006\LaravelAudit\Enums\AgentExit;
-use Astro2006\LaravelAudit\Enums\ReadProtection;
 use Astro2006\LaravelAudit\Support\McpServer;
 
 it('builds a headless run command with its own agent and model', function () {
@@ -12,8 +11,7 @@ it('builds a headless run command with its own agent and model', function () {
     expect($driver->command(new AgentRequest('backend.injection', 'p', '/app', '/run/logs/opencode.json')))
         ->toBe(['opencode', 'run', '--pure', '--format', 'json', '--agent', 'laravel-audit', '--model', 'ollama/qwen3-coder:30b'])
         ->and($driver->environment(new AgentRequest('backend.injection', 'p', '/app', '/run/logs/opencode.json')))
-        ->toBe(['OPENCODE_CONFIG' => '/run/logs/opencode.json'])
-        ->and($driver->readProtection())->toBe(ReadProtection::Enforced);
+        ->toBe(['OPENCODE_CONFIG' => '/run/logs/opencode.json']);
 });
 
 it('writes a config with read-only tools, denied secrets and only the allowed boost tools', function () {
@@ -42,6 +40,33 @@ it('writes a config with read-only tools, denied secrets and only the allowed bo
         ->and($config['mcp']['laravel-boost'])->toBe(['type' => 'local', 'command' => ['php', 'artisan', 'boost:mcp'], 'enabled' => true]);
 });
 
+it('limits the steps of the audit agent', function () {
+    $dir = tempDir('opencode');
+    $limited = json_decode(file_get_contents((new OpenCodeDriver('/app', maxTurns: 12))->writeConfig($dir)), true);
+    $unlimited = json_decode(file_get_contents((new OpenCodeDriver('/app'))->writeConfig($dir)), true);
+
+    expect($limited['agent']['laravel-audit']['steps'])->toBe(12)
+        ->and($unlimited['agent']['laravel-audit'])->not->toHaveKey('steps');
+});
+
+it('runs verify calls as their own agent with fewer steps', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, verifyMaxTurns: 6);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-verify']['steps'])->toBe(6)
+        ->and($config['agent']['laravel-audit-verify']['permission'])->toBe($config['agent']['laravel-audit']['permission'])
+        ->and($driver->command(new AgentRequest('k.verify', 'p', '/app', verify: true)))->toContain('laravel-audit-verify')
+        ->and($driver->command(new AgentRequest('k', 'p', '/app')))->toContain('laravel-audit');
+});
+
+it('has an agent without tools that answers in one step', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-answer'])->toMatchArray(['tools' => ['*' => false], 'steps' => 1])
+        ->and($driver->command(new AgentRequest('skills', 'p', '/app', answerOnly: true)))->toContain('laravel-audit-answer');
+});
+
 it('parses the json event stream of a real run', function () {
     $driver = new OpenCodeDriver('/app', model: 'opencode/big-pickle');
     $result = $driver->parse(file_get_contents(fixture('agents/opencode-run.jsonl')), 0);
@@ -65,4 +90,42 @@ it('resumes the session and reports errors', function () {
     expect(array_slice($driver->resumeCommand($previous, new AgentRequest('k', 'p', '/app')), -2))->toBe(['--session', 'ses_f6f48795dffe3KYHTjDTTIYtYf'])
         ->and($driver->parse($error, 1))->exit->toBe(AgentExit::Error)->error->toBe('Model hy3-free is not supported')
         ->and($driver->parse('', 1)->exit)->toBe(AgentExit::Error);
+});
+
+it('fails a run in which the model only sent empty replies', function () {
+    $empty = implode("\n", array_map(fn (int $step): string => json_encode(['type' => 'step_finish', 'timestamp' => $step, 'sessionID' => 'ses_1', 'part' => ['messageID' => 'm'.$step, 'reason' => 'unknown', 'tokens' => ['input' => 0, 'output' => 0]]]), range(1, 30)));
+
+    $result = (new OpenCodeDriver('/app'))->parse($empty, 0);
+
+    expect($result->exit)->toBe(AgentExit::Error)
+        ->and($result->error)->toContain('30 empty replies')
+        ->and($result->telemetry->turns)->toBe(30);
+});
+
+it('maps a rate limit of the provider to a limit exit', function () {
+    $error = '{"type":"error","timestamp":1,"sessionID":"ses_1","error":{"name":"APIError","data":{"message":"Rate limit exceeded, retry in 20s"}}}';
+
+    expect((new OpenCodeDriver('/app'))->parse($error, 1))->exit->toBe(AgentExit::Limit)->error->toBe('Rate limit exceeded, retry in 20s');
+});
+
+it('gives tasks with their own turn cap their own agent', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, taskSteps: [30, 25]);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+
+    expect($config['agent']['laravel-audit-30']['steps'])->toBe(30)
+        ->and($config['agent']['laravel-audit-25']['permission'])->toBe($config['agent']['laravel-audit']['permission'])
+        ->and($driver->command(new AgentRequest('backend.dead-code', 'p', '/app', maxTurns: 30)))->toContain('laravel-audit-30')
+        ->and($driver->command(new AgentRequest('backend.laravel', 'p', '/app')))->toContain('laravel-audit');
+});
+
+it('gives the orchestrator its own agent that may only run audit:tool', function () {
+    $driver = new OpenCodeDriver('/app', maxTurns: 15, orchestratorMaxTurns: 300);
+    $config = json_decode(file_get_contents($driver->writeConfig(tempDir('opencode'))), true);
+    $agent = $config['agent']['laravel-audit-orchestrator'];
+
+    expect($agent['tools'])->toBe(['*' => false, 'bash' => true])
+        ->and($agent['permission']['bash'])->toBe(['*' => 'deny', 'php artisan audit:tool *' => 'allow'])
+        ->and($agent['permission'])->toMatchArray(['edit' => 'deny', 'read' => 'deny', 'webfetch' => 'deny', 'task' => 'deny'])
+        ->and($agent['steps'])->toBe(300)
+        ->and($driver->orchestratorCommand(new AgentRequest('orchestrator', 'p', '/app')))->toBe(['opencode', 'run', '--pure', '--format', 'json', '--agent', 'laravel-audit-orchestrator']);
 });

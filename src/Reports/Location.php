@@ -7,10 +7,6 @@ namespace Astro2006\LaravelAudit\Reports;
 use Astro2006\LaravelAudit\Support\Regex;
 use Stringable;
 
-/**
- * One location of a finding: a file (optionally with lines), a route, a
- * package, or a file whose absence is the finding (`missing:path`).
- */
 final readonly class Location implements Stringable
 {
     public function __construct(
@@ -78,7 +74,7 @@ final readonly class Location implements Stringable
             return new self(missing: self::normalizePath($value));
         }
 
-        $lines = Regex::groups('/^(.+?):(\d+)(?:\s*-\s*(\d+))?$/', $raw);
+        $lines = Regex::groups('/^(.+?)(?::|#L)(\d+)(?:\s*[-–—]\s*L?(\d+))?(?:\s*,\s*\d+)*$/u', $raw);
 
         if ($lines !== null) {
             [$file, $line, $endLine] = $lines;
@@ -93,10 +89,6 @@ final readonly class Location implements Stringable
         return new self(file: self::normalizePath($raw));
     }
 
-    /**
-     * What the location points at, without line numbers. Used for finding
-     * keys and for matching required findings.
-     */
     public function target(): string
     {
         return match (true) {
@@ -112,12 +104,16 @@ final readonly class Location implements Stringable
         return $this->file !== null;
     }
 
+    public function isPath(): bool
+    {
+        return $this->file !== null && preg_match('#^[\w@.~+{}\[\]$-]+(/[\w@.~+{}\[\]$-]+)*$#u', $this->file) === 1;
+    }
+
     public function isMissing(): bool
     {
         return $this->missing !== null;
     }
 
-    /** Last line covered by this location, or null for whole-file locations. */
     public function lastLine(): ?int
     {
         return $this->endLine ?? $this->line;

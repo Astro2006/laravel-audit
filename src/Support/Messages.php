@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Astro2006\LaravelAudit\Support;
 
-/**
- * Console texts in the report language (config audit.report_language,
- * falling back to app.locale, then English).
- */
 final class Messages
 {
     public function __construct(public readonly string $locale = 'en') {}

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Astro2006\LaravelAudit\Preflight\Steps;
 
 use Astro2006\LaravelAudit\Contracts\Step;
-use Astro2006\LaravelAudit\Data\Steps\PintData;
 use Astro2006\LaravelAudit\Enums\OptionalStep;
 use Astro2006\LaravelAudit\Enums\PreflightStep;
 use Astro2006\LaravelAudit\Enums\SkipReason;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\PintDTO;
 use Astro2006\LaravelAudit\Preflight\PreflightContext;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Support\Json;
@@ -28,10 +28,6 @@ final class PintStep implements Step
             return StepResult::skipped($this->step(), SkipReason::Without);
         }
 
-        if (! $context->config('preflight.pint', true)) {
-            return StepResult::skipped($this->step(), SkipReason::Disabled);
-        }
-
         if (! $context->project->hasVendorBinary('pint')) {
             return StepResult::skipped($this->step(), SkipReason::NotInstalled);
         }
@@ -48,7 +44,6 @@ final class PintStep implements Step
 
         $context->writeJson('pint.json', $report);
 
-        // One entry per (rule, file), then grouped by rule.
         $pairs = new Collection;
 
         foreach (Read::arrays($report, 'files') as $file) {
@@ -74,6 +69,6 @@ final class PintStep implements Step
         $filesWithIssues = count(Read::arrays($report, 'files'));
         $context->writeJson('pint-grouped.json', ['files_with_issues' => $filesWithIssues, 'rules' => $rules]);
 
-        return StepResult::ok($this->step(), new PintData($filesWithIssues, count($rules)));
+        return StepResult::ok($this->step(), new PintDTO($filesWithIssues, count($rules)));
     }
 }
