@@ -7,6 +7,7 @@ namespace Astro2006\LaravelAudit\Prompts;
 use Astro2006\LaravelAudit\Audits\Audit;
 use Astro2006\LaravelAudit\Audits\AuditTask;
 use Astro2006\LaravelAudit\Enums\SnapshotType;
+use Astro2006\LaravelAudit\Enums\Stage;
 use Astro2006\LaravelAudit\Support\Language;
 use Illuminate\Support\Arr;
 
@@ -53,6 +54,7 @@ final class TaskPlaceholders
             '{{tools_note}}' => $context->toolsNote !== '' ? $context->toolsNote : self::TOOLS_NOTE,
             '{{boost_note}}' => $context->boostAvailable ? self::BOOST_NOTE : self::NO_BOOST_NOTE,
             '{{skills}}' => (string) Arr::get($context->skills, $task->key(), ''),
+            '{{standards}}' => $task->stage === Stage::Standards || $task->name === 'conventions' ? $context->standards : '',
         ];
     }
 

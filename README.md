@@ -435,6 +435,8 @@ return [
 | `preflight.composer.*` / `preflight.license_allowlist` | `outdated` and `licenses` on / common open-source licenses |
 | `max_findings_per_task` / `max_files_per_task` | `5` / `25` |
 | `agent.skills` / `skills_per_task` / `skill_max_chars` | `auto` (one agent call picks the skills per task) / `2` / `2000` |
+| `agent.standards` / `standards_max_chars` | `boost` (the code rules Boost wrote into `AGENTS.md`, plus `.ai/rules` and `.ai/guidelines`, inlined into the standards-stage tasks), `none`, or a list of files / `6000` |
+| `agent.run_budget_usd` | `null`; pause the run before a task that would push its total cost above this amount (`AUDIT_RUN_BUDGET_USD`) |
 | `agent.verify_max_turns` | `6`, tool calls a verify call may take |
 | `tool.wait_timeout` | `100`, seconds `audit:tool wait` blocks at most |
 | `tool.max_calls` | `400`, `audit:tool` calls per run; above it only `status`, `wait` and `finish` still work |

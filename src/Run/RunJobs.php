@@ -11,6 +11,7 @@ use Astro2006\LaravelAudit\Prompts\PromptTemplates;
 use Astro2006\LaravelAudit\Skills\SkillInventory;
 use Astro2006\LaravelAudit\Skills\SkillSection;
 use Astro2006\LaravelAudit\Skills\SkillSelection;
+use Astro2006\LaravelAudit\Standards\GuidelineSource;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\McpServer;
 
@@ -31,7 +32,8 @@ final class RunJobs
         $driverConfig = $driver->writeConfig($run->logsDir(), $extra);
         $snapshots = SnapshotWriter::standard($this->config->int('snapshot_rows'))->write($summary, $project->relative($run->preflightDir()));
         $skills = SkillSection::render(SkillSelection::read($run->dir().'/'.SkillSelection::FILE) ?? new SkillSelection, SkillInventory::scan($project->basePath), max(200, $this->config->int('skill_max_chars')));
-        $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $locale, McpServer::forProject($project) !== null, $driver->toolsNote(), $snapshots, $skills);
+        $standards = GuidelineSource::for($project->basePath, $this->config)->render(max(200, $this->config->int('standards_max_chars')));
+        $prompt = (new PromptContextBuilder)->build($summary, $run, $project, $this->config, $locale, McpServer::forProject($project) !== null, $driver->toolsNote(), $snapshots, $skills, $standards);
         $overridePath = PromptTemplates::publishedPath();
         $requests = new TaskRequests($prompt, $overridePath, $run, $project->basePath, $driverConfig, $extra);
 

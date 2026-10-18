@@ -26,6 +26,8 @@ Every finding uses exactly one of these slugs in its `Check` field; your task in
 
 {{skills}}
 
+{{standards}}
+
 ## How to work
 
 1. A preflight step with status `error` or `skipped` goes under Limitations.

@@ -116,17 +116,18 @@ abstract class Audit
     public function renderTask(AuditTask $task, PromptContext $context, array $dependencyContext = [], array $missingDependencies = [], ?int $maxFindings = null): RenderedPrompt
     {
         $instructions = $this->templates->get($task->promptFile());
+        $placeholders = TaskPlaceholders::for($this, $task, $context, $instructions);
         $text = strtr($this->templates->get(self::BASE_TEMPLATE)."\n\n".$instructions, [
-            ...TaskPlaceholders::for($this, $task, $context, $instructions),
+            ...$placeholders,
             ...($maxFindings === null ? [] : ['{{max_findings}}' => (string) $maxFindings]),
             '{{snapshot}}' => TaskPlaceholders::snapshots($task, $context),
             '{{dependency_context}}' => TaskPlaceholders::dependencyContext($dependencyContext, $missingDependencies),
             '{{sections_template}}' => implode('', array_map(fn (string $title): string => "## {$title}\n<see your task instructions>\n\n", $task->sections)),
         ]);
 
-        $skills = (string) Arr::get($context->skills, $task->key(), '');
+        $extra = ((string) Arr::get($context->skills, $task->key(), '')).Arr::get($placeholders, '{{standards}}', '');
 
-        return new RenderedPrompt($text, $skills === '' ? $this->taskHash($task) : substr(sha1($this->taskHash($task)."\0".$skills), 0, 8));
+        return new RenderedPrompt($text, $extra === '' ? $this->taskHash($task) : substr(sha1($this->taskHash($task)."\0".$extra), 0, 8));
     }
 
     /**

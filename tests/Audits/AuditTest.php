@@ -370,3 +370,13 @@ it('keeps every task prompt within its size budget', function (AuditType $type) 
         expect(strlen($audit->renderTask($task, promptContext())->text))->toBeLessThanOrEqual(7_100, $task->key());
     }
 })->with(AuditType::cases());
+
+it('gives the coding standards to the standards-stage tasks and the conventions baseline only', function () {
+    $context = promptContext(['standards' => "## Coding standards\n\n### php\n- Always use curly braces."]);
+    $audit = new BackendAudit;
+
+    expect($audit->renderTask(backendTask('laravel'), $context)->text)->toContain("### php\n- Always use curly braces.")
+        ->and($audit->renderTask(backendTask('conventions'), $context)->text)->toContain('## Coding standards')
+        ->and($audit->renderTask(backendTask('injection'), $context)->text)->not->toContain('## Coding standards')
+        ->and($audit->renderTask(backendTask('laravel'), $context)->hash)->not->toBe($audit->renderTask(backendTask('laravel'), promptContext())->hash);
+});

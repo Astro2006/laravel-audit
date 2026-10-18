@@ -16,6 +16,7 @@ final readonly class AuditConfig
 
         'agent' => [
             'skills' => 'auto',
+            'standards' => 'boost',
             'max_attempts' => 2,
             'verify_max_turns' => 6,
             'boost_tools' => [
@@ -72,6 +73,7 @@ final readonly class AuditConfig
         'max_files_per_task' => 25,
         'skills_per_task' => 2,
         'skill_max_chars' => 2000,
+        'standards_max_chars' => 6000,
         'snapshot_rows' => 10,
         'summary' => 'generated',
         'exclude_paths' => ['vendor', 'node_modules', 'storage', 'public/build', 'bootstrap/cache'],

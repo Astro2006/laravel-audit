@@ -13,6 +13,7 @@ final readonly class PromptContext
      * @param  array<string, list<string>>  $customChecks  audit key => rules
      * @param  array<string, string>  $snapshots  snapshot type => markdown for the prompt
      * @param  array<string, string>  $skills  task key => the skills section of its prompt
+     * @param  string  $standards  the `## Coding standards` section for standards-stage tasks (GuidelineSource::render())
      */
     public function __construct(
         public string $projectName,
@@ -34,6 +35,7 @@ final readonly class PromptContext
         public int $maxFiles = 25,
         public array $snapshots = [],
         public array $skills = [],
+        public string $standards = '',
     ) {}
 
     /** @return list<string> */
