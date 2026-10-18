@@ -13,6 +13,7 @@ use Astro2006\LaravelAudit\Prompts\PromptContext;
 use Astro2006\LaravelAudit\Prompts\RenderedPrompt;
 use Astro2006\LaravelAudit\Reports\AuditAssembler;
 use Astro2006\LaravelAudit\Reports\Finding;
+use Astro2006\LaravelAudit\Reports\FindingDigest;
 use Astro2006\LaravelAudit\Reports\FindingEditor;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\ReportParser;
@@ -101,21 +102,7 @@ final class TaskRequests
             $report = $this->assembler->assemble($audit, $planned->tasks, $this->verdicts->apply($finished), skipped: $skipped);
             $parsed = $this->parser->parse($report->body);
 
-            $counts = [];
-
-            foreach ($parsed->findings as $finding) {
-                $severity = $finding->field('severity') ?? 'unknown';
-                $counts[$severity] = Arr::get($counts, $severity, 0) + 1;
-            }
-
-            $digests[] = sprintf(
-                "### %s (%s)\n\n%s\n\n%d findings (%s).",
-                $audit->title(),
-                $audit->idPrefix(),
-                $parsed->summary() ?: 'No summary.',
-                count($parsed->findings),
-                $counts === [] ? 'none' : implode(', ', array_map(fn (string $severity, int $count): string => "{$count} {$severity}", array_keys($counts), $counts)),
-            );
+            $digests[] = sprintf("### %s (%s)\n\n%s\n\n%s", $audit->title(), $audit->idPrefix(), $parsed->summary() ?: 'No summary.', FindingDigest::table($parsed->findings));
         }
 
         return $this->request(JobPlanner::RESULTS_KEY, (new OverviewPrompt($this->overridePath))->render($this->context, $digests));

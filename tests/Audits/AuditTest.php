@@ -252,7 +252,7 @@ it('fills context, the task checks and the output template', function () {
         ->toContain('### BE-001 — <title')
         ->toContain('You can read files (read, glob, list).')
         ->toContain('At most 8 findings.')
-        ->toContain('Open at most 25 project files')
+        ->toContain('project files that matter, at most 25.')
         ->toContain('`missing:<path>`')
         // No real-looking example a weak model could copy as a finding.
         ->not->toContain('OrderController')

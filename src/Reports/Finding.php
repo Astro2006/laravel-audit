@@ -77,6 +77,15 @@ final readonly class Finding
         return $this->with(keySalt: $salt);
     }
 
+    public function withId(string $id): self
+    {
+        return new self(
+            $id, $this->title, $this->severity, $this->confidence, $this->category, $this->check,
+            $this->effort, $this->locations, $this->occurrences, $this->references, $this->related, $this->evidence, $this->impact,
+            $this->recommendation, $this->keySalt,
+        );
+    }
+
     public function downgraded(): self
     {
         return $this->with(severity: $this->severity->lower(), confidence: Confidence::Suspected);

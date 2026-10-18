@@ -14,9 +14,10 @@ final class AuditAssembler
 {
     private const int MAX_POSITIVE = 5;
 
-    private const string OUT_OF_SCOPE = '/^###\s+Out of scope observations/i';
-
-    public function __construct(private readonly ReportParser $parser = new ReportParser) {}
+    public function __construct(
+        private readonly ReportParser $parser = new ReportParser,
+        private readonly FindingEditor $editor = new FindingEditor,
+    ) {}
 
     /**
      * @param  list<AuditTask>  $tasks
@@ -27,18 +28,14 @@ final class AuditAssembler
      */
     public function assemble(Audit $audit, array $tasks, array $outcomes, ?string $summary = null, array $summarySections = [], array $skipped = []): AssembledReport
     {
-        $blocks = [];
-        $findingTasks = [];
         $sections = $summarySections;
-        $positive = [];
         $limitations = [];
-        $outOfScope = [];
         $completed = [];
         $failed = [];
-        $findings = [];
-        $rejected = 0;
         $skippedTasks = [];
-        $number = 0;
+        $reports = [];
+        $byTask = [];
+        $rejected = 0;
 
         foreach ($tasks as $task) {
             if ($task->isSummary()) {
@@ -72,41 +69,65 @@ final class AuditAssembler
             }
 
             $completed[] = $task->key();
-            array_push($findings, ...$outcome->findings);
+            $reports[$task->key()] = $this->parser->parse($outcome->body);
+            $byTask[$task->key()] = $outcome->findings;
             $rejected += count($outcome->rejected);
-            $report = $this->parser->parse($outcome->body);
+        }
 
-            $ids = [];
+        $ordered = FindingOrder::sort($byTask, $audit->idPrefix());
+        $maps = [];
+        $findingTasks = [];
+        $findings = [];
+        $blocks = [];
 
-            foreach ($report->findings as $parsed) {
-                $ids[$parsed->id] = sprintf('%s-%03d', $audit->idPrefix(), ++$number);
-                $findingTasks[Arr::get($ids, $parsed->id)] = $task->key();
+        foreach ($ordered as $entry) {
+            $finding = Arr::get($entry, 'finding');
+            $maps[Arr::get($entry, 'task')][Arr::get($entry, 'from')] = $finding->id;
+            $findingTasks[$finding->id] = Arr::get($entry, 'task');
+            $findings[] = $finding;
+        }
+
+        foreach ($ordered as $entry) {
+            $body = (string) Arr::get($outcomes, Arr::get($entry, 'task'))->body;
+            $block = $this->editor->blocks($body, [Arr::get($entry, 'from')]);
+            $blocks[] = FindingRenumberer::trimTitle(FindingRenumberer::renumber($block, Arr::get($maps, Arr::get($entry, 'task'), [])));
+        }
+
+        $positive = [];
+        $taskLimitations = [];
+        $outOfScope = [];
+
+        foreach ($tasks as $task) {
+            $report = Arr::get($reports, $task->key());
+
+            if ($report === null) {
+                continue;
             }
 
-            $block = FindingRenumberer::renumber((string) $report->section('Findings'), $ids);
-
-            if ($block !== '') {
-                $blocks[] = $block;
-            }
+            $ids = Arr::get($maps, $task->key(), []);
 
             foreach ($task->sections as $title) {
-                $sections[$title] = trim((string) $report->section($title));
+                $sections[$title] = FindingRenumberer::remap(trim((string) $report->section($title)), $ids);
             }
 
             foreach (Regex::lines((string) $report->section('Positive observations')) as $line) {
                 if (preg_match('/^\s*[-*]\s+\S/', $line) === 1) {
-                    $positive[] = rtrim($line);
+                    $positive[] = FindingRenumberer::remap(rtrim($line), $ids);
                 }
             }
 
-            [$taskLimitations, $taskOutOfScope] = $this->limitations((string) $report->section('Limitations'));
-            array_push($limitations, ...$taskLimitations);
-            array_push($outOfScope, ...$taskOutOfScope);
+            [$bullets, $scope] = LimitationsMerger::split((string) $report->section('Limitations'));
+            $taskLimitations[$task->key()] = ['title' => $task->title, 'bullets' => array_map(fn (string $bullet): string => FindingRenumberer::remap($bullet, $ids), $bullets)];
+            array_push($outOfScope, ...array_map(fn (string $bullet): string => FindingRenumberer::remap($bullet, $ids), $scope));
         }
+
+        array_push($limitations, ...LimitationsMerger::merge($taskLimitations));
 
         if ($rejected > 0) {
             $limitations[] = sprintf('- %d findings were dropped because their evidence was not in the project, contradicted the preflight, or failed the verify pass. run.md lists them.', $rejected);
         }
+
+        $outOfScope = LimitationsMerger::outOfScope($outOfScope, $findings);
 
         $body = implode("\n", [
             '## Summary',
@@ -118,6 +139,10 @@ final class AuditAssembler
             $blocks === [] ? 'No findings.' : implode("\n\n", $blocks),
             '',
             ...$this->auditSections($audit, $tasks, $sections, $failed),
+            '## Checks',
+            '',
+            ChecksTable::render($tasks, $outcomes, $skipped, $findings, $findingTasks),
+            '',
             '## Positive observations',
             '',
             $positive === [] ? 'None noted.' : implode("\n", array_slice(array_values(array_unique($positive)), 0, self::MAX_POSITIVE)),
@@ -125,57 +150,10 @@ final class AuditAssembler
             '## Limitations',
             '',
             $limitations === [] ? 'None.' : implode("\n", array_values(array_unique($limitations))),
-            ...($outOfScope === [] ? [] : ['', '### Out of scope observations', '', ...array_values(array_unique($outOfScope))]),
+            ...($outOfScope === [] ? [] : ['', '### Out of scope observations', '', ...$outOfScope]),
         ])."\n";
 
         return new AssembledReport($body, $findingTasks, $completed, $failed);
-    }
-
-    /**
-     * The task's limitations, and the out-of-scope observations below their
-     * own heading, as bullets.
-     *
-     * @return array{list<string>, list<string>}
-     */
-    private function limitations(string $section): array
-    {
-        $limitations = [];
-        $outOfScope = [];
-        $scope = false;
-
-        foreach (Regex::lines($section) as $line) {
-            if (preg_match(self::OUT_OF_SCOPE, $line) === 1) {
-                $scope = true;
-
-                continue;
-            }
-
-            $line = $this->bullet($line);
-
-            if ($line === null) {
-                continue;
-            }
-
-            if ($scope) {
-                $outOfScope[] = $line;
-            } else {
-                $limitations[] = $line;
-            }
-        }
-
-        return [$limitations, $outOfScope];
-    }
-
-    private function bullet(string $line): ?string
-    {
-        $line = rtrim($line);
-        $text = trim($line);
-
-        if ($text === '' || preg_match('/^(none|n\/a|keine)\.?$/i', $text) === 1) {
-            return null;
-        }
-
-        return preg_match('/^\s*([-*|]|\d+\.)\s*/', $line) === 1 ? $line : '- '.$text;
     }
 
     /**

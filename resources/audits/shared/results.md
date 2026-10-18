@@ -4,10 +4,10 @@ You write the overview of this audit run of {{project_name}} (Laravel {{laravel_
 
 ## Rules
 
-- Work only from the digests below. Do not open files and do not audit again.
+- Work only from the digests and finding tables below. Do not open files and do not audit again.
 - Refer to findings by their IDs (e.g. `BE-004`); do not copy their text.
 - Do not invent findings, severities or counts that are not in the digests.
-- Call out patterns a single audit could not see on its own: the same root cause showing up in more than one audit, or one audit's finding making another one worse.
+- Call out patterns a single audit could not see on its own: the same root cause showing up in more than one audit, or one audit's finding making another one worse. When there is none, say so in one sentence instead of speculating.
 - No secrets in your answer.
 
 ## Audits
