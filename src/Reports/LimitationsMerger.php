@@ -86,7 +86,8 @@ final class LimitationsMerger
             }
 
             if (count($kept) > self::PER_TASK) {
-                $merged[] = sprintf('- **%s:** %d more limitations in the task log.', $title, count($kept) - self::PER_TASK);
+                $more = count($kept) - self::PER_TASK;
+                $merged[] = sprintf('- **%s:** %d more %s in the task log.', $title, $more, $more === 1 ? 'limitation' : 'limitations');
             }
         }
 

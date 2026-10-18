@@ -21,7 +21,7 @@ final class ChecksTable
      */
     public static function render(array $tasks, array $outcomes, array $skipped, array $findings, array $findingTasks): string
     {
-        $rows = ['| Check | Task | Result |', '|---|---|---|'];
+        $rows = ['| Task | Check | Result |', '|---|---|---|'];
 
         foreach ($tasks as $task) {
             if ($task->isSummary()) {
@@ -46,7 +46,7 @@ final class ChecksTable
                     }
                 }
 
-                $rows[] = sprintf('| `%s` | %s | %s |', $check, $task->name, self::result($task, $outcome, $skipped, $ids));
+                $rows[] = sprintf('| %s | `%s` | %s |', $task->name, $check, self::result($task, $outcome, $skipped, $ids));
             }
         }
 

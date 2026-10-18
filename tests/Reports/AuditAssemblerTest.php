@@ -46,11 +46,11 @@ it('renumbers findings across tasks and remaps related ids', function () {
         ->and($report->findingTasks)->toBe(['DEP-001' => 'dependencies.security', 'DEP-002' => 'dependencies.security', 'DEP-003' => 'dependencies.hygiene'])
         ->and($report->body)->toContain("## Limitations\n\n- The task `dependencies.necessity`")
         ->toContain('- **Constraints, Composer config and licenses:** No lock file history.')
-        ->toContain("## Checks\n\n| Check | Task | Result |")
-        ->toContain('| `vulnerable-dependency` | security | 1 finding (DEP-001) |')
-        ->toContain('| `loose-constraint` | hygiene | 1 finding (DEP-003) |')
-        ->toContain('| `lock-out-of-sync` | hygiene | clean |')
-        ->toContain('| `unused-package` | necessity | not run |');
+        ->toContain("## Checks\n\n| Task | Check | Result |")
+        ->toContain('| security | `vulnerable-dependency` | 1 finding (DEP-001) |')
+        ->toContain('| hygiene | `loose-constraint` | 1 finding (DEP-003) |')
+        ->toContain('| hygiene | `lock-out-of-sync` | clean |')
+        ->toContain('| necessity | `unused-package` | not run |');
 });
 
 it('lists failed tasks, keeps their sections visible and passes the audit linter', function () {
@@ -97,7 +97,7 @@ it('orders the findings by severity and confidence and remaps every ID in prose'
         ->and($report->findingTasks)->toBe(['DEP-001' => 'dependencies.hygiene', 'DEP-002' => 'dependencies.security'])
         ->and($report->body)->toContain('- **Advisories and abandoned packages:** DEP-002 could not be checked against the changelog.')
         ->toContain("## Summary\n\n2 findings from 2 tasks (1 medium, 1 low). Most important: DEP-001 — a/three finding.")
-        ->toContain('| `loose-constraint` | hygiene | 1 finding (DEP-001) |')
+        ->toContain('| hygiene | `loose-constraint` | 1 finding (DEP-001) |')
         ->toContain('- `composer.json:8` pins nothing');
 });
 

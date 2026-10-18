@@ -51,7 +51,7 @@ Sections in this order. Level-2 headings must match literally (case-insensitive)
 (free markdown, defined per audit prompt)
 
 ## Checks
-(harness: one row per check of the audit with its task and result)
+(harness: one row per check of the audit: task, check, result)
 
 ## Positive observations
 Max 5 bullets.
