@@ -48,7 +48,7 @@ final class PauseRun
 
         $console->closing($messages->get('pause.resume', ['pending' => count($pause->pending), 'run' => $context->run->id]));
 
-        if ($pause->reason !== RunPause::LIMIT || ! $console->interactive || ! $console->confirmWait()) {
+        if ($pause->reason !== RunPause::LIMIT || ! $console->interactive || ! $console->confirm('pause.question')) {
             return false;
         }
 

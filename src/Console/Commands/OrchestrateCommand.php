@@ -8,12 +8,15 @@ use Astro2006\LaravelAudit\Agents\DriverRegistry;
 use Astro2006\LaravelAudit\Console\Output\AuditConsole;
 use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\RunStatus;
+use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Orchestration\OrchestratorPrompt;
 use Astro2006\LaravelAudit\Orchestration\OrchestratorSession;
 use Astro2006\LaravelAudit\Run\AuditOptions;
 use Astro2006\LaravelAudit\Run\Data\RunFrontmatter;
+use Astro2006\LaravelAudit\Run\Phases\CheckModel;
 use Astro2006\LaravelAudit\Support\AuditConfig;
 use Astro2006\LaravelAudit\Support\Messages;
+use Astro2006\LaravelAudit\Support\ProjectInspector;
 use Astro2006\LaravelAudit\Support\Read;
 use Astro2006\LaravelAudit\Tool\Finish;
 use Astro2006\LaravelAudit\Tool\Open;
@@ -34,10 +37,17 @@ class OrchestrateCommand extends Command
 
     protected $description = 'Let a headless agent session drive the audit through audit:tool: it picks steps and tasks, reruns failures and writes the reports';
 
-    public function handle(AuditConfig $config, Open $open, OrchestratorSession $session, Finish $finish): int
+    public function handle(AuditConfig $config, Open $open, OrchestratorSession $session, Finish $finish, CheckModel $checkModel): int
     {
         $list = fn (string $name): array => array_values(array_filter(array_map('trim', explode(',', implode(',', array_map('strval', (array) $this->option($name)))))));
-        $options = new AuditOptions(audits: $list('audits'), without: $list('without'), force: (bool) $this->option('force'), agent: $this->stringOption('agent'), model: $this->stringOption('model'), concurrency: $this->stringOption('concurrency'));
+        $models = $this->checkModels($config, $checkModel);
+
+        if ($models === null) {
+            return AuditExit::HarnessError->value;
+        }
+
+        [$taskModel, $orchestratorModel] = $models;
+        $options = new AuditOptions(audits: $list('audits'), without: $list('without'), force: (bool) $this->option('force'), agent: $this->stringOption('agent'), model: $taskModel, concurrency: $this->stringOption('concurrency'));
         $opened = $open->handle($options, Messages::fromConfig());
 
         if (Arr::has($opened, 'error')) {
@@ -47,7 +57,7 @@ class OrchestrateCommand extends Command
         }
 
         $run = OpenedRun::open($config, Read::string($opened, 'run'));
-        $driver = (new DriverRegistry($config, $run->plan->project))->resolve($options->agent, $config->nullableString('agent.orchestrator.model') ?? $options->model);
+        $driver = (new DriverRegistry($config, $run->plan->project))->resolve($options->agent, $orchestratorModel);
         $this->components->info(sprintf('Run %s: %s drives the audit through audit:tool …', $run->run->id, $driver->displayName()));
 
         $result = $session->run($driver, $run->run, $run->plan->project, OrchestratorPrompt::render($run->run->id));
@@ -78,6 +88,29 @@ class OrchestrateCommand extends Command
             RunFrontmatter::read($run->run->manifestPath())?->status === RunStatus::Aborted->value => AuditExit::GateAborted->value,
             default => AuditExit::HarnessError->value,
         };
+    }
+
+    /** @return array{0: string|null, 1: string|null}|null the models of the tasks and of the orchestrator; null when one does not answer */
+    private function checkModels(AuditConfig $config, CheckModel $checkModel): ?array
+    {
+        $project = ProjectInspector::fromConfig($config);
+        $registry = new DriverRegistry($config, $project);
+        $console = new AuditConsole($this->output, Messages::fromConfig(), $this->input->isInteractive());
+
+        try {
+            $tasks = $checkModel->handle($registry->resolve($this->stringOption('agent'), $this->stringOption('model')), $project, $console);
+
+            if ($tasks === null) {
+                return null;
+            }
+
+            $orchestratorModel = $config->nullableString('agent.orchestrator.model');
+            $orchestrator = $orchestratorModel === null || $orchestratorModel === $tasks->model() ? $tasks : $checkModel->handle($registry->resolve($this->stringOption('agent'), $orchestratorModel), $project, $console);
+        } catch (InvalidSelection) {
+            return [$this->stringOption('model'), $config->nullableString('agent.orchestrator.model') ?? $this->stringOption('model')];
+        }
+
+        return $orchestrator === null ? null : [$tasks->model(), $orchestrator->model()];
     }
 
     private function stringOption(string $name): ?string

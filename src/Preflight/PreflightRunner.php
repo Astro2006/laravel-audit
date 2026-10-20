@@ -28,6 +28,8 @@ use Throwable;
 
 final class PreflightRunner
 {
+    private const int POLL_MICROSECONDS = 50_000;
+
     /** @var Collection<string, Step> */
     private Collection $steps;
 
@@ -70,7 +72,7 @@ final class PreflightRunner
         $has = fn (PreflightStep $step): bool => in_array($step, $required, true) && $this->steps->has($step->value);
         $background = [PreflightStep::Tests, ...($context->config->bool('preflight.phpstan.parallel') ? [PreflightStep::Phpstan] : [])];
 
-        /** @var array<string, array{AsyncStep, InvokedProcess, float}> $running */
+        /** @var array<string, RunningStep> $running */
         $running = [];
 
         foreach ($background as $step) {
@@ -109,9 +111,7 @@ final class PreflightRunner
 
         foreach ([PreflightStep::Tests, PreflightStep::Browser, PreflightStep::Phpstan] as $step) {
             if (Arr::has($running, $step->value)) {
-                [$async, $process, $startedAt] = Arr::get($running, $step->value);
-                $result = $this->attempt($step, fn () => $async->finish($context, $process->wait()));
-                $this->record($context, $result->withDuration(microtime(true) - $startedAt), $onResult);
+                $this->collect($context, $running, Arr::get($running, $step->value), $onResult);
 
                 continue;
             }
@@ -126,17 +126,38 @@ final class PreflightRunner
     }
 
     /**
-     * Reads what the background processes wrote so far. A process whose
-     * output pipe is full stops until someone reads it, and Symfony only
-     * reads while it is asked for the status.
+     * Polls every background step. A process whose output pipe is full stops
+     * until someone reads it, and Symfony only reads while it is asked for
+     * the status; the poll also notes when each step ended, so a step
+     * collected late is not charged the wait for the steps before it.
      *
-     * @param  array<string, array{AsyncStep, InvokedProcess, float}>  $running
+     * @param  array<string, RunningStep>  $running
      */
     private function drain(array $running): void
     {
-        foreach ($running as [, $process]) {
-            $process->running();
+        foreach ($running as $step) {
+            $step->poll();
         }
+    }
+
+    /**
+     * Waits for one background step while polling the others, then records
+     * it with the time it really ran.
+     *
+     * @param  array<string, RunningStep>  $running
+     * @param  Closure(StepResult): void  $onResult
+     */
+    private function collect(PreflightContext $context, array $running, RunningStep $step, Closure $onResult): void
+    {
+        $this->drain($running);
+
+        while (! $step->finished()) {
+            usleep(self::POLL_MICROSECONDS);
+            $this->drain($running);
+        }
+
+        $result = $this->attempt($step->step->step(), fn () => $step->step->finish($context, $step->process->wait()));
+        $this->record($context, $result->withDuration($step->duration()), $onResult);
     }
 
     /**
@@ -144,15 +165,14 @@ final class PreflightRunner
      * right away (skipped, crashed).
      *
      * @param  Closure(StepResult): void  $onResult
-     * @return array{AsyncStep, InvokedProcess, float}|null
      */
-    private function startInBackground(PreflightContext $context, AsyncStep $async, Closure $onResult): ?array
+    private function startInBackground(PreflightContext $context, AsyncStep $async, Closure $onResult): ?RunningStep
     {
         $startedAt = microtime(true);
         $started = $this->attempt($async->step(), fn () => $async->start($context));
 
         if ($started instanceof InvokedProcess) {
-            return [$async, $started, $startedAt];
+            return new RunningStep($async, $started, $startedAt);
         }
 
         $this->record($context, $started->withDuration(microtime(true) - $startedAt), $onResult);

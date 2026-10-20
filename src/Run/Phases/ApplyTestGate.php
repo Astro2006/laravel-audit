@@ -33,7 +33,7 @@ final class ApplyTestGate
             GateMode::tryFrom($this->config->string('preflight.tests.gate')) ?? GateMode::Ask,
             $context->options->force,
             $console->interactive,
-            $console->confirmGate(...),
+            fn (): bool => $console->confirm('gate.question'),
         );
     }
 }

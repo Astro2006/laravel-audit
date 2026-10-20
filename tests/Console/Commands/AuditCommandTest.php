@@ -17,6 +17,7 @@ function auditProject(): string
     config()->set('audit.report_language', 'en');
     config()->set('audit.summary', 'agent');
     config()->set('audit.agent.verify.enabled', false);
+    config()->set('audit.agent.check_model', false);
 
     return $dir;
 }

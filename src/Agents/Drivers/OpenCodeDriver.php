@@ -63,6 +63,19 @@ final class OpenCodeDriver implements AgentDriver
         return 'You can read files and find files by name (read, glob, list). There is no content search: open the files you need. There is no shell, no web access and no write access. `.env` files are blocked on purpose.';
     }
 
+    public function modelsCommand(): array
+    {
+        return [$this->binary, 'models', '--pure'];
+    }
+
+    public function models(string $listed): array
+    {
+        return array_values(array_filter(
+            array_map('trim', explode("\n", $listed)),
+            fn (string $line): bool => preg_match('#^[\w.-]+/\S+$#', $line) === 1,
+        ));
+    }
+
     public function writeConfig(string $directory, array $extraDirectories = []): string
     {
         $path = $directory.'/opencode.json';

@@ -138,6 +138,16 @@ return [
         'not_found' => 'No run to resume in :path.',
     ],
 
+    'model' => [
+        'ok' => 'Model :model answers (:seconds s)',
+        'failed' => 'Model :model does not answer: :error',
+        'default' => 'from the CLI config',
+        'question' => 'Pick a model for this run',
+        'abort' => 'None, stop the run',
+        'available' => 'Models the CLI offers: :models',
+        'hint' => 'Start again with --model=<model>, or set agent.model (AUDIT_MODEL).',
+    ],
+
     'pause' => [
         'limit' => 'Usage limit reached: :message',
         'budget' => ':message',

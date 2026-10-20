@@ -389,8 +389,11 @@ it('tells the tasks about the project context and the runtime facts', function (
 
     expect($section)->toStartWith("## Project context\n\nSingle-user app behind a Cloudflare tunnel.")
         ->toContain('Runtime facts: Laravel 13.2.0 · PHP 8.4.1 · database pgsql · queue database · mail smtp.')
-        ->toContain('at most `low` unless it is reachable without login')
+        ->toContain('Only when it says the app has a single user is a finding that needs another logged-in user at most `low`')
+        ->not->toContain('The project context is not set')
         ->and(ProjectContextSection::render(null, new AboutDTO('Shop', '13.2.0', '8.4.1')))->toContain('Runtime facts: Laravel 13.2.0 · PHP 8.4.1.')
+        ->toContain('The project context is not set: do not assume how many users the app has')
+        ->not->toContain('single user')
         ->and(ProjectContextSection::render(null, null))->toBe('')
         ->and((new BackendAudit)->renderTask(backendTask('auth'), $context)->text)->toContain('## Project context')
         ->and((new BackendAudit)->renderVerify(backendTask('auth'), $context, 'x')->text)->toContain('Runtime facts: Laravel 13.2.0');

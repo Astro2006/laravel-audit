@@ -6,6 +6,8 @@ namespace Astro2006\LaravelAudit\Run;
 
 use Astro2006\LaravelAudit\Agents\AuditOutcome;
 use Astro2006\LaravelAudit\Agents\Telemetry;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\BrowserDTO;
+use Astro2006\LaravelAudit\Preflight\Data\Steps\TestsDTO;
 use Astro2006\LaravelAudit\Preflight\StepResult;
 use Astro2006\LaravelAudit\Reports\Location;
 use Astro2006\LaravelAudit\Reports\Overlap;
@@ -74,12 +76,20 @@ final class RunMarkdown
     {
         $rows = array_map(fn (StepResult $result): array => [
             $result->step->value,
-            $result->status->value,
+            $this->stepStatus($result),
             round($result->duration, 2).'s',
             $result->reason->value ?? $result->error ?? implode('; ', $result->warnings),
         ], $this->manifest->steps->all());
 
         return $this->section('Preflight', ['Step', 'Status', 'Duration', 'Notes'], $rows, always: true);
+    }
+
+    private function stepStatus(StepResult $result): string
+    {
+        $data = $result->data;
+        $failures = $data instanceof TestsDTO || $data instanceof BrowserDTO ? $data->failures() : 0;
+
+        return $result->status->value.($failures > 0 ? sprintf(' (%d failed)', $failures) : '');
     }
 
     /** @return list<string> */

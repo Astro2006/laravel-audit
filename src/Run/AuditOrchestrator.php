@@ -9,6 +9,7 @@ use Astro2006\LaravelAudit\Enums\AuditExit;
 use Astro2006\LaravelAudit\Enums\RunStatus;
 use Astro2006\LaravelAudit\Exceptions\InvalidSelection;
 use Astro2006\LaravelAudit\Requirements\RequirementChecker;
+use Astro2006\LaravelAudit\Run\Phases\CheckModel;
 use Astro2006\LaravelAudit\Run\Phases\CheckRequirements;
 use Astro2006\LaravelAudit\Run\Phases\FinalizeRun;
 use Astro2006\LaravelAudit\Run\Phases\PauseRun;
@@ -25,6 +26,7 @@ final class AuditOrchestrator
     public function __construct(
         private readonly PlanRun $planRun,
         private readonly CheckRequirements $checkRequirements,
+        private readonly CheckModel $checkModel,
         private readonly StartRun $startRun,
         private readonly Preflight $preflight,
         private readonly SelectSkills $selectSkills,
@@ -56,6 +58,13 @@ final class AuditOrchestrator
             return AuditExit::HarnessError;
         }
 
+        $driver = $options->preflightOnly ? $plan->driver : $this->checkModel->handle($plan->driver, $plan->project, $console);
+
+        if ($driver === null) {
+            return AuditExit::HarnessError;
+        }
+
+        $plan = $plan->withDriver($driver);
         $context = $this->startRun->handle($plan, $options, $console);
         $summary = $this->preflight->handle($context);
 

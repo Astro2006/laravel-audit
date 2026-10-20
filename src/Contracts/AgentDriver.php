@@ -19,6 +19,15 @@ interface AgentDriver
 
     public function isAvailable(): bool;
 
+    /** @return list<string>|null argv that prints the models the CLI can use; null when it has no such command */
+    public function modelsCommand(): ?array;
+
+    /**
+     * @param  string  $listed  what modelsCommand() printed, '' when there is no such command
+     * @return list<string> models to offer when the chosen one does not answer
+     */
+    public function models(string $listed): array;
+
     public function toolsNote(): string;
 
     /**
