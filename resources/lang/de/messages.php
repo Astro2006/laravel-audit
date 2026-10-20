@@ -138,6 +138,16 @@ return [
         'not_found' => 'Kein Run zum Fortsetzen in :path.',
     ],
 
+    'model' => [
+        'ok' => 'Modell :model antwortet (:seconds s)',
+        'failed' => 'Modell :model antwortet nicht: :error',
+        'default' => 'aus der CLI-Konfiguration',
+        'question' => 'Welches Modell soll dieser Run nutzen?',
+        'abort' => 'Keines, Run abbrechen',
+        'available' => 'Modelle, die die CLI anbietet: :models',
+        'hint' => 'Neu starten mit --model=<modell> oder agent.model (AUDIT_MODEL) setzen.',
+    ],
+
     'pause' => [
         'limit' => 'Nutzungslimit erreicht: :message',
         'budget' => ':message',

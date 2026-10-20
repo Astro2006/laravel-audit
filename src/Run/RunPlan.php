@@ -17,4 +17,9 @@ final readonly class RunPlan
         public int $concurrency,
         public DatabaseGuard $guard,
     ) {}
+
+    public function withDriver(AgentDriver $driver): self
+    {
+        return new self($this->project, $this->selection, $driver, $this->concurrency, $this->guard);
+    }
 }

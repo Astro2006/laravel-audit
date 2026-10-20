@@ -16,8 +16,9 @@ final readonly class AuditConfig
 
         'agent' => [
             'skills' => 'auto',
+            'check_model' => true,
             'standards' => 'boost',
-            'verify' => ['threshold' => 2, 'always_categories' => ['security', 'correctness']],
+            'verify' => ['threshold' => 2, 'from' => 'medium'],
             'orchestrator' => ['model' => null, 'max_turns' => 300, 'max_budget_usd' => null, 'timeout' => 7200],
             'max_attempts' => 2,
             'verify_max_turns' => 6,
@@ -91,7 +92,8 @@ final readonly class AuditConfig
         'agent.orchestrator.wait_timeout' => 'tool.wait_timeout',
         'agent.mode' => 'agent.max_concurrency',
         'agent.concurrency' => 'agent.max_concurrency',
-        'agent.verify.min_severity' => null,
+        'agent.verify.min_severity' => 'agent.verify.from',
+        'agent.verify.always_categories' => null,
         'agent.binary' => 'agent.drivers.claude_code.binary',
         'agent.effort' => 'agent.drivers.claude_code.effort',
         'agent.max_budget_usd' => 'agent.drivers.claude_code.max_budget_usd',

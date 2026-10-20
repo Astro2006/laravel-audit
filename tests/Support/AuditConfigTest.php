@@ -62,5 +62,5 @@ it('treats empty strings as not set', function () {
 });
 
 it('names removed keys without a replacement', function () {
-    expect(AuditConfig::load(['agent' => ['verify' => ['min_severity' => 'high']]])->legacyKeys())->toBe(['agent.verify.min_severity' => null]);
+    expect(AuditConfig::load(['agent' => ['verify' => ['min_severity' => 'high']]])->legacyKeys())->toBe(['agent.verify.min_severity' => 'agent.verify.from']);
 });

@@ -12,33 +12,33 @@ function policyFinding(Severity $severity, Confidence $confidence, Category $cat
     return new Finding('BE-001', 'x', $severity, $confidence, $category, 'other', Effort::S, [], 1, [], [], '', '', '');
 }
 
-it('verifies severe findings unless the agent is sure enough', function (Severity $severity, Confidence $confidence, bool $verify) {
+it('verifies every finding from medium up unless the agent confirmed it', function (Severity $severity, Confidence $confidence, bool $verify) {
     expect((new VerifyPolicy)->needsVerify(policyFinding($severity, $confidence)))->toBe($verify);
 })->with([
     [Severity::Critical, Confidence::Confirmed, true],
     [Severity::High, Confidence::Confirmed, false],
     [Severity::High, Confidence::Likely, true],
-    [Severity::Medium, Confidence::Likely, false],
+    [Severity::Medium, Confidence::Likely, true],
+    [Severity::Medium, Confidence::Confirmed, false],
     [Severity::Medium, Confidence::Suspected, true],
+    [Severity::Low, Confidence::Likely, false],
     [Severity::Low, Confidence::Suspected, false],
     [Severity::Info, Confidence::Suspected, false],
 ]);
 
-it('always verifies unconfirmed security and correctness findings from medium up', function () {
+it('does not care about the category', function () {
     $policy = VerifyPolicy::fromConfig(auditConfig());
 
-    expect($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Security)))->toBeTrue()
-        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Correctness)))->toBeTrue()
-        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Confirmed, Category::Security)))->toBeFalse()
-        ->and($policy->needsVerify(policyFinding(Severity::Low, Confidence::Suspected, Category::Security)))->toBeFalse()
-        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Consistency)))->toBeFalse();
+    expect($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Accessibility)))->toBeTrue()
+        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Security)))->toBeTrue()
+        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Confirmed, Category::Security)))->toBeFalse();
 });
 
-it('takes the threshold and the categories from the config', function () {
-    $policy = VerifyPolicy::fromConfig(auditConfig(['agent' => ['verify' => ['threshold' => 3, 'always_categories' => ['performance']]]]));
+it('takes the threshold and the severity floor from the config', function () {
+    $policy = VerifyPolicy::fromConfig(auditConfig(['agent' => ['verify' => ['threshold' => 3, 'from' => 'low']]]));
 
-    expect($policy->needsVerify(policyFinding(Severity::High, Confidence::Likely)))->toBeFalse()
+    expect($policy->needsVerify(policyFinding(Severity::High, Confidence::Confirmed)))->toBeFalse()
         ->and($policy->needsVerify(policyFinding(Severity::Critical, Confidence::Likely)))->toBeTrue()
-        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Performance)))->toBeTrue()
-        ->and($policy->needsVerify(policyFinding(Severity::Medium, Confidence::Likely, Category::Security)))->toBeFalse();
+        ->and($policy->needsVerify(policyFinding(Severity::Low, Confidence::Likely)))->toBeTrue()
+        ->and($policy->needsVerify(policyFinding(Severity::Info, Confidence::Suspected)))->toBeFalse();
 });

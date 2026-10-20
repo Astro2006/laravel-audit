@@ -227,3 +227,24 @@ it('round-trips step results through summary.json data', function () {
         ->and($restored->duration)->toBe(1.5)
         ->and($restored->data?->failures())->toBe(2);
 });
+
+it('charges a background step only the time it ran, not the wait for the step collected before it', function () {
+    Process::fake([
+        'tests-in-background' => Process::describe()->output('done')->runsFor(iterations: 14),
+        'phpstan-in-background' => Process::describe()->output('done')->runsFor(iterations: 1),
+    ]);
+    $events = new ArrayObject;
+    $steps = array_map(
+        fn (PreflightStep $step) => in_array($step, [PreflightStep::Tests, PreflightStep::Phpstan], true) ? fakeAsyncStep($step, $events) : fakeStep($step),
+        PreflightStep::cases(),
+    );
+    $durations = [];
+
+    (new PreflightRunner($steps))->run(runnerContext(), function (StepResult $result) use (&$durations) {
+        $durations[$result->step->value] = $result->duration;
+    });
+
+    expect($durations['phpstan'])->toBeLessThan(0.05)
+        ->and($durations['tests'])->toBeGreaterThan(0.1)
+        ->and($durations['phpstan'])->toBeLessThan($durations['tests']);
+});

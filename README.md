@@ -8,7 +8,10 @@
 An AI code audit for Laravel apps, started with one Artisan command.
 
 > [!WARNING]
-> **Test version.** This is the MVP3 preview on the `refactor/orchestrator` branch: an orchestrator agent that runs the audit stage by stage, pause and resume at usage limits or a run budget, and cheap models such as Claude Haiku 5.5 as the task model. It has been exercised on a handful of test projects only. Commands, config keys and the report layout can still change before a release, and the reports are a well-structured starting point for a human review, not a certificate. Agents can be wrong, and a run uses real tokens (see [Costs](#costs)).
+This package is still in early development and is not yet a stable release. You’re welcome to try it out, but expect bugs, missing features, and breaking changes. There’s still a lot of work ahead before it reaches the quality I’m aiming for, so please use it with caution.
+
+Disclaimer: This software is provided “as is”, without any warranty. I am not liable for any damage, data loss, or other issues that may result from using it.
+
 
 ```bash
 php artisan audit
@@ -438,8 +441,8 @@ return [
 | `agent.standards` / `standards_max_chars` | `boost` (the code rules Boost wrote into `AGENTS.md`, plus `.ai/rules` and `.ai/guidelines`, inlined into the standards-stage tasks), `none`, or a list of files / `6000` |
 | `agent.run_budget_usd` | `null`; pause the run before a task that would push its total cost above this amount (`AUDIT_RUN_BUDGET_USD`) |
 | `agent.orchestrator.model` / `max_turns` / `max_budget_usd` / `timeout` | `null` (the task model; `AUDIT_ORCHESTRATOR_MODEL`) / `300` / `null` / `7200` seconds, for the session `php artisan audit:orchestrate` starts |
-| `agent.verify.threshold` / `agent.verify.always_categories` | `2` (severity rank minus confidence rank that triggers the verify pass) / `security`, `correctness` (always verified from `medium` up unless `confirmed`) |
-| `project.context` | `null`; free text about who uses the app and how it runs, given to every task with the runtime facts from `artisan about` so severities fit the threat model (`AUDIT_PROJECT_CONTEXT`) |
+| `agent.verify.threshold` / `agent.verify.from` | `2` (severity rank minus confidence rank that triggers the verify pass) / `medium` (every finding from this severity up is verified unless `confirmed`, whatever its category) |
+| `project.context` | `null`; free text about who uses the app and how it runs, given to every task with the runtime facts from `artisan about` so severities fit the threat model (`AUDIT_PROJECT_CONTEXT`). Without it the tasks are told not to guess the user model; set it, because a wrong guess colours every severity |
 | `max_turns` per task in `audit.php` | the task's own turn cap, e.g. `backend.dead-code` 30; overrides `agent.max_turns` |
 | `agent.verify_max_turns` | `6`, tool calls a verify call may take |
 | `tool.wait_timeout` | `100`, seconds `audit:tool wait` blocks at most |

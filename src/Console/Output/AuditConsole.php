@@ -156,14 +156,15 @@ final class AuditConsole
         }
     }
 
-    public function confirmGate(): bool
+    public function confirm(string $key): bool
     {
-        return $this->output->confirm($this->messages->get('gate.question'), false);
+        return $this->output->confirm($this->messages->get($key), false);
     }
 
-    public function confirmWait(): bool
+    /** @param  list<string>  $choices */
+    public function choose(string $key, array $choices): string
     {
-        return $this->output->confirm($this->messages->get('pause.question'), false);
+        return (string) $this->output->choice($this->messages->get($key), $choices);
     }
 
     public function outcome(AuditOutcome $outcome): void

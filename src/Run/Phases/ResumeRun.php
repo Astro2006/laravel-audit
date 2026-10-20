@@ -28,6 +28,7 @@ final class ResumeRun
         private readonly AuditConfig $config,
         private readonly PlanRun $planRun,
         private readonly CheckRequirements $checkRequirements,
+        private readonly CheckModel $checkModel,
         private readonly RunAgents $runAgents,
         private readonly FinalizeRun $finalizeRun,
         private readonly PauseRun $pauseRun,
@@ -76,6 +77,14 @@ final class ResumeRun
         if (RequirementChecker::hasFailures($checks)) {
             return AuditExit::HarnessError;
         }
+
+        $driver = $this->checkModel->handle($plan->driver, $plan->project, $console);
+
+        if ($driver === null) {
+            return AuditExit::HarnessError;
+        }
+
+        $plan = $plan->withDriver($driver);
 
         $summary = PreflightSummary::fromDirectory($run->preflightDir());
         $manifest = StartRun::manifest($run, $plan);

@@ -21,6 +21,8 @@ final class ClaudeCodeDriver implements AgentDriver
 
     private const array TOOLS = ['Read', 'Grep', 'Glob'];
 
+    private const array MODEL_ALIASES = ['fable', 'opus', 'sonnet', 'haiku'];
+
     private const array ALWAYS_DENIED = ['Edit', 'Write', 'NotebookEdit', 'Bash', 'WebFetch', 'WebSearch'];
 
     private const array ORCHESTRATOR_DENIED = ['Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Read', 'Grep', 'Glob', 'Agent', 'Skill'];
@@ -60,6 +62,16 @@ final class ClaudeCodeDriver implements AgentDriver
     public function toolsNote(): string
     {
         return 'You can read and search files (Read, Grep, Glob). There is no shell, no web access and no write access. `.env` files are blocked on purpose.';
+    }
+
+    public function modelsCommand(): ?array
+    {
+        return null;
+    }
+
+    public function models(string $listed): array
+    {
+        return self::MODEL_ALIASES;
     }
 
     public function writeConfig(string $directory, array $extraDirectories = []): ?string
@@ -184,7 +196,7 @@ final class ClaudeCodeDriver implements AgentDriver
             telemetry: $usage->telemetry,
             exit: $exit,
             truncated: Read::string($data, 'stop_reason') === 'max_tokens',
-            error: $exit === AgentExit::Success ? null : trim($subtype.' '.mb_substr($answer, 0, 300)),
+            error: $exit === AgentExit::Success ? null : trim(($subtype === 'success' ? '' : $subtype).' '.mb_substr($answer, 0, 300)),
         );
     }
 
