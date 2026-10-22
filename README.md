@@ -54,7 +54,7 @@ First, a **deterministic preflight** runs the tools you already trust: your test
   ✔ dependencies ........ 6 findings · 31 turns · 140k in / 6k out · 3m 10s
 
  Findings: Critical 1 · High 7 · Medium 19 · Low 16 · Info 5
- → storage/audit/2026-09-11_14-02-11/run.md
+ → storage/audit/2026-09-11_14-02-11/audit.md
 ```
 
 ## Contents
@@ -208,7 +208,7 @@ The package ships a Laravel Boost guideline and a skill. The guideline, a few li
 | `audit:tool start TASK[:SKILL,…] … --run=ID` | Starts tasks, optionally with the project skills each one gets; tasks without skills get the harness's own selection |
 | `audit:tool start --stage=STAGE` / `--pending` / `--failed` | Starts every task of a stage that has not run, every task that has not run, or every failed task once more (at most `agent.max_attempts` starts per task) |
 | `audit:tool result TASK --run=ID` | The findings of one task |
-| `audit:tool finish --run=ID` | Writes the reports and `run.md` |
+| `audit:tool finish --run=ID` | Writes the reports, `audit.md` and `run.md` |
 
 Every command prints JSON. The tasks themselves run exactly as in `php artisan audit`: read-only, one short session each, at most `agent.max_concurrency` at once.
 
@@ -321,8 +321,9 @@ Every run gets its own folder:
 storage/audit/
 ├── .gitignore
 └── 2026-09-11_14-02-11/
-    ├── run.md               # overview: cross-audit summary, preflight, metrics, audits, tasks, findings, possible duplicates
-    ├── run.json             # the same, machine-readable
+    ├── audit.md             # start here: cross-audit overview, every finding in one table, possible duplicates, rejected findings
+    ├── run.md               # what the run did: preflight, metrics, audits and tasks with their cost, linter warnings
+    ├── run.json             # the run, machine-readable
     ├── tests.md
     ├── frontend.md
     ├── backend.md
@@ -365,7 +366,7 @@ Every report has frontmatter and the same structure. Every finding carries a fix
 - Locations are files with lines, `route:METHOD /uri`, `package:vendor/name`, or `missing:path` when the absence of a file is the finding.
 - The harness drops findings it can disprove, without a repair pass: a file that does not exist, a `missing:` file that does exist, quoted code that is not in the file, or a dependency finding that composer contradicts (an advisory or abandoned package composer does not report, a package that is not locked). `run.md` lists them under "Rejected findings".
 - Each finding gets a stable key (audit, check and targets, without line numbers). Keys let you compare runs. Findings that would share a key within one report are told apart by their line, then their title.
-- Findings from different audits, or from different tasks of one audit, that point to the same place are listed in `run.md` as possible duplicates. They are not merged.
+- Findings from different audits, or from different tasks of one audit, that point to the same place are listed in `audit.md` as possible duplicates. They are not merged.
 - There is no grade. `run.md` shows metrics (coverage, PHPStan errors, advisories …) and experimental risk points that you can weight in the config.
 
 The full specification is in [`resources/audits/shared/report-format.md`](resources/audits/shared/report-format.md).

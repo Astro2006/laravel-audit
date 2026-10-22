@@ -38,7 +38,7 @@ Work stage by stage. Within a stage you are free.
 | `start --stage=<stage>` · `start <task>[:skill,…] …` · `start --pending` · `start --failed` | starts the tasks of a stage, named tasks, every task not run, or every failed task once more | `wait` |
 | `status` | the full table: gate, stages, every task, spend, pause | – |
 | `result <task>` | the findings of one task | – |
-| `finish` | writes the reports and `run.md` | read them |
+| `finish` | writes the reports, `audit.md` and `run.md` | read them |
 
 ## Decisions you make
 
@@ -51,4 +51,4 @@ Work stage by stage. Within a stage you are free.
 
 ## When you are done
 
-After `finish`, read `run.md` and tell the user: the findings to fix first (by ID and title, critical and high first), the tasks that failed or were left out and why, and what the run cost (`spend_usd`). Findings the harness disproved are under "Rejected findings" in `run.md`; they are not in the reports.
+After `finish`, read `audit.md` and tell the user: the findings to fix first (by ID and title, critical and high first), the tasks that failed or were left out and why (`run.md`), and what the run cost (`spend_usd`). Findings the harness disproved are under "Rejected findings" in `audit.md`; they are not in the reports.

@@ -22,7 +22,7 @@ final class FinalizeRun
         $riskPoints = new RiskPoints($this->config->array('risk_points.weights'), $this->config->array('risk_points.confidence'));
 
         (new RunFinalizer($riskPoints))->finalize($context->manifest, $summary, $outcomes, $context->plan->driver->name());
-        $context->console->summary($context->manifest, $outcomes, $context->plan->project->relative($context->run->manifestPath()));
+        $context->console->summary($context->manifest, $outcomes, $context->plan->project->relative($context->manifest->resultPath()));
 
         foreach ($outcomes as $outcome) {
             if (! $outcome->completed()) {

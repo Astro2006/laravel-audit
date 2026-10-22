@@ -74,6 +74,15 @@ final class RunManifest
     {
         file_put_contents($this->run->manifestPath(), $this->render());
         Json::writeFile($this->run->dir().'/run.json', $this->toArray());
+
+        if ($this->outcomes !== []) {
+            file_put_contents($this->run->auditPath(), (new AuditMarkdown($this))->render());
+        }
+    }
+
+    public function resultPath(): string
+    {
+        return $this->outcomes === [] ? $this->run->manifestPath() : $this->run->auditPath();
     }
 
     /**

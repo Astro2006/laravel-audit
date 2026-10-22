@@ -4,7 +4,8 @@ All notable changes to `laravel-audit` will be documented in this file.
 
 ## Unreleased
 
-Nothing yet.
+- **A config file you can navigate.** `config/audit.php` keeps the same keys, now in four titled blocks in the order you touch them: your project (context, audits, custom checks), the agent (driver, model, concurrency, turns, budget), guard rails (files never read, the test gate) and rarely changed settings (verify, orchestrator model, binaries, output path, language). A table of contents at the top names the blocks. Re-publish it with `php artisan audit:install` or keep yours; nothing changed in what the keys mean.
+- **`audit.md`.** The run folder gets a second index. `audit.md` starts with the overview and lists every finding of the run in one table, then the possible duplicates and the rejected findings; `run.md` keeps the preflight, the metrics, the audits and tasks with their cost, and the linter warnings. The console and `audit:tool finish` point to `audit.md` once there are findings. Before, the findings sat behind the task tables at the end of a 250-line `run.md`.
 
 ## 0.2.0 — 2026-10-20
 

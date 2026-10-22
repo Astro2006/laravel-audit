@@ -149,7 +149,8 @@ it('runs an audit end to end with a validated report', function () {
         ->toContain('| dependencies | completed | 3 | 0/0/1/2/0 | no | 60 |')
         ->toContain('## Tasks')
         ->toContain('| dependencies.security | completed | 3 | no | 12 |')
-        ->toContain('| vulnerable-dependency | medium | confirmed | `package:guzzlehttp/psr7` |')
+        ->and(file_get_contents($run.'/audit.md'))->toContain('| DEP-001 | medium | confirmed | guzzlehttp/psr7')
+        ->toContain('`package:guzzlehttp/psr7` |')
         ->and($run.'/logs/dependencies.security.prompt.md')->toBeFile()
         ->and(file_get_contents($run.'/logs/dependencies.security.prompt.md'))->toContain('Write all prose in **English (en)**')
         ->and(file_get_contents($run.'/logs/dependencies.summary.prompt.md'))->toContain('- DEP-003 · low · confirmed · `abandoned-package` — acme/test-only is abandoned (package:acme/test-only)');
@@ -168,7 +169,10 @@ it('writes the run overview once every selected audit is done', function () {
 
     expect($run.'/logs/results.prompt.md')->toBeFile()
         ->and(file_get_contents($run.'/logs/results.prompt.md'))->toContain('### Dependencies Audit (DEP)')
-        ->and(file_get_contents($run.'/run.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001) is the only issue worth fixing soon; the rest is housekeeping.");
+        ->and(file_get_contents($run.'/audit.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001) is the only issue worth fixing soon; the rest is housekeeping.")
+        ->toContain('| DEP-001 | medium |')
+        ->and(file_get_contents($run.'/run.md'))->not->toContain('## Overview')->not->toContain('## Findings')
+        ->toContain('The overview and the findings are in `audit.md`.');
 });
 
 it('gives each task a snapshot of the preflight instead of the raw files', function () {
@@ -374,6 +378,7 @@ it('writes the summary itself and applies the verify pass', function () {
     $run = latestRun($project);
     $report = file_get_contents($run.'/dependencies.md');
     $manifest = file_get_contents($run.'/run.md');
+    $audit = file_get_contents($run.'/audit.md');
 
     expect($report)->toContain('acme/test-only accepts any version')
         ->not->toContain('acme/used-lib constraint is too loose')
@@ -386,10 +391,10 @@ it('writes the summary itself and applies the verify pass', function () {
         ->not->toContain('Made-up constraint')
         // Findings that cover an advisory are facts, not claims, and are not verified.
         ->and($run.'/logs/dependencies.security.verify.prompt.md')->not->toBeFile()
-        ->and($manifest)->toContain('## Rejected findings')
+        ->and($audit)->toContain('## Rejected findings')
         ->toContain('| dependencies.hygiene | DEP-002 | acme/used-lib constraint is too loose | verify pass: `^2.0` is a normal range. |')
         ->toContain('| dependencies.hygiene | DEP-003 | Made-up constraint | the code in Evidence does not appear in `composer.json`. |')
-        ->toContain('| Wall clock |');
+        ->and($manifest)->toContain('| Wall clock |')->not->toContain('## Rejected findings');
 });
 
 it('asks at the test gate once the preflight is done and stops when told to', function () {
@@ -450,7 +455,7 @@ it('resumes a run and runs only the tasks without a completed result', function 
         ->and(RunFrontmatter::read($run.'/run.md'))->status->toBe('completed')
         ->and(file_get_contents($run.'/dependencies.md'))->toContain('### DEP-001 — guzzlehttp/psr7')
         ->toContain("## Upgrade plan\n\n1. Update guzzlehttp/psr7 (✅ safe patch).")
-        ->and(file_get_contents($run.'/run.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001)");
+        ->and(file_get_contents($run.'/audit.md'))->toContain("## Overview\n\nOne medium advisory (DEP-001)");
 
     Process::assertRanTimes(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.security', 1);
     Process::assertRanTimes(fn ($process) => ($process->environment['AUDIT_TASK'] ?? '') === 'dependencies.necessity', 2);

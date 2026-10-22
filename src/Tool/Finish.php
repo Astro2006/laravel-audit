@@ -55,7 +55,7 @@ final class Finish
 
         return [
             'status' => $exit === AuditExit::Ok ? RunStatus::Completed->value : RunStatus::Failed->value,
-            'report' => $plan->project->relative($run->run->manifestPath()),
+            'report' => $plan->project->relative($manifest->resultPath()),
             'audits' => array_map(fn (AuditOutcome $outcome): array => [
                 'audit' => $outcome->audit->value,
                 'status' => $outcome->status->value,

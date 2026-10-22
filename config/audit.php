@@ -5,90 +5,38 @@
 | laravel-audit
 |--------------------------------------------------------------------------
 |
-| Only the settings people usually change. Keep only the keys you change:
-| everything missing here falls back to the package default, also after
-| an update. Rarely changed settings (preflight tools, report limits,
-| Boost tools, license allowlist, risk points) are listed in
-| Astro2006\LaravelAudit\Support\AuditConfig::DEFAULTS and can be set here
-| with the same key.
+| Keep only the keys you change. Everything missing here falls back to the
+| package default, also after an update; every key of
+| Astro2006\LaravelAudit\Support\AuditConfig::DEFAULTS can be set here.
 |
-| Precedence: command option (--agent, --model, --mode) > this file (and
-| the AUDIT_* variables in it) > package default.
+| Precedence: command option > this file and its AUDIT_* variables > default.
+|
+|   1. Your project     what the app is, which audits run, your own rules
+|   2. The agent        which CLI and model, how fast, what it may spend
+|   3. Guard rails      files the agents never read, the failing-tests gate
+|   4. Rarely changed   output folder, language, verify, binaries
 |
 */
 
 return [
 
-    // Every run gets its own timestamped folder below this path.
-    'output_path' => env('AUDIT_OUTPUT_PATH', storage_path('audit')),
-
-    // null = app.locale. Language for report prose and console output.
-    'report_language' => env('AUDIT_LANGUAGE'),
+    /*
+    |--------------------------------------------------------------------------
+    | 1. Your project
+    |--------------------------------------------------------------------------
+    */
 
     'project' => [
-        // Free text the agents read before judging severity: who uses the app,
-        // how it is deployed, what is exposed. Without it, smaller models
-        // rate authorization findings as if every app had many users.
-        // e.g. 'Single-user app. Only the owner has an account; no registration.'
+        // One or two sentences the agents read before they rate a finding:
+        // who uses the app, how it is deployed, what is reachable from outside.
+        // Without it the agents must not guess the user model, and every
+        // authorization finding is rated as if any logged-in user may be hostile.
+        // e.g. 'Family app with a few accounts and roles, public on Laravel Cloud.'
         'context' => env('AUDIT_PROJECT_CONTEXT'),
     ],
 
-    'agent' => [
-        // claude_code, opencode or auto (the first agent from boost.json
-        // that is installed, then Claude Code, OpenCode).
-        'driver' => env('AUDIT_AGENT', 'auto'),
-
-        // null = the CLI's own default model. With OpenCode: provider/model,
-        // e.g. ollama/qwen3-coder:30b.
-        'model' => env('AUDIT_MODEL'),
-
-        // Tasks at once. 1 = one after the other: for self-hosted models and
-        // subscription CLIs with rate limits. Raise it for a hosted API or a
-        // model server that serves concurrent requests.
-        'max_concurrency' => (int) env('AUDIT_CONCURRENCY', 1),
-
-        'timeout' => 900,   // seconds per task
-
-        // Pause the run before a task that would push its total cost above
-        // this amount, and continue later with --resume. null = no limit.
-        // Only CLIs that report costs (Claude Code with an API key) enforce it.
-        'run_budget_usd' => env('AUDIT_RUN_BUDGET_USD'),
-
-        // Tool calls (turns) one agent session may take before it has to
-        // answer. Every turn sends the whole conversation again, so long
-        // sessions get slow and expensive, above all with local models.
-        // null = no limit.
-        'max_turns' => (int) env('AUDIT_MAX_TURNS', 15) ?: null,
-
-        // A second call checks each task's findings (keep, downgrade, drop).
-        'verify' => true,
-
-        // The headless orchestrator (php artisan audit:orchestrate): the model of
-        // its own session (null = agent.model). Its turn cap, budget and
-        // timeout are agent.orchestrator.max_turns (300), max_budget_usd (null)
-        // and timeout (7200 s), see AuditConfig::DEFAULTS.
-        'orchestrator' => [
-            'model' => env('AUDIT_ORCHESTRATOR_MODEL'),
-        ],
-
-        'drivers' => [
-            'claude_code' => [
-                'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
-                'effort' => env('AUDIT_EFFORT'),                 // low, medium, high, xhigh, max
-                'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per task, null = no limit
-            ],
-            'opencode' => [
-                'binary' => env('AUDIT_OPENCODE_BINARY', 'opencode'),
-            ],
-        ],
-
-        // Files the agents must never read. Globs are expanded at run time;
-        // allow_read punches holes into deny_read.
-        'deny_read' => ['.env*', 'auth.json', 'storage/**/*.key'],
-        'allow_read' => ['.env.example'],
-    ],
-
-    // Which audits run when no --tests, --frontend, … option is given.
+    // The audits a plain `php artisan audit` runs. --tests, --frontend, …
+    // pick single ones regardless of this list.
     'audits' => [
         'tests' => true,
         'frontend' => true,
@@ -96,15 +44,7 @@ return [
         'dependencies' => true,
     ],
 
-    'preflight' => [
-        'tests' => [
-            'gate' => 'ask',        // failing tests: ask | abort | continue
-            'coverage' => true,
-            'parallel' => true,     // switched off automatically without paratest
-        ],
-    ],
-
-    // Project rules the agents check in addition to their checklist.
+    // Rules of this project the agents check on top of their own checklist.
     'custom_checks' => [
         'tests' => [],
         'frontend' => [],
@@ -113,4 +53,90 @@ return [
         ],
         'dependencies' => [],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | 2. The agent
+    |--------------------------------------------------------------------------
+    */
+
+    'agent' => [
+        // claude_code, opencode or auto (the first installed agent from
+        // boost.json, then Claude Code, then OpenCode).
+        'driver' => env('AUDIT_AGENT', 'auto'),
+
+        // null = the CLI's own default. With OpenCode: provider/model,
+        // e.g. ollama/qwen3-coder:30b.
+        'model' => env('AUDIT_MODEL'),
+
+        // Tasks at once. 1 = one after the other, right for subscription CLIs
+        // with rate limits and for local models. Raise it for a hosted API.
+        'max_concurrency' => (int) env('AUDIT_CONCURRENCY', 1),
+
+        // Tool calls one task may make before it has to answer. Each call
+        // resends the conversation, so long sessions get slow and expensive.
+        // null = no limit.
+        'max_turns' => (int) env('AUDIT_MAX_TURNS', 15) ?: null,
+
+        // Seconds one task may run.
+        'timeout' => 900,
+
+        // Pause the run before a task that would push its total above this
+        // amount; continue later with --resume. null = no limit. Only CLIs
+        // that report costs (Claude Code with an API key) can enforce it.
+        'run_budget_usd' => env('AUDIT_RUN_BUDGET_USD'),
+
+        'drivers' => [
+            'claude_code' => [
+                'effort' => env('AUDIT_EFFORT', 'medium'),       // low, medium, high, xhigh, max
+                'max_budget_usd' => env('AUDIT_MAX_BUDGET_USD'), // per task, null = no limit
+                'binary' => env('AUDIT_CLAUDE_BINARY', 'claude'),
+            ],
+            'opencode' => [
+                'binary' => env('AUDIT_OPENCODE_BINARY', 'opencode'),
+            ],
+        ],
+
+        /*
+        |----------------------------------------------------------------------
+        | 3. Guard rails
+        |----------------------------------------------------------------------
+        */
+
+        // Files the agents must never read. Globs; allow_read punches holes.
+        'deny_read' => ['.env*', 'auth.json', 'storage/**/*.key'],
+        'allow_read' => ['.env.example'],
+
+        /*
+        |----------------------------------------------------------------------
+        | 4. Rarely changed
+        |----------------------------------------------------------------------
+        */
+
+        // A second, short call per task checks its findings (keep, downgrade,
+        // drop). false switches it off; the severity it starts at and more
+        // are agent.verify.from and agent.verify.threshold in DEFAULTS.
+        'verify' => true,
+
+        // php artisan audit:orchestrate: the model of the orchestrator's own
+        // session (null = agent.model). Its caps are in DEFAULTS.
+        'orchestrator' => [
+            'model' => env('AUDIT_ORCHESTRATOR_MODEL'),
+        ],
+    ],
+
+    'preflight' => [
+        'tests' => [
+            // What happens when the test suite is red: ask | abort | continue.
+            'gate' => 'ask',
+            'coverage' => true,
+            'parallel' => true, // switched off automatically without paratest
+        ],
+    ],
+
+    // Every run gets its own timestamped folder below this path.
+    'output_path' => env('AUDIT_OUTPUT_PATH', storage_path('audit')),
+
+    // Language of the reports and the console. null = app.locale.
+    'report_language' => env('AUDIT_LANGUAGE'),
 ];

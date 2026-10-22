@@ -84,4 +84,9 @@ final readonly class AuditRun
     {
         return $this->dir().'/run.md';
     }
+
+    public function auditPath(): string
+    {
+        return $this->dir().'/audit.md';
+    }
 }
